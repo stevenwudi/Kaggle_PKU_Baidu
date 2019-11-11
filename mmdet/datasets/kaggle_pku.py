@@ -7,11 +7,29 @@ from tqdm import tqdm
 import cv2
 from mmcv.image import imread, imwrite
 from pycocotools.coco import COCO
+from pycocotools import mask as maskUtils
+from skimage import measure
 
 from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
-from .kaggle_pku_utils import euler_to_Rot
+from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
+    quaternion_upper_hemispher, mesh_point_to_bbox, euler_angles_to_rotation_matrix
+
+
+class NumpyEncoder(json.JSONEncoder):
+    """ Special json encoder for numpy types """
+    def default(self, obj):
+        if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
+            np.int16, np.int32, np.int64, np.uint8,
+            np.uint16, np.uint32, np.uint64)):
+            return int(obj)
+        elif isinstance(obj, (np.float_, np.float16, np.float32,
+            np.float64)):
+            return float(obj)
+        elif isinstance(obj,(np.ndarray,)): #### This is the fix
+            return obj.tolist()
+        return json.JSONEncoder.default(self, obj)
 
 
 @DATASETS.register_module
@@ -19,27 +37,36 @@ class KaggkePKUDataset(CustomDataset):
 
     CLASSES = ('car')
 
-    def load_annotations(self, ann_file):
-
+    def load_annotations(self, ann_file,
+                         outdir='/data/Kaggle/wudi_data'):
+        # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
+        self.bottom_half = 1480   # this
         # From camera.zip
         self.camera_matrix = np.array([[2304.5479, 0, 1686.2379],
                                   [0, 2305.8757, 1354.9849],
                                   [0, 0, 1]], dtype=np.float32)
         self.camera_matrix_inv = np.linalg.inv(self.camera_matrix)
+
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
-
-        annotations = []
 
         train = pd.read_csv(ann_file)
         self.print_statistics(train)
 
-        # this is wrong but we have limited bandwidth to upload images for the moment
-        for idx in range(len(train)):
-            annotation = self.load_anno_idx(idx, train)
+        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
 
+        if os.path.isfile(outfile):
+            annotations = json.load(open(outfile, 'r'))
+        else:
+            annotations = []
+            for idx in tqdm(range(len(train))):
+                annotation = self.load_anno_idx(idx, train)
+                annotations.append(annotation)
+            with open(outfile, 'w') as f:
+                json.dump(annotations, f, indent=4, cls=NumpyEncoder)
 
+        self.annotations = annotations
         return annotations
 
     def load_car_models(self):
@@ -51,19 +78,40 @@ class KaggkePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True):
+    def load_anno_idx(self, idx, train, draw=False, draw_dir='/data/Kaggle/wudi_data/train_iamge_gt_vis'):
 
+        labels = []
+        bboxes = []
+        polys = []
+        eular_angles = []
+        quaternion_semispheres = []
+        translations = []
 
         img_name = self.img_prefix + train['ImageId'].iloc[idx] +'.jpg'
-        if os.path.isfile(img_name):
+        if not os.path.isfile(img_name):
+            assert "Image file does not exist!"
+        else:
             if draw:
                 image = imread(img_name)
                 mask_all = np.zeros(image.shape)
+                merged_image = image.copy()
                 alpha = 0.8  # transparency
             gt = self._str2coords(train['PredictionString'].iloc[idx])
             for gt_pred in gt:
+                eular_angle = np.array([gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']])
+                translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
+                quaternion = euler_angles_to_quaternions(eular_angle)
+                quaternion_semisphere = quaternion_upper_hemispher(quaternion)
+
+                labels.append(gt_pred['id'])
+                eular_angles.append(eular_angle)
+                quaternion_semispheres.append(quaternion_semisphere)
+                translations.append(translation)
                 # rendering the car according to:
                 # https://www.kaggle.com/ebouteillon/augmented-reality
+
+                # car_id2name is from:
+                # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
                 car_name = car_id2name[gt_pred['id']].name
                 vertices = np.array(self.car_model_dict[car_name]['vertices'])
                 vertices[:, 1] = -vertices[:, 1]
@@ -87,24 +135,75 @@ class KaggkePKUDataset(CustomDataset):
                 img_cor_points[:, 0] /= img_cor_points[:, 2]
                 img_cor_points[:, 1] /= img_cor_points[:, 2]
 
+                # project 3D points to 2d image plane
+                rot_mat = euler_angles_to_rotation_matrix(eular_angle)
+                rvect, _ = cv2.Rodrigues(rot_mat)
+                imgpts, jac = cv2.projectPoints(np.array(self.car_model_dict[car_name]['vertices']), rvect,
+                                                translation, self.camera_matrix,
+                                                distCoeffs=None)
+
+                imgpts = np.int32(imgpts).reshape(-1, 2)
+                x1, y1, x2, y2 = imgpts[:, 0].min(), imgpts[:, 1].min(), imgpts[:, 0].max(), imgpts[:, 1].max()
+
                 if draw:
-                    mask = np.zeros(image.shape)
+                    # project 3D points to 2d image plane
+                    mask_seg = np.zeros(image.shape, dtype=np.uint8)
                     for t in triangles:
                         coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]], dtype=np.int32)
-                        cv2.polylines(mask, np.int32([coord]), 1, (0, 255, 0))
-                    mask_all += mask
+                        # This will draw the mask for segmenation
+                        #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                        cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+
+                    mask_all += mask_seg
+                    #imwrite(mask_seg, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis','mask_demo.jpg'))
+
+                    # Find mask
+                    ground_truth_binary_mask = np.zeros(mask_seg.shape, dtype=np.uint8)
+                    ground_truth_binary_mask[mask_seg == 255] = 1
+                    if self.bottom_half > 0:  # this indicate w
+                        ground_truth_binary_mask = ground_truth_binary_mask[int(self.bottom_half):, :]
+
+                    x1, x2, y1, y2 = mesh_point_to_bbox(ground_truth_binary_mask)
+
+                bboxes.append([x1, x2, y1, y2])
+                # TODO: problem of masking
+                # Following is the code to find mask
+                #contours, hierarchy = cv2.findContours(ground_truth_binary_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+                # fortran_ground_truth_binary_mask = np.asfortranarray(ground_truth_binary_mask)
+                # encoded_ground_truth = maskUtils.encode(fortran_ground_truth_binary_mask)
+                # contours = measure.find_contours(np.array(ground_truth_binary_mask), 0.5)
+                # mask_instance = []
+                #
+                # for contour in contours:
+                #     contour = np.flip(contour, axis=1)
+                #     segmentation = contour.ravel().tolist()
+                #     mask_instance.append(segmentation)
+
             if draw:
                 mask_all = mask_all * 255 / mask_all.max()
-                image_overlap = cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
-                imwrite(mask_all, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis',train['ImageId'].iloc[idx] +'_mask.jpg'))
+                cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
+                imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
 
-                imwrite(image_overlap, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis',train['ImageId'].iloc[idx] +'.jpg'))
+            if len(bboxes):
+                bboxes = np.array(bboxes, dtype=np.float32)
+                labels = np.array(labels, dtype=np.int64)
+                eular_angles = np.array(eular_angles, dtype=np.float32)
+                quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
+                translations = np.array(translations, dtype=np.float32)
+                assert len(gt) == len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
 
-        else:
-            #assert "Image file does not exist!"
-            return []
-
-
+                annotation = {
+                    'filename': img_name,
+                    'width': self.image_shape[1],
+                    'height': self.image_shape[0],
+                    'bboxes': bboxes,
+                    'labels': labels,
+                    'eular_angles': eular_angles,
+                    'quaternion_semispheres': quaternion_semispheres,
+                    'translations': translations
+                }
+                return annotation
 
     def print_statistics(self, train):
         car_per_image = np.array([len(self._str2coords(s)) for s in train['PredictionString']])
@@ -164,8 +263,8 @@ class KaggkePKUDataset(CustomDataset):
         print(np.unique(car_models))
         # array([2, 6, 7, 8, 9, 12, 14, 16, 18, 19, 20, 23, 25, 27, 28, 31, 32,
         #        35, 37, 40, 43, 46, 47, 48, 50, 51, 54, 56, 60, 61, 66, 70, 71, 76])
-        print("Number of unique car models: %d" % len(np.unique(car_models))        )
-
+        print("Number of unique car models: %d" % len(np.unique(car_models)))
+        # 34
 
     def _str2coords(self, s, names=('id', 'yaw', 'pitch', 'roll', 'x', 'y', 'z')):
         """
@@ -201,7 +300,6 @@ class KaggkePKUDataset(CustomDataset):
         img_ys = img_p[:, 1]
         img_zs = img_p[:, 2]  # z = Distance from the camera
         return img_xs, img_ys
-
 
     def get_ann_info(self, idx):
         img_id = self.img_infos[idx]['id']

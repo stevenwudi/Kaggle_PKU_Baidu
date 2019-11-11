@@ -3,13 +3,21 @@
     Author: wangpeng54@baidu.com
     Date: 2018/6/10
 """
-
 import numpy as np
 import math
 
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from math import sin, cos
+
+
+def mesh_point_to_bbox(img):
+    rows = np.any(img, axis=1)
+    cols = np.any(img, axis=0)
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+
+    return cmin, cmax, rmin, rmax
 
 
 def euler_angles_to_quaternions(angle):
@@ -40,6 +48,8 @@ def euler_angles_to_quaternions(angle):
     q[:, 2] = cy * cr * sp + sy * sr * cp
     q[:, 3] = sy * cr * cp - cy * sr * sp
 
+    if in_dim == 1:
+        return q[0]
     return q
 
 
@@ -73,7 +83,6 @@ def quaternion_upper_hemispher(q):
                 q[3] = 0
 
     return q
-
 
 
 def quaternion_to_euler_angle(q):
@@ -174,7 +183,7 @@ def rotation_matrix_to_euler_angles(R, check=True):
     """Convert rotation matrix to euler angles
     Input:
         R: 3 x 3 rotation matrix
-        check: whether Check if a matrix is a valid
+        check: whether Checeuler_angles_to_quaternionsk if a matrix is a valid
             rotation matrix.
     Output:
         euler angle [x/roll, y/pitch, z/yaw]

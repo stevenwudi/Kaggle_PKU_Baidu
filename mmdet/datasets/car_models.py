@@ -132,5 +132,3 @@ car_id2name = {label.id: label for label in models}
 # Main for testing
 #--------------------------------------------------------------------------------
 
-
-
