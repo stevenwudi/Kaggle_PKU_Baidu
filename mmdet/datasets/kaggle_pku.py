@@ -54,7 +54,8 @@ class KaggkePKUDataset(CustomDataset):
         train = pd.read_csv(ann_file)
         self.print_statistics(train)
 
-        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+        #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_no_mask.json')
 
         if os.path.isfile(outfile):
             annotations = json.load(open(outfile, 'r'))
@@ -82,7 +83,7 @@ class KaggkePKUDataset(CustomDataset):
 
         labels = []
         bboxes = []
-        polys = []
+        rles = []
         eular_angles = []
         quaternion_semispheres = []
         translations = []
@@ -96,6 +97,7 @@ class KaggkePKUDataset(CustomDataset):
                 mask_all = np.zeros(image.shape)
                 merged_image = image.copy()
                 alpha = 0.8  # transparency
+
             gt = self._str2coords(train['PredictionString'].iloc[idx])
             for gt_pred in gt:
                 eular_angle = np.array([gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']])
@@ -144,6 +146,7 @@ class KaggkePKUDataset(CustomDataset):
 
                 imgpts = np.int32(imgpts).reshape(-1, 2)
                 x1, y1, x2, y2 = imgpts[:, 0].min(), imgpts[:, 1].min(), imgpts[:, 0].max(), imgpts[:, 1].max()
+                bboxes.append([x1, y1, x2, y2])
 
                 if draw:
                     # project 3D points to 2d image plane
@@ -151,8 +154,8 @@ class KaggkePKUDataset(CustomDataset):
                     for t in triangles:
                         coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]], dtype=np.int32)
                         # This will draw the mask for segmenation
-                        #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
-                        cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+                        cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                        #cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
 
                     mask_all += mask_seg
                     #imwrite(mask_seg, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis','mask_demo.jpg'))
@@ -163,24 +166,26 @@ class KaggkePKUDataset(CustomDataset):
                     if self.bottom_half > 0:  # this indicate w
                         ground_truth_binary_mask = ground_truth_binary_mask[int(self.bottom_half):, :]
 
-                    x1, x2, y1, y2 = mesh_point_to_bbox(ground_truth_binary_mask)
+                    #x1, x2, y1, y2 = mesh_point_to_bbox(ground_truth_binary_mask)
 
-                bboxes.append([x1, x2, y1, y2])
-                # TODO: problem of masking
-                # Following is the code to find mask
-                #contours, hierarchy = cv2.findContours(ground_truth_binary_mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+                    # TODO: problem of masking
+                    # Taking a kernel for dilation and erosion,
+                    # the kernel size is set at 1/10th of the average width and heigh of the car
 
-                # fortran_ground_truth_binary_mask = np.asfortranarray(ground_truth_binary_mask)
-                # encoded_ground_truth = maskUtils.encode(fortran_ground_truth_binary_mask)
-                # contours = measure.find_contours(np.array(ground_truth_binary_mask), 0.5)
-                # mask_instance = []
-                #
-                # for contour in contours:
-                #     contour = np.flip(contour, axis=1)
-                #     segmentation = contour.ravel().tolist()
-                #     mask_instance.append(segmentation)
+                    kernel_size = int(((y2-y1)/2 + (x2-x1)/2) / 10)
+                    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+                    # Following is the code to find mask
+                    ground_truth_binary_mask_img = ground_truth_binary_mask.sum(axis=2).astype(np.uint8)
+                    ground_truth_binary_mask_img[ground_truth_binary_mask_img>1] = 1
+                    ground_truth_binary_mask_img = cv2.dilate(ground_truth_binary_mask_img, kernel, iterations=1)
+                    ground_truth_binary_mask_img = cv2.erode(ground_truth_binary_mask_img, kernel, iterations=1)
+                    fortran_ground_truth_binary_mask = np.asfortranarray(ground_truth_binary_mask_img)
+                    encoded_ground_truth = maskUtils.encode(fortran_ground_truth_binary_mask)
 
-            if draw:
+                    rles.append(encoded_ground_truth)
+                #bm = maskUtils.decode(encoded_ground_truth)
+            #if draw:
+            if False:
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
                 imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
@@ -201,7 +206,8 @@ class KaggkePKUDataset(CustomDataset):
                     'labels': labels,
                     'eular_angles': eular_angles,
                     'quaternion_semispheres': quaternion_semispheres,
-                    'translations': translations
+                    'translations': translations,
+                    'rles': rles
                 }
                 return annotation
 
@@ -302,23 +308,18 @@ class KaggkePKUDataset(CustomDataset):
         return img_xs, img_ys
 
     def get_ann_info(self, idx):
-        img_id = self.img_infos[idx]['id']
-        ann_ids = self.coco.getAnnIds(imgIds=[img_id])
-        ann_info = self.coco.loadAnns(ann_ids)
-        return self._parse_ann_info(self.img_infos[idx], ann_info)
+        ann_info = self.img_infos[idx]
+        return self._parse_ann_info(ann_info)
 
     def _filter_imgs(self, min_size=32):
         """Filter images too small or without ground truths."""
         valid_inds = []
-        ids_with_ann = set(_['image_id'] for _ in self.coco.anns.values())
         for i, img_info in enumerate(self.img_infos):
-            if self.img_ids[i] not in ids_with_ann:
-                continue
             if min(img_info['width'], img_info['height']) >= min_size:
                 valid_inds.append(i)
         return valid_inds
 
-    def _parse_ann_info(self, img_info, ann_info):
+    def _parse_ann_info(self, ann_info):
         """Parse bbox and mask annotation.
 
         Args:
@@ -335,10 +336,10 @@ class KaggkePKUDataset(CustomDataset):
         gt_bboxes_ignore = []
         gt_masks_ann = []
 
-        for i, ann in enumerate(ann_info):
-            if ann.get('ignore', False):
-                continue
-            x1, y1, w, h = ann['bbox']
+        for i in range(len(ann_info['bboxes'])):
+            x1, y1, x2, y2 = ann_info['bboxes'][i]
+            w, h = x2-x1, y2-y1
+            x1, y1, w, h = ann_info['bboxes'][i]
             if ann['area'] <= 0 or w < 1 or h < 1:
                 continue
             bbox = [x1, y1, x1 + w - 1, y1 + h - 1]
