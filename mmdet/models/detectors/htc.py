@@ -20,6 +20,9 @@ class HybridTaskCascade(CascadeRCNN):
                  semantic_fusion=('bbox', 'mask'),
                  interleaved=True,
                  mask_info_flow=True,
+                 with_semantic_loss=False,
+                 car_cls_rot_roi_extractor=None,
+                 car_cls_rot_head=None,
                  **kwargs):
         super(HybridTaskCascade, self).__init__(num_stages, backbone, **kwargs)
         assert self.with_bbox and self.with_mask
@@ -29,6 +32,7 @@ class HybridTaskCascade(CascadeRCNN):
                 semantic_roi_extractor)
             self.semantic_head = builder.build_head(semantic_head)
 
+        self.with_semantic_loss = with_semantic_loss
         self.semantic_fusion = semantic_fusion
         self.interleaved = interleaved
         self.mask_info_flow = mask_info_flow
@@ -202,7 +206,11 @@ class HybridTaskCascade(CascadeRCNN):
                       gt_bboxes_ignore=None,
                       gt_masks=None,
                       gt_semantic_seg=None,
-                      proposals=None):
+                      proposals=None,
+                      carlabels=None,
+                      quaternion_semispheres=None,
+                      translations=None,
+                      ):
         x = self.extract_feat(img)
 
         losses = dict()
@@ -227,8 +235,9 @@ class HybridTaskCascade(CascadeRCNN):
         # 2 outputs: segmentation prediction and embedded features
         if self.with_semantic:
             semantic_pred, semantic_feat = self.semantic_head(x)
-            loss_seg = self.semantic_head.loss(semantic_pred, gt_semantic_seg)
-            losses['loss_semantic_seg'] = loss_seg
+            if self.with_semantic_loss:
+                loss_seg = self.semantic_head.loss(semantic_pred, gt_semantic_seg)
+                losses['loss_semantic_seg'] = loss_seg
         else:
             semantic_feat = None
 

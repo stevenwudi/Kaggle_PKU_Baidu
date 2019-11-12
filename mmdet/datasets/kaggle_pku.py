@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from scipy.stats import norm
 import json
 import os
 from tqdm import tqdm
@@ -29,6 +28,8 @@ class NumpyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj,(np.ndarray,)): #### This is the fix
             return obj.tolist()
+        elif isinstance(obj, (bytes)):
+            return obj.decode("ascii")
         return json.JSONEncoder.default(self, obj)
 
 
@@ -42,11 +43,18 @@ class KaggkePKUDataset(CustomDataset):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480   # this
+        self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
+                                19, 20, 23, 25, 27, 28, 31, 32,
+                                35, 37, 40, 43, 46, 47, 48, 50,
+                                51, 54, 56, 60, 61, 66, 70, 71, 76]
+        self.cat2label = {car_model: i for i, car_model in enumerate(self.unique_car_mode)}
+
         # From camera.zip
         self.camera_matrix = np.array([[2304.5479, 0, 1686.2379],
                                   [0, 2305.8757, 1354.9849],
                                   [0, 0, 1]], dtype=np.float32)
         self.camera_matrix_inv = np.linalg.inv(self.camera_matrix)
+
 
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
@@ -55,7 +63,8 @@ class KaggkePKUDataset(CustomDataset):
         self.print_statistics(train)
 
         #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
-        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_no_mask.json')
+        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_3.json')
+        #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_no_mask.json')
 
         if os.path.isfile(outfile):
             annotations = json.load(open(outfile, 'r'))
@@ -79,7 +88,7 @@ class KaggkePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=False, draw_dir='/data/Kaggle/wudi_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/wudi_data/train_iamge_gt_vis'):
 
         labels = []
         bboxes = []
@@ -332,23 +341,37 @@ class KaggkePKUDataset(CustomDataset):
                 decoded into binary masks.
         """
         gt_bboxes = []
+        gt_class_labels = []    # this will always be fixed as car class
         gt_labels = []
         gt_bboxes_ignore = []
         gt_masks_ann = []
 
+        quaternion_semispheres = []
+        translations = []
+
         for i in range(len(ann_info['bboxes'])):
             x1, y1, x2, y2 = ann_info['bboxes'][i]
             w, h = x2-x1, y2-y1
-            x1, y1, w, h = ann_info['bboxes'][i]
-            if ann['area'] <= 0 or w < 1 or h < 1:
+            if w < 1 or h < 1:
                 continue
-            bbox = [x1, y1, x1 + w - 1, y1 + h - 1]
-            if ann.get('iscrowd', False):
+            if self.bottom_half:   # we only take bottom half image
+                bbox = [x1, y1, x2, y2]
+            else:
+                bbox = [x1, y1 - self.bottom_half, x2, y2 - self.bottom_half]
+            if ann_info.get('iscrowd', False):   # TODO: train mask need to include
                 gt_bboxes_ignore.append(bbox)
             else:
                 gt_bboxes.append(bbox)
-                gt_labels.append(self.cat2label[ann['category_id']])
-                gt_masks_ann.append(ann['segmentation'])
+
+                # There are only 34 car in this training dataset:
+                gt_label = self.cat2label[ann_info['labels'][i]]
+                gt_labels.append(gt_label)
+                gt_class_labels.append(3)  # coco 3 is "car" class
+                mask = maskUtils.decode(ann_info['rles'][i])
+                gt_masks_ann.append(mask)
+
+                quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
+                translations.append(ann_info['translations'][i])
 
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
@@ -362,13 +385,13 @@ class KaggkePKUDataset(CustomDataset):
         else:
             gt_bboxes_ignore = np.zeros((0, 4), dtype=np.float32)
 
-        seg_map = img_info['filename'].replace('jpg', 'png')
-
         ann = dict(
             bboxes=gt_bboxes,
-            labels=gt_labels,
+            labels=gt_class_labels,
+            carlabels=gt_labels,
             bboxes_ignore=gt_bboxes_ignore,
             masks=gt_masks_ann,
-            seg_map=seg_map)
+            quaternion_semispheres=quaternion_semispheres,
+            translations=quaternion_semispheres,)
 
         return ann

@@ -303,6 +303,38 @@ class Normalize(object):
 
 
 @PIPELINES.register_module
+class CropBottom(object):
+    """Random crop the image & bboxes & masks.
+
+    Args:
+        crop_size (tuple): Expected size after cropping, (h, w).
+    """
+
+    def __init__(self, bottom_half):
+        self.bottom_half = bottom_half
+
+    def __call__(self, results):
+        img = results['img']
+
+        # crop the image
+        img = img[self.bottom_half:, :, :]
+        img_shape = img.shape
+        results['img'] = img
+        results['img_shape'] = img_shape
+
+        # the bbox and masks are already processed in dataloader....
+        # crop bboxes accordingly and clip to the image boundary
+
+        # filter out the gt bboxes that are completely cropped
+
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(bottom_half={})'.format(
+            self.bottom_half)
+
+
+@PIPELINES.register_module
 class RandomCrop(object):
     """Random crop the image & bboxes & masks.
 

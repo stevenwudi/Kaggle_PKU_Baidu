@@ -43,13 +43,17 @@ class LoadAnnotations(object):
                  with_mask=False,
                  with_seg=False,
                  poly2mask=True,
-                 skip_img_without_anno=True):
+                 skip_img_without_anno=True,
+                 with_carcls_rot=False,
+                 with_translation=False):
         self.with_bbox = with_bbox
         self.with_label = with_label
         self.with_mask = with_mask
         self.with_seg = with_seg
         self.poly2mask = poly2mask
         self.skip_img_without_anno = skip_img_without_anno
+        self.with_carcls_rot = with_carcls_rot
+        self.with_translation = with_translation
 
     def _load_bboxes(self, results):
         ann_info = results['ann_info']
@@ -91,7 +95,8 @@ class LoadAnnotations(object):
         h, w = results['img_info']['height'], results['img_info']['width']
         gt_masks = results['ann_info']['masks']
         if self.poly2mask:
-            gt_masks = [self._poly2mask(mask, h, w) for mask in gt_masks]
+            if not isinstance(gt_masks[0], np.ndarray) :
+                gt_masks = [self._poly2mask(mask, h, w) for mask in gt_masks]
         results['gt_masks'] = gt_masks
         results['mask_fields'].append('gt_masks')
         return results
@@ -100,6 +105,18 @@ class LoadAnnotations(object):
         results['gt_semantic_seg'] = mmcv.imread(
             osp.join(results['seg_prefix'], results['ann_info']['seg_map']),
             flag='unchanged').squeeze()
+        return results
+
+    def _load_carcls(self, results):
+        results['carlabels'] = results['ann_info']['carlabels']
+        return results
+
+    def _load_quaternion_semispheres(self, results):
+        results['quaternion_semispheres'] = results['ann_info']['quaternion_semispheres']
+        return results
+
+    def _load_translations(self, results):
+        results['translations'] = results['ann_info']['translations']
         return results
 
     def __call__(self, results):
@@ -113,6 +130,14 @@ class LoadAnnotations(object):
             results = self._load_masks(results)
         if self.with_seg:
             results = self._load_semantic_seg(results)
+
+        if self.with_carcls_rot:
+            results = self._load_carcls(results)
+            results = self._load_quaternion_semispheres(results)
+
+        if self.with_translation:
+            results = self._load_translations(results)
+
         return results
 
     def __repr__(self):

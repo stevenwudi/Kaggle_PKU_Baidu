@@ -11,27 +11,30 @@ model = dict(
                 num_modules=1,
                 num_branches=1,
                 block='BOTTLENECK',
-                num_blocks=(4, ),
-                num_channels=(64, )),
+                num_blocks=(4,),
+                num_channels=(64,)),
             stage2=dict(
                 num_modules=1,
                 num_branches=2,
                 block='BASIC',
                 num_blocks=(4, 4),
-                num_channels=(32, 64)),
+                num_channels=(48, 96)),
             stage3=dict(
                 num_modules=4,
                 num_branches=3,
                 block='BASIC',
                 num_blocks=(4, 4, 4),
-                num_channels=(32, 64, 128)),
+                num_channels=(48, 96, 192)),
             stage4=dict(
                 num_modules=3,
                 num_branches=4,
                 block='BASIC',
                 num_blocks=(4, 4, 4, 4),
-                num_channels=(32, 64, 128, 256)))),
-    neck=dict(type='HRFPN', in_channels=[32, 64, 128, 256], out_channels=256),
+                num_channels=(48, 96, 192, 384)))),
+    neck=dict(
+        type='HRFPN',
+        in_channels=[48, 96, 192, 384],
+        out_channels=256),
     rpn_head=dict(
         type='RPNHead',
         in_channels=256,
@@ -102,7 +105,40 @@ model = dict(
         conv_out_channels=256,
         num_classes=81,
         loss_mask=dict(
-            type='CrossEntropyLoss', use_mask=True, loss_weight=1.0)),)
+            type='CrossEntropyLoss', use_mask=True, loss_weight=1.0)),
+    semantic_roi_extractor=dict(
+        type='SingleRoIExtractor',
+        roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
+        out_channels=256,
+        featmap_strides=[8]),
+    semantic_head=dict(
+        type='FusedSemanticHead',
+        num_ins=5,
+        fusion_level=1,
+        num_convs=4,
+        in_channels=256,
+        conv_out_channels=256,
+        num_classes=183,
+        ignore_label=255,
+        loss_weight=0.2),
+
+    with_semantic_loss=False,
+    # This is DI WU's customised model
+    semantic_fusion=('bbox', 'mask', 'car_cls_rot'),
+    car_cls_rot_roi_extractor=dict(
+        type='SingleRoIExtractor',
+        roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
+        out_channels=256,
+        featmap_strides=[4, 8, 16, 32]),
+
+    car_cls_rot_head=dict(
+        type='HTCCarClsRotHead',
+        num_convs=4,
+        in_channels=256,
+        conv_out_channels=256,
+        num_classes=34,
+    )
+)
 # model training and testing settings
 train_cfg = dict(
     rpn=dict(
@@ -200,19 +236,22 @@ img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='LoadAnnotations', with_bbox=True, with_mask=True, with_seg=True),
+    dict(type='LoadAnnotations', with_bbox=True, with_mask=True,
+         with_carcls_rot=True, with_translation=True),
+    dict(type='CropBottom', bottom_half=1480),
+
     dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
-    dict(type='SegResizeFlipPadRescale', scale_factor=1 / 8),
     dict(type='DefaultFormatBundle'),
-    dict(
-type='Collect',
-        keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks', 'gt_semantic_seg']),
+    dict(type='Collect',
+        keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks',
+              'carlabels',  'quaternion_semispheres', 'translations']),
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
+    dict(type='CropBottom', bottom_half=1480),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1333, 800),
@@ -227,7 +266,7 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    imgs_per_gpu=2,
+    imgs_per_gpu=1,
     workers_per_gpu=2,
     train=dict(
         type=dataset_type,
@@ -268,7 +307,8 @@ log_config = dict(
 total_epochs = 20
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = './work_dirs/htc_hrnetv2p_w32_20e_kaggle_pku'
-load_from = None
+work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku'
+load_from = '/data/Kaggle/mmdet_pretrained_weights/htc_hrnetv2p_w48_28e_20190810-a4274b38.pth'
+
 resume_from = None
 workflow = [('train', 1)]

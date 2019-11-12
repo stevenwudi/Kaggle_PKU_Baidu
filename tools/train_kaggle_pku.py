@@ -16,7 +16,7 @@ from mmdet.models import build_detector
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w32_20e_kaggle_pku.py', help='train config file path')
+    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku.py', help='train config file path')
     parser.add_argument('--work_dir', help='the dir to save logs and models')
     parser.add_argument('--resume_from', help='the checkpoint file to resume from')
     parser.add_argument('--validate', action='store_true', help='whether to evaluate the checkpoint during training')
