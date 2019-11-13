@@ -321,6 +321,7 @@ class CropBottom(object):
         img_shape = img.shape
         results['img'] = img
         results['img_shape'] = img_shape
+        results['ori_shape'] = img_shape
 
         # the bbox and masks are already processed in dataloader....
         # crop bboxes accordingly and clip to the image boundary
