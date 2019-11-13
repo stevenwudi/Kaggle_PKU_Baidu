@@ -36,7 +36,7 @@ class NumpyEncoder(json.JSONEncoder):
 @DATASETS.register_module
 class KaggkePKUDataset(CustomDataset):
 
-    CLASSES = ('car')
+    CLASSES = ('car',)
 
     def load_annotations(self, ann_file,
                          outdir='/data/Kaggle/wudi_data'):
@@ -62,8 +62,7 @@ class KaggkePKUDataset(CustomDataset):
         train = pd.read_csv(ann_file)
         self.print_statistics(train)
 
-        #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
-        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_3.json')
+        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
         #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_no_mask.json')
 
         if os.path.isfile(outfile):
@@ -192,7 +191,7 @@ class KaggkePKUDataset(CustomDataset):
                     encoded_ground_truth = maskUtils.encode(fortran_ground_truth_binary_mask)
 
                     rles.append(encoded_ground_truth)
-                #bm = maskUtils.decode(encoded_ground_truth)
+                    #bm = maskUtils.decode(encoded_ground_truth)
             #if draw:
             if False:
                 mask_all = mask_all * 255 / mask_all.max()
@@ -354,10 +353,11 @@ class KaggkePKUDataset(CustomDataset):
             w, h = x2-x1, y2-y1
             if w < 1 or h < 1:
                 continue
-            if self.bottom_half:   # we only take bottom half image
-                bbox = [x1, y1, x2, y2]
-            else:
+            if self.bottom_half:
+                # we only take bottom half image
                 bbox = [x1, y1 - self.bottom_half, x2, y2 - self.bottom_half]
+            else:
+                bbox = [x1, y1, x2, y2]
             if ann_info.get('iscrowd', False):   # TODO: train mask need to include
                 gt_bboxes_ignore.append(bbox)
             else:
