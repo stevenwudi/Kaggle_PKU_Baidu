@@ -4,6 +4,7 @@ model = dict(
     num_stages=3,
     interleaved=True,
     mask_info_flow=True,
+    car_cls_info_flow=True,
     backbone=dict(
         type='HRNet',
         extra=dict(
@@ -123,6 +124,7 @@ model = dict(
         loss_weight=0.2),
 
     with_semantic_loss=False,
+    with_car_cls_rot=True,
     # This is DI WU's customised model
     semantic_fusion=('bbox', 'mask', 'car_cls_rot'),
     car_cls_rot_roi_extractor=dict(
@@ -132,13 +134,20 @@ model = dict(
         featmap_strides=[4, 8, 16, 32]),
 
     car_cls_rot_head=dict(
-        type='HTCCarClsRotHead',
-        num_convs=4,
+        type='SharedCarClsRotHead',
+        num_fcs=2,
         in_channels=256,
-        conv_out_channels=256,
-        num_classes=34,
-    )
+        fc_out_channels=1024,
+        roi_feat_size=14,
+        num_classes=34,    # There are total 34 car classes
+        reg_class_agnostic=True,
+        # target_means=[0., 0., 0., 0.],
+        # target_stds=[0.1, 0.1, 0.2, 0.2],
+        loss_cls=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
 )
+
 # model training and testing settings
 train_cfg = dict(
     rpn=dict(
@@ -239,8 +248,8 @@ train_pipeline = [
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True,
          with_carcls_rot=True, with_translation=True),
     dict(type='CropBottom', bottom_half=1480),
-
-    dict(type='Resize', img_scale=(1333, 800), keep_ratio=True),
+    #dict(type='Resize', img_scale=(1300, 800), keep_ratio=True),
+    dict(type='Resize', img_scale=(1700, 1400), keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
@@ -254,7 +263,7 @@ test_pipeline = [
     dict(type='CropBottom', bottom_half=1480),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(1333, 800),
+        img_scale=(3384, 1230),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
@@ -285,7 +294,7 @@ data = dict(
         img_prefix=data_root + 'test_images/',
         pipeline=test_pipeline))
 # optimizer
-optimizer = dict(type='SGD', lr=0.02, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -308,7 +317,7 @@ total_epochs = 20
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku'
-load_from = '/data/Kaggle/mmdet_pretrained_weights/htc_hrnetv2p_w48_28e_20190810-a4274b38.pth'
+load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_Nov13-12-04-05/epoch_13.pth'
 
 resume_from = None
 workflow = [('train', 1)]

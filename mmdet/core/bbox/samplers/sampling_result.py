@@ -19,6 +19,20 @@ class SamplingResult(object):
         else:
             self.pos_gt_labels = None
 
+        if assign_result.assigned_carlabels is not None:
+            self.pos_gt_carlabels = assign_result.assigned_carlabels[pos_inds]
+        else:
+            self.pos_gt_carlabels = None
+        if assign_result.assigned_quaternion_semispheres is not None:
+            self.pos_gt_assigned_quaternion_semispheres = assign_result.assigned_quaternion_semispheres[pos_inds]
+        else:
+            self.pos_gt_assigned_quaternion_semispheres = None
+        if assign_result.assigned_translations is not None:
+            self.pog_gt_assigned_translations = assign_result.assigned_translations[pos_inds]
+        else:
+            self.pog_gt_assigned_translations = None
+
+
     @property
     def bboxes(self):
         return torch.cat([self.pos_bboxes, self.neg_bboxes])

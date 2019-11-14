@@ -25,6 +25,8 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
                  bbox_head=None,
                  mask_roi_extractor=None,
                  mask_head=None,
+                 car_cls_rot_roi_extractor=None,
+                 car_cls_rot_head=None,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None):
@@ -80,6 +82,25 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
             else:
                 self.share_roi_extractor = True
                 self.mask_roi_extractor = self.bbox_roi_extractor
+
+        if car_cls_rot_head is not None:
+            self.car_cls_rot_head = nn.ModuleList()
+            if not isinstance(car_cls_rot_head, list):
+                car_cls_rot_head = [car_cls_rot_head for _ in range(num_stages)]
+            assert len(car_cls_rot_head) == self.num_stages
+            for head in car_cls_rot_head:
+                self.car_cls_rot_head.append(builder.build_head(head))
+            if car_cls_rot_roi_extractor is not None:
+                self.share_roi_extractor = False
+                self.car_cls_rot_roi_extractor = nn.ModuleList()
+                if not isinstance(car_cls_rot_roi_extractor, list):
+                    car_cls_rot_roi_extractor = [car_cls_rot_roi_extractor for _ in range(num_stages)]
+                    assert len(car_cls_rot_roi_extractor) == self.num_stages
+                for roi_extractor in car_cls_rot_roi_extractor:
+                    self.car_cls_rot_roi_extractor.append(builder.build_roi_extractor(roi_extractor))
+            else:
+                self.share_roi_extractor = True
+                self.car_cls_rot_roi_extractor = self.bbox_roi_extractor
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg

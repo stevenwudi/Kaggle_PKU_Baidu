@@ -112,11 +112,11 @@ class LoadAnnotations(object):
         return results
 
     def _load_quaternion_semispheres(self, results):
-        results['quaternion_semispheres'] = results['ann_info']['quaternion_semispheres']
+        results['quaternion_semispheres'] = np.array(results['ann_info']['quaternion_semispheres'])
         return results
 
     def _load_translations(self, results):
-        results['translations'] = results['ann_info']['translations']
+        results['translations'] = np.array(results['ann_info']['translations'])
         return results
 
     def __call__(self, results):

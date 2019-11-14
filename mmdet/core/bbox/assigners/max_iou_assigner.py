@@ -44,7 +44,9 @@ class MaxIoUAssigner(BaseAssigner):
         self.ignore_iof_thr = ignore_iof_thr
         self.ignore_wrt_candidates = ignore_wrt_candidates
 
-    def assign(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None):
+    def assign(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None,
+               carlabels=None, quaternion_semispheres=None, translations=None
+               ):
         """Assign gt to bboxes.
 
         This method assign a gt bbox to every bbox (proposal/anchor), each bbox
@@ -87,10 +89,12 @@ class MaxIoUAssigner(BaseAssigner):
                 ignore_max_overlaps, _ = ignore_overlaps.max(dim=0)
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
 
-        assign_result = self.assign_wrt_overlaps(overlaps, gt_labels)
+        assign_result = self.assign_wrt_overlaps(overlaps, gt_labels,
+                                                 carlabels, quaternion_semispheres, translations)
         return assign_result
 
-    def assign_wrt_overlaps(self, overlaps, gt_labels=None):
+    def assign_wrt_overlaps(self, overlaps, gt_labels=None,
+                            carlabels=None, quaternion_semispheres=None, translations=None):
         """Assign w.r.t. the overlaps of bboxes with gts.
 
         Args:
@@ -107,9 +111,7 @@ class MaxIoUAssigner(BaseAssigner):
         num_gts, num_bboxes = overlaps.size(0), overlaps.size(1)
 
         # 1. assign -1 by default
-        assigned_gt_inds = overlaps.new_full((num_bboxes, ),
-                                             -1,
-                                             dtype=torch.long)
+        assigned_gt_inds = overlaps.new_full((num_bboxes, ), -1, dtype=torch.long)
 
         # for each anchor, which gt best overlaps with it
         # for each anchor, the max iou of all gts
@@ -122,6 +124,7 @@ class MaxIoUAssigner(BaseAssigner):
         if isinstance(self.neg_iou_thr, float):
             assigned_gt_inds[(max_overlaps >= 0)
                              & (max_overlaps < self.neg_iou_thr)] = 0
+
         elif isinstance(self.neg_iou_thr, tuple):
             assert len(self.neg_iou_thr) == 2
             assigned_gt_inds[(max_overlaps >= self.neg_iou_thr[0])
@@ -142,12 +145,24 @@ class MaxIoUAssigner(BaseAssigner):
 
         if gt_labels is not None:
             assigned_labels = assigned_gt_inds.new_zeros((num_bboxes, ))
+            assigned_carlabels = assigned_gt_inds.new_zeros((num_bboxes, ))
+            assigned_quaternion_semispheres = assigned_gt_inds.new_zeros((num_bboxes, 4), dtype=torch.double)
+            assigned_translations = assigned_gt_inds.new_zeros((num_bboxes, 3), dtype=torch.double)
+
             pos_inds = torch.nonzero(assigned_gt_inds > 0).squeeze()
             if pos_inds.numel() > 0:
-                assigned_labels[pos_inds] = gt_labels[
-                    assigned_gt_inds[pos_inds] - 1]
+                assigned_labels[pos_inds] = gt_labels[assigned_gt_inds[pos_inds] - 1]
+                assigned_carlabels[pos_inds] = carlabels[assigned_gt_inds[pos_inds] - 1]
+                assigned_quaternion_semispheres[pos_inds] = quaternion_semispheres[assigned_gt_inds[pos_inds] - 1]
+                assigned_translations[pos_inds] = translations[assigned_gt_inds[pos_inds] - 1]
+
         else:
             assigned_labels = None
+            assigned_carlabels = None
+            assigned_quaternion_semispheres = None
+            assigned_translations = None
 
         return AssignResult(
-            num_gts, assigned_gt_inds, max_overlaps, labels=assigned_labels)
+            num_gts, assigned_gt_inds, max_overlaps, labels=assigned_labels,
+            assigned_carlabels=assigned_carlabels, assigned_quaternion_semispheres=assigned_quaternion_semispheres,
+            assigned_translations=assigned_translations)

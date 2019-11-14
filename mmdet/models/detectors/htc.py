@@ -20,9 +20,9 @@ class HybridTaskCascade(CascadeRCNN):
                  semantic_fusion=('bbox', 'mask'),
                  interleaved=True,
                  mask_info_flow=True,
+                 car_cls_info_flow=True,
                  with_semantic_loss=False,
-                 car_cls_rot_roi_extractor=None,
-                 car_cls_rot_head=None,
+                 with_car_cls_rot=False,
                  **kwargs):
         super(HybridTaskCascade, self).__init__(num_stages, backbone, **kwargs)
         assert self.with_bbox and self.with_mask
@@ -36,6 +36,10 @@ class HybridTaskCascade(CascadeRCNN):
         self.semantic_fusion = semantic_fusion
         self.interleaved = interleaved
         self.mask_info_flow = mask_info_flow
+        self.car_cls_info_flow = car_cls_info_flow
+
+        # The following is for 6DoF estimation
+        self.with_car_cls_rot = with_car_cls_rot
 
     @property
     def with_semantic(self):
@@ -73,6 +77,47 @@ class HybridTaskCascade(CascadeRCNN):
                                             gt_labels, rcnn_train_cfg)
         loss_bbox = bbox_head.loss(cls_score, bbox_pred, *bbox_targets)
         return loss_bbox, rois, bbox_targets, bbox_pred
+
+    def _carcls_rot_forward_train(self,
+                            stage,
+                            x,
+                            sampling_results,
+                            carlabels,
+                            quaternion_semispheres,
+                            rcnn_train_cfg,
+                            semantic_feat=None):
+        car_cls_rot_roi_extractor = self.car_cls_rot_roi_extractor[stage]
+        car_cls_rot_head = self.car_cls_rot_head[stage]
+
+        pos_rois = bbox2roi([res.pos_bboxes for res in sampling_results])
+        car_cls_rot_feats = car_cls_rot_roi_extractor(x[:car_cls_rot_roi_extractor.num_inputs], pos_rois)
+
+        # semantic feature fusion
+        # element-wise sum for original features and pooled semantic features
+        if self.with_semantic and 'car_cls_rot' in self.semantic_fusion:
+            car_cls_rot_semantic_feat = self.semantic_roi_extractor([semantic_feat],pos_rois)
+            if car_cls_rot_semantic_feat.shape[-2:] != car_cls_rot_feats.shape[-2:]:
+                car_cls_rot_semantic_feat = F.adaptive_avg_pool2d(
+                    car_cls_rot_semantic_feat, car_cls_rot_feats.shape[-2:])
+            car_cls_rot_feats += car_cls_rot_semantic_feat
+
+        # car cls rot information flow
+        # forward all previous mask heads to obtain last_feat, and fuse it
+        # with the normal mask feature
+        if self.car_cls_info_flow:
+            last_feat = None
+            for i in range(stage):
+                last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
+                car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats, last_feat, return_feat=False)
+        else:
+            car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats)
+
+        car_cls_score_target, quaternion_target = car_cls_rot_head.get_target(sampling_results, carlabels, quaternion_semispheres, rcnn_train_cfg)
+        pos_labels = torch.cat([res.pos_gt_labels for res in sampling_results])
+        loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
+                                                 car_cls_score_target, quaternion_target,
+                                                 pos_labels)
+        return loss_car_cls_rot
 
     def _mask_forward_train(self,
                             stage,
@@ -258,12 +303,18 @@ class HybridTaskCascade(CascadeRCNN):
                 assign_result = bbox_assigner.assign(proposal_list[j],
                                                      gt_bboxes[j],
                                                      gt_bboxes_ignore[j],
-                                                     gt_labels[j])
+                                                     gt_labels[j],
+                                                     carlabels[j],
+                                                     quaternion_semispheres[j],
+                                                     translations[j])
                 sampling_result = bbox_sampler.sample(
                     assign_result,
                     proposal_list[j],
                     gt_bboxes[j],
                     gt_labels[j],
+                    carlabels[j],
+                    quaternion_semispheres[j],
+                    translations[j],
                     feats=[lvl_feat[j][None] for lvl_feat in x])
                 sampling_results.append(sampling_result)
 
@@ -292,12 +343,18 @@ class HybridTaskCascade(CascadeRCNN):
                         for j in range(num_imgs):
                             assign_result = bbox_assigner.assign(
                                 proposal_list[j], gt_bboxes[j],
-                                gt_bboxes_ignore[j], gt_labels[j])
+                                gt_bboxes_ignore[j], gt_labels[j],
+                                carlabels[j],
+                                quaternion_semispheres[j],
+                                translations[j])
                             sampling_result = bbox_sampler.sample(
                                 assign_result,
                                 proposal_list[j],
                                 gt_bboxes[j],
                                 gt_labels[j],
+                                carlabels[j],
+                                quaternion_semispheres[j],
+                                translations[j],
                                 feats=[lvl_feat[j][None] for lvl_feat in x])
                             sampling_results.append(sampling_result)
                 loss_mask = self._mask_forward_train(i, x, sampling_results,
@@ -306,6 +363,21 @@ class HybridTaskCascade(CascadeRCNN):
                 for name, value in loss_mask.items():
                     losses['s{}.{}'.format(i, name)] = (
                         value * lw if 'loss' in name else value)
+
+            if self.with_car_cls_rot:
+                # interleaved execution: use regressed bboxes by the box branch
+                # to train the mask branch
+                if self.interleaved:
+                    pos_is_gts = [res.pos_is_gt for res in sampling_results]
+                    with torch.no_grad():
+                        proposal_list = self.bbox_head[i].refine_bboxes(
+                            rois, roi_labels, bbox_pred, pos_is_gts, img_meta)
+
+                loss_car_cls_rot = self._carcls_rot_forward_train(i, x, sampling_results,
+                                                                 carlabels, quaternion_semispheres,
+                                                                 rcnn_train_cfg, semantic_feat)
+                for name, value in loss_car_cls_rot.items():
+                    losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
             # refine bboxes (same as Cascade R-CNN)
             if i < self.num_stages - 1 and not self.interleaved:

@@ -392,6 +392,6 @@ class KaggkePKUDataset(CustomDataset):
             bboxes_ignore=gt_bboxes_ignore,
             masks=gt_masks_ann,
             quaternion_semispheres=quaternion_semispheres,
-            translations=quaternion_semispheres,)
+            translations=translations)
 
         return ann
