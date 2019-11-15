@@ -107,21 +107,21 @@ model = dict(
         num_classes=81,
         loss_mask=dict(
             type='CrossEntropyLoss', use_mask=True, loss_weight=1.0)),
-    semantic_roi_extractor=dict(
-        type='SingleRoIExtractor',
-        roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
-        out_channels=256,
-        featmap_strides=[8]),
-    semantic_head=dict(
-        type='FusedSemanticHead',
-        num_ins=5,
-        fusion_level=1,
-        num_convs=4,
-        in_channels=256,
-        conv_out_channels=256,
-        num_classes=183,
-        ignore_label=255,
-        loss_weight=0.2),
+    # semantic_roi_extractor=dict(
+    #     type='SingleRoIExtractor',
+    #     roi_layer=dict(type='RoIAlign', out_size=14, sample_num=2),
+    #     out_channels=256,
+    #     featmap_strides=[8]),
+    # semantic_head=dict(
+    #     type='FusedSemanticHead',
+    #     num_ins=5,
+    #     fusion_level=1,
+    #     num_convs=4,
+    #     in_channels=256,
+    #     conv_out_channels=256,
+    #     num_classes=183,
+    #     ignore_label=255,
+    #     loss_weight=0.2),
 
     with_semantic_loss=False,
     with_car_cls_rot=True,
@@ -143,9 +143,8 @@ model = dict(
         reg_class_agnostic=True,
         # target_means=[0., 0., 0., 0.],
         # target_stds=[0.1, 0.1, 0.2, 0.2],
-        loss_cls=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
-        loss_bbox=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+        loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+        loss_quaternion=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
 )
 
 # model training and testing settings
@@ -250,6 +249,8 @@ train_pipeline = [
     dict(type='CropBottom', bottom_half=1480),
     #dict(type='Resize', img_scale=(1300, 800), keep_ratio=True),
     dict(type='Resize', img_scale=(1700, 1400), keep_ratio=True),
+    #dict(type='Resize', img_scale=(1000, 300), keep_ratio=True),
+
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
@@ -317,7 +318,7 @@ total_epochs = 20
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku'
-load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_Nov13-12-04-05/epoch_13.pth'
+load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_Nov13-12-04-05/epoch_20.pth'
 
 resume_from = None
 workflow = [('train', 1)]

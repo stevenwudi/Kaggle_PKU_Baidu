@@ -375,6 +375,9 @@ class KaggkePKUDataset(CustomDataset):
 
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
+            quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
+            translations = np.array(translations, dtype=np.float32)
+
             gt_labels = np.array(gt_labels, dtype=np.int64)
         else:
             gt_bboxes = np.zeros((0, 4), dtype=np.float32)

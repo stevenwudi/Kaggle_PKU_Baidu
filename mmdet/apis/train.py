@@ -14,6 +14,27 @@ from mmdet.models import RPN
 from .env import get_root_logger
 
 
+# def parse_losses(total_losses):
+#     log_vars = OrderedDict()
+#     for total_keys in total_losses.keys():
+#         losses = total_losses[total_keys]
+#         log_vars[total_keys] = dict()
+#         for loss_name, loss_value in losses.items():
+#             if isinstance(loss_value, torch.Tensor):
+#                 log_vars[total_keys][loss_name] = loss_value.mean()
+#             elif isinstance(loss_value, list):
+#                 log_vars[total_keys][loss_name] = sum(_loss.mean() for _loss in loss_value)
+#             else:
+#                 raise TypeError('{} is not a tensor or list of tensors'.format(loss_name))
+#
+#         loss = sum(_value for _key, _value in log_vars[total_keys].items() if 'loss' in _key)
+#
+#         log_vars[total_keys]['loss'] = loss
+#     # for name in log_vars['htc_losses']:
+#     #     log_vars[name] = log_vars[name].item()
+#
+#     return loss, log_vars
+
 def parse_losses(losses):
     log_vars = OrderedDict()
     for loss_name, loss_value in losses.items():
@@ -22,8 +43,7 @@ def parse_losses(losses):
         elif isinstance(loss_value, list):
             log_vars[loss_name] = sum(_loss.mean() for _loss in loss_value)
         else:
-            raise TypeError(
-                '{} is not a tensor or list of tensors'.format(loss_name))
+            raise TypeError('{} is not a tensor or list of tensors'.format(loss_name))
 
     loss = sum(_value for _key, _value in log_vars.items() if 'loss' in _key)
 
@@ -34,12 +54,11 @@ def parse_losses(losses):
     return loss, log_vars
 
 
-def batch_processor(model, data, train_mode):
+def batch_processor(model, data, current_lr, train_mode):
     losses = model(**data)
     loss, log_vars = parse_losses(losses)
-
-    outputs = dict(
-        loss=loss, log_vars=log_vars, num_samples=len(data['img'].data))
+    log_vars['current_lr'] = current_lr
+    outputs = dict(loss=loss, log_vars=log_vars, num_samples=len(data['img'].data))
 
     return outputs
 

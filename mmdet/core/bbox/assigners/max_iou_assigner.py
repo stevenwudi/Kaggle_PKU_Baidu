@@ -146,8 +146,8 @@ class MaxIoUAssigner(BaseAssigner):
         if gt_labels is not None:
             assigned_labels = assigned_gt_inds.new_zeros((num_bboxes, ))
             assigned_carlabels = assigned_gt_inds.new_zeros((num_bboxes, ))
-            assigned_quaternion_semispheres = assigned_gt_inds.new_zeros((num_bboxes, 4), dtype=torch.double)
-            assigned_translations = assigned_gt_inds.new_zeros((num_bboxes, 3), dtype=torch.double)
+            assigned_quaternion_semispheres = assigned_gt_inds.new_zeros((num_bboxes, 4), dtype=torch.float)
+            assigned_translations = assigned_gt_inds.new_zeros((num_bboxes, 3), dtype=torch.float)
 
             pos_inds = torch.nonzero(assigned_gt_inds > 0).squeeze()
             if pos_inds.numel() > 0:

@@ -1,10 +1,14 @@
 import torch.nn as nn
-
+import torch
 
 from mmdet.models.registry import HEADS
 from mmdet.models.utils import ConvModule
 from .bbox_head import BBoxHead
 from mmdet.core import force_fp32
+
+from ..losses import accuracy
+from ..builder import build_loss
+
 
 @HEADS.register_module
 class ConvFCCarClsRotHead(BBoxHead):
@@ -27,6 +31,8 @@ class ConvFCCarClsRotHead(BBoxHead):
                  fc_out_channels=1024,
                  conv_cfg=None,
                  norm_cfg=None,
+                 loss_car_cls='CrossEntropyLoss',
+                 loss_quaternion='L1',
                  *args,
                  **kwargs):
         super(ConvFCCarClsRotHead, self).__init__(*args, **kwargs)
@@ -80,6 +86,10 @@ class ConvFCCarClsRotHead(BBoxHead):
             out_dim_reg = (4 if self.reg_class_agnostic else 4 *
                            self.num_classes)
             self.fc_reg = nn.Linear(self.reg_last_dim, out_dim_reg)
+
+        # Di Wu add build loss here overriding bbox_head
+        self.loss_car_cls = build_loss(loss_car_cls)
+        self.loss_quaternion = build_loss(loss_quaternion)
 
     def _add_conv_fc_branch(self,
                             num_branch_convs,
@@ -172,59 +182,28 @@ class ConvFCCarClsRotHead(BBoxHead):
 
     def get_target(self, sampling_results, carlabels, quaternion_semispheres,
                    rcnn_train_cfg):
-        pos_proposals = [res.pos_bboxes for res in sampling_results]
-        #neg_proposals = [res.neg_bboxes for res in sampling_results]
-        pos_gt_bboxes = [res.pos_gt_bboxes for res in sampling_results]
-        pos_gt_labels = [res.pos_gt_labels for res in sampling_results]
 
         pos_carlabels = [res.pos_gt_carlabels for res in sampling_results]
         pos_gt_assigned_quaternion_semispheres = [res.pos_gt_assigned_quaternion_semispheres for res in sampling_results]
-        pog_gt_assigned_translations = [res.pog_gt_assigned_translations for res in sampling_results]
+        #pog_gt_assigned_translations = [res.pog_gt_assigned_translations for res in sampling_results]
+        pos_carlabels = torch.cat(pos_carlabels, 0)
+        pos_gt_assigned_quaternion_semispheres = torch.cat(pos_gt_assigned_quaternion_semispheres, 0)
 
-        reg_classes = 1 if self.reg_class_agnostic else self.num_classes
-        cls_reg_targets = bbox_target(
-            pos_proposals,
-            neg_proposals,
-            pos_gt_bboxes,
-            pos_gt_labels,
-            rcnn_train_cfg,
-            reg_classes,
-            target_means=self.target_means,
-            target_stds=self.target_stds)
-        return cls_reg_targets
+        return pos_carlabels, pos_gt_assigned_quaternion_semispheres
 
     @force_fp32(apply_to=('car_cls_score', 'quaternion_pred'))
     def loss(self,
              car_cls_score_pred,
              quaternion_pred,
-             labels,
-             label_weights,
-             bbox_targets,
-             bbox_weights,
-             reduction_override=None):
+             car_cls_score_target,
+             quaternion_target):
         losses = dict()
-        if cls_score is not None:
-            avg_factor = max(torch.sum(label_weights > 0).float().item(), 1.)
-            losses['loss_cls'] = self.loss_cls(
-                cls_score,
-                labels,
-                label_weights,
-                avg_factor=avg_factor,
-                reduction_override=reduction_override)
-            losses['acc'] = accuracy(cls_score, labels)
-        if bbox_pred is not None:
-            pos_inds = labels > 0
-            if self.reg_class_agnostic:
-                pos_bbox_pred = bbox_pred.view(bbox_pred.size(0), 4)[pos_inds]
-            else:
-                pos_bbox_pred = bbox_pred.view(bbox_pred.size(0), -1,
-                                               4)[pos_inds, labels[pos_inds]]
-            losses['loss_bbox'] = self.loss_bbox(
-                pos_bbox_pred,
-                bbox_targets[pos_inds],
-                bbox_weights[pos_inds],
-                avg_factor=bbox_targets.size(0),
-                reduction_override=reduction_override)
+
+        losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
+        losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
+
+        losses['loss_quaternion'] = self.loss_quaternion(quaternion_pred, quaternion_target)
+
         return losses
 
 
