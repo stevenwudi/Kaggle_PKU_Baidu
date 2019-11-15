@@ -22,6 +22,5 @@ for i in tqdm(range(len(img_names))):
     show_result_kaggle_pku(img, result,
                            CocoDataset.CLASSES,
                            show=False,
-                           out_file=os.path.join(out_dir, img_names[i]),
-                           bottom_half=True)
+                           out_file=os.path.join(out_dir, img_names[i]))
 

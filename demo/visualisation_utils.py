@@ -99,8 +99,7 @@ def show_result_kaggle_pku(img,
                 score_thr=0.3,
                 wait_time=0,
                 show=True,
-                out_file=None,
-                bottom_half=True,):
+                out_file=None):
     """Visualize the detection results on the image.
 
     Args:
