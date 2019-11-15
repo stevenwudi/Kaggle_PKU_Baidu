@@ -113,8 +113,14 @@ class HybridTaskCascade(CascadeRCNN):
             car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats)
 
         car_cls_score_target, quaternion_target = car_cls_rot_head.get_target(sampling_results, carlabels, quaternion_semispheres, rcnn_train_cfg)
+
+        # we need to reweight the loss here:
+        car_cls_weight = self.train_cfg.car_cls_weight
+        rot_weight = self.train_cfg.rot_weight
+
         loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
-                                                 car_cls_score_target, quaternion_target)
+                                                 car_cls_score_target, quaternion_target,
+                                                 car_cls_weight, rot_weight)
         return loss_car_cls_rot
 
     def _mask_forward_train(self,

@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import numpy  as np
 
 from mmdet.models.registry import HEADS
 from mmdet.models.utils import ConvModule
@@ -196,16 +197,26 @@ class ConvFCCarClsRotHead(BBoxHead):
              car_cls_score_pred,
              quaternion_pred,
              car_cls_score_target,
-             quaternion_target):
+             quaternion_target,
+             car_cls_weight=1.0,
+             rot_weight=1.0):
         losses = dict()
 
         losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
+        losses['car_cls_ce_loss'] *= car_cls_weight
         losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
 
         losses['loss_quaternion'] = self.loss_quaternion(quaternion_pred, quaternion_target)
+        losses['loss_quaternion'] *= rot_weight
+        losses['rotation_distance'] = self.rotation_similiarity(quaternion_pred, quaternion_target)
 
         return losses
 
+
+    def rotation_similiarity(self, quaternion_pred, quaternion_target):
+        diff = torch.abs(torch.sum(quaternion_pred*quaternion_target, dim=1))
+        dis_rot = 2 * torch.acos(diff) * 180 / np.pi
+        return dis_rot
 
 
 @HEADS.register_module
