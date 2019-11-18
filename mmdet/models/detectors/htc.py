@@ -23,6 +23,7 @@ class HybridTaskCascade(CascadeRCNN):
                  car_cls_info_flow=True,
                  with_semantic_loss=False,
                  with_car_cls_rot=False,
+                 with_translation=True,
                  **kwargs):
         super(HybridTaskCascade, self).__init__(num_stages, backbone, **kwargs)
         assert self.with_bbox and self.with_mask
@@ -40,6 +41,8 @@ class HybridTaskCascade(CascadeRCNN):
 
         # The following is for 6DoF estimation
         self.with_car_cls_rot = with_car_cls_rot
+        self.with_translation = with_translation
+
 
     @property
     def with_semantic(self):
@@ -108,9 +111,9 @@ class HybridTaskCascade(CascadeRCNN):
             last_feat = None
             for i in range(stage):
                 last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
-            car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats, last_feat, return_feat=False)
+            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, last_feat, return_feat=False)
         else:
-            car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats)
+            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats)
 
         car_cls_score_target, quaternion_target = car_cls_rot_head.get_target(sampling_results, carlabels, quaternion_semispheres, rcnn_train_cfg)
 
@@ -121,7 +124,7 @@ class HybridTaskCascade(CascadeRCNN):
         loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
                                                  car_cls_score_target, quaternion_target,
                                                  car_cls_weight, rot_weight)
-        return loss_car_cls_rot
+        return loss_car_cls_rot, car_cls_rot_feat
 
     def _mask_forward_train(self,
                             stage,
@@ -276,6 +279,7 @@ class HybridTaskCascade(CascadeRCNN):
                       carlabels=None,
                       quaternion_semispheres=None,
                       translations=None,
+                      scale_factor=1.0,
                       ):
         x = self.extract_feat(img)
 
@@ -383,7 +387,7 @@ class HybridTaskCascade(CascadeRCNN):
 
             if self.with_car_cls_rot:
 
-                loss_car_cls_rot = self._carcls_rot_forward_train(i, x, sampling_results,
+                loss_car_cls_rot, car_cls_rot_feat = self._carcls_rot_forward_train(i, x, sampling_results,
                                                                  carlabels, quaternion_semispheres,
                                                                  rcnn_train_cfg, semantic_feat)
                 for name, value in loss_car_cls_rot.items():
@@ -395,6 +399,19 @@ class HybridTaskCascade(CascadeRCNN):
                 with torch.no_grad():
                     proposal_list = self.bbox_head[i].refine_bboxes(
                         rois, roi_labels, bbox_pred, pos_is_gts, img_meta)
+
+        # for translation, we don't have interleave or cascading for the moment
+        if self.with_translation:
+            pos_bboxes = [res.pos_bboxes for res in sampling_results]
+            # TODO: this is a dangerous hack: we assume only one image per batch
+            for im_idx in range(len(pos_bboxes)):
+                pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx])
+                trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
+                pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+
+                loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
+                for name, value in loss_translation.items():
+                    losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
         return losses
 

@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-import numpy  as np
+import numpy as np
 
 from mmdet.models.registry import HEADS
 from mmdet.models.utils import ConvModule
@@ -179,7 +179,7 @@ class ConvFCCarClsRotHead(BBoxHead):
         quaternion_pred = self.fc_reg(x_reg) if self.with_reg else None
         # Di WU also normalise the quaternion here
         quaternion_pred = nn.functional.normalize(quaternion_pred, p=2, dim=1)
-        return car_cls_score_pred, quaternion_pred
+        return car_cls_score_pred, quaternion_pred, x
 
     def get_target(self, sampling_results, carlabels, quaternion_semispheres,
                    rcnn_train_cfg):
@@ -211,7 +211,6 @@ class ConvFCCarClsRotHead(BBoxHead):
         losses['rotation_distance'] = self.rotation_similiarity(quaternion_pred, quaternion_target)
 
         return losses
-
 
     def rotation_similiarity(self, quaternion_pred, quaternion_target):
         diff = torch.abs(torch.sum(quaternion_pred*quaternion_target, dim=1))

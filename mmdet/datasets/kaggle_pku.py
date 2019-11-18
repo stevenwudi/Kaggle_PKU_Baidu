@@ -242,17 +242,21 @@ class KaggkePKUDataset(CustomDataset):
         """
 
         # car points looking from the sky
-        xs, ys = [], []
+        xs, ys, zs = [], [], []
         for ps in train['PredictionString']:
             coords = self._str2coords(ps)
             xs += [c['x'] for c in coords]
             ys += [c['y'] for c in coords]
-        xs, ys = np.array(xs), np.array(ys)
-        print("x min: %d, max: %d, mean: %d" % (int(min(xs)), int(max(xs)), int(xs.mean())))
-        print("y min: %d, max: %d, mean: %d" % (int(min(ys)), int(max(ys)), int(ys.mean())))
+            zs += [c['z'] for c in coords]
+        xs, ys, zs = np.array(xs), np.array(ys), np.array(zs)
+        print("x min: %d, max: %d, mean: %d, std: %.3f" % (int(min(xs)), int(max(xs)), int(xs.mean()), xs.std()))
+        print("y min: %d, max: %d, mean: %d, std: %.3f" % (int(min(ys)), int(max(ys)), int(ys.mean()), ys.std()))
+        print("z min: %d, max: %d, mean: %d, std: %.3f" % (int(min(zs)), int(max(zs)), int(zs.mean()), zs.std()))
+
         """
-        x min: -90, max: 519, mean: -3
-        y min: 1, max: 689, mean: 9
+        x min: -90, max: 519, mean: -3, std: 14.560
+        y min: 1, max: 689, mean: 9, std: 6.826
+        z min: 3, max: 3502, mean: 52, std: 40.046
         """
         # Next we filter our 99.9% data distribution
         xmin, xmax = -80, 80
@@ -353,6 +357,11 @@ class KaggkePKUDataset(CustomDataset):
             w, h = x2-x1, y2-y1
             if w < 1 or h < 1:
                 continue
+            translation = ann_info['translations'][i]
+            # X within range (-80, 80) will have cdf of: 0.999738, outlier number: 13
+            # Y within range (1, 50) will have cdf of: 0.999819, outlier number: 9
+            if translation[0] < -80 or translation[0] > 80 or translation[1] < 1 or translation[1] > 50:
+                continue
             if self.bottom_half:
                 # we only take bottom half image
                 bbox = [x1, y1 - self.bottom_half, x2, y2 - self.bottom_half]
@@ -371,7 +380,7 @@ class KaggkePKUDataset(CustomDataset):
                 gt_masks_ann.append(mask)
 
                 quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
-                translations.append(ann_info['translations'][i])
+                translations.append(translation)
 
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
