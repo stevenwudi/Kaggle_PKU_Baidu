@@ -293,7 +293,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[16, 19])
+    step=[50, 100])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -304,11 +304,11 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 20
+total_epochs = 200
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic'
-load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-
+#load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_Nov15-16-11-59/epoch_5.pth'
 resume_from = None
 workflow = [('train', 1)]
