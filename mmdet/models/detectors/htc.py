@@ -245,6 +245,23 @@ class HybridTaskCascade(CascadeRCNN):
                 else:
                     mask_pred = mask_head(mask_feats)
                 outs = outs + (mask_pred, )
+
+        # car cls and rot head
+        if self.with_car_cls_rot:
+            pos_rois = rois[:100]
+            car_cls_rot_roi_extractor = self.car_cls_rot_roi_extractor[-1]
+            car_cls_rot_feats = car_cls_rot_roi_extractor(x[:car_cls_rot_roi_extractor.num_inputs], pos_rois)
+            for i in range(self.num_stages):
+                car_cls_rot_head = self.car_cls_rot_head[i]
+                if self.car_cls_info_flow:
+                    last_feat = None
+                    for ii in range(i):
+                        last_feat = self.car_cls_rot_head[ii](car_cls_rot_feats, last_feat, return_logits=False)
+                    car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats, last_feat, return_feat=False)
+                else:
+                    car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats)
+
+                outs = outs + (car_cls_score_pred, quaternion_pred)
         return outs
 
     def forward_train(self,
