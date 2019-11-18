@@ -36,10 +36,10 @@ class NumpyEncoder(json.JSONEncoder):
 @DATASETS.register_module
 class KaggkePKUDataset(CustomDataset):
 
-    CLASSES = ('car',)
+    CLASSES = ('car')
 
     def load_annotations(self, ann_file,
-                         outdir='/data/Kaggle/wudi_data'):
+                         outdir='/data/Kaggle/cwx_data'):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480   # this
@@ -62,14 +62,15 @@ class KaggkePKUDataset(CustomDataset):
         train = pd.read_csv(ann_file)
         self.print_statistics(train)
 
-        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+        #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_debug1118_poly.json')
         #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_no_mask.json')
 
         if os.path.isfile(outfile):
             annotations = json.load(open(outfile, 'r'))
         else:
             annotations = []
-            for idx in tqdm(range(len(train))):
+            for idx in tqdm(range(len(train[0:40]))):
                 annotation = self.load_anno_idx(idx, train)
                 annotations.append(annotation)
             with open(outfile, 'w') as f:
@@ -79,15 +80,16 @@ class KaggkePKUDataset(CustomDataset):
         return annotations
 
     def load_car_models(self):
-        car_model_dir = os.path.join(self.data_root, 'car_models_json')
+        # car_model_dir = os.path.join(self.data_root, 'car_models_json')
+        car_model_dir = os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json')
         car_model_dict = {}
         for car_name in tqdm(os.listdir(car_model_dir)):
-            with open(os.path.join(self.data_root, 'car_models_json', car_name)) as json_file:
+            with open(os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json', car_name)) as json_file:
                 car_model_dict[car_name[:-5]] = json.load(json_file)
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/wudi_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis_debug_poly'):
 
         labels = []
         bboxes = []
@@ -124,8 +126,8 @@ class KaggkePKUDataset(CustomDataset):
                 # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
                 car_name = car_id2name[gt_pred['id']].name
                 vertices = np.array(self.car_model_dict[car_name]['vertices'])
-                vertices[:, 1] = -vertices[:, 1]
-                triangles = np.array(self.car_model_dict[car_name]['faces']) - 1
+                vertices[:, 1] = -vertices[:, 1]#TODO
+                triangles = np.array(self.car_model_dict[car_name]['faces']) - 1#TODO
 
                 # project 3D points to 2d image plane
                 yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
@@ -162,11 +164,11 @@ class KaggkePKUDataset(CustomDataset):
                     for t in triangles:
                         coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]], dtype=np.int32)
                         # This will draw the mask for segmenation
-                        cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
-                        #cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+                        # cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                        cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
 
                     mask_all += mask_seg
-                    #imwrite(mask_seg, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis','mask_demo.jpg'))
+                    # imwrite(mask_seg, os.path.join('/data/Kaggle/cwx_data/train_iamge_gt_vis_debug',train['ImageId'].iloc[idx] + '_mask_demo.jpg'))
 
                     # Find mask
                     ground_truth_binary_mask = np.zeros(mask_seg.shape, dtype=np.uint8)
@@ -191,11 +193,14 @@ class KaggkePKUDataset(CustomDataset):
                     encoded_ground_truth = maskUtils.encode(fortran_ground_truth_binary_mask)
 
                     rles.append(encoded_ground_truth)
-                    #bm = maskUtils.decode(encoded_ground_truth)
+                #bm = maskUtils.decode(encoded_ground_truth)
             #if draw:
-            if False:
+            if True:
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
+                if not os.path.exists(draw_dir):
+                    os.mkdir(draw_dir)
+                # merged_image = np.concatenate((mask_seg,merged_image),axis=1)
                 imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
 
             if len(bboxes):
@@ -353,11 +358,10 @@ class KaggkePKUDataset(CustomDataset):
             w, h = x2-x1, y2-y1
             if w < 1 or h < 1:
                 continue
-            if self.bottom_half:
-                # we only take bottom half image
-                bbox = [x1, y1 - self.bottom_half, x2, y2 - self.bottom_half]
-            else:
+            if self.bottom_half:   # we only take bottom half image
                 bbox = [x1, y1, x2, y2]
+            else:
+                bbox = [x1, y1 - self.bottom_half, x2, y2 - self.bottom_half]
             if ann_info.get('iscrowd', False):   # TODO: train mask need to include
                 gt_bboxes_ignore.append(bbox)
             else:
@@ -375,9 +379,6 @@ class KaggkePKUDataset(CustomDataset):
 
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
-            quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
-            translations = np.array(translations, dtype=np.float32)
-
             gt_labels = np.array(gt_labels, dtype=np.int64)
         else:
             gt_bboxes = np.zeros((0, 4), dtype=np.float32)
@@ -395,6 +396,6 @@ class KaggkePKUDataset(CustomDataset):
             bboxes_ignore=gt_bboxes_ignore,
             masks=gt_masks_ann,
             quaternion_semispheres=quaternion_semispheres,
-            translations=translations)
+            translations=quaternion_semispheres,)
 
         return ann

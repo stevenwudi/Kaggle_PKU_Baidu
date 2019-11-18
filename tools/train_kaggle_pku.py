@@ -1,7 +1,7 @@
 from __future__ import division
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '3'
 import torch
 from datetime import datetime
 
@@ -16,7 +16,7 @@ from mmdet.models import build_detector
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku.py', help='train config file path')
+    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic.py', help='train config file path')
     parser.add_argument('--work_dir', help='the dir to save logs and models')
     parser.add_argument('--resume_from', help='the checkpoint file to resume from')
     parser.add_argument('--validate', action='store_true', help='whether to evaluate the checkpoint during training')
@@ -47,6 +47,7 @@ def main():
     cfg.gpus = args.gpus
     # Di WU change the saving directory according to the datetime
     cfg.work_dir = cfg.work_dir + '_' + datetime.now().strftime("%b%d-%H-%M-%S")
+
 
     if args.autoscale_lr:
         # apply the linear scaling rule (https://arxiv.org/abs/1706.02677)
