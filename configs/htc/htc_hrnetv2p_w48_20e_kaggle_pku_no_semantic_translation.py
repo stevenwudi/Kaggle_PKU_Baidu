@@ -265,8 +265,10 @@ test_pipeline = [
         img_scale=(3384, 1230),
         flip=False,
         transforms=[
-            dict(type='Resize', keep_ratio=True),
-            dict(type='RandomFlip', flip_ratio=0.5),
+            #dict(type='Resize', keep_ratio=True),
+            dict(type='Resize', img_scale=(1700, 618), keep_ratio=True),
+            #dict(type='RandomFlip', flip_ratio=0.5),
+            dict(type='RandomFlip', flip_ratio=0),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
             dict(type='ImageToTensor', keys=['img']),
@@ -284,11 +286,13 @@ data = dict(
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
+        data_root=data_root,
         ann_file=data_root + 'train.csv',
         img_prefix=data_root + 'train_images/',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
+        data_root=data_root,
         ann_file=data_root + '',
         img_prefix=data_root + 'test_images/',
         pipeline=test_pipeline))
@@ -301,7 +305,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[20, 20])
+    step=[20, 40])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(

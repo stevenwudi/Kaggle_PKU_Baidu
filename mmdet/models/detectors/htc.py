@@ -126,6 +126,21 @@ class HybridTaskCascade(CascadeRCNN):
                                                  car_cls_weight, rot_weight)
         return loss_car_cls_rot, car_cls_rot_feat
 
+    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat):
+        pos_bboxes = [res.pos_bboxes for res in sampling_results]
+        # TODO: this is a dangerous hack: we assume only one image per batch
+        if len(len(pos_bboxes)) > 0:
+            raise NotImplementedError("Image batch size 1 is not implement!")
+        for im_idx in range(len(pos_bboxes)):
+            device_id = car_cls_rot_feat.get_device()
+            pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
+            trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
+            pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+
+            loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
+
+        return loss_translation
+
     def _mask_forward_train(self,
                             stage,
                             x,
@@ -209,6 +224,54 @@ class HybridTaskCascade(CascadeRCNN):
         else:
             mask_pred = mask_head(mask_feats)
         return mask_pred
+
+    def _carcls_rot_forward_test(self,
+                              stage,
+                              x,
+                              _bboxes,
+                              semantic_feat=None):
+
+        car_cls_rot_roi_extractor = self.car_cls_rot_roi_extractor[stage]
+        car_cls_rot_head = self.car_cls_rot_head[stage]
+
+        pos_rois = bbox2roi([_bboxes])
+        car_cls_rot_feats = car_cls_rot_roi_extractor(x[:car_cls_rot_roi_extractor.num_inputs], pos_rois)
+
+        # semantic feature fusion
+        # element-wise sum for original features and pooled semantic features
+        if self.with_semantic and 'car_cls_rot' in self.semantic_fusion:
+            car_cls_rot_semantic_feat = self.semantic_roi_extractor([semantic_feat], pos_rois)
+            if car_cls_rot_semantic_feat.shape[-2:] != car_cls_rot_feats.shape[-2:]:
+                car_cls_rot_semantic_feat = F.adaptive_avg_pool2d(
+                    car_cls_rot_semantic_feat, car_cls_rot_feats.shape[-2:])
+            car_cls_rot_feats += car_cls_rot_semantic_feat
+
+        # car cls rot information flow
+        # forward all previous mask heads to obtain last_feat, and fuse it
+        # with the normal mask feature
+        if self.car_cls_info_flow:
+            last_feat = None
+            for i in range(stage):
+                last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
+            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, last_feat,
+                                                                                     return_feat=False)
+        else:
+            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats)
+
+        car_cls_score_pred = car_cls_score_pred.cpu().numpy()
+        quaternion_pred = quaternion_pred.cpu().numpy()
+        return car_cls_score_pred, quaternion_pred, car_cls_rot_feat
+
+    def _translation_forward_test(self, pos_bboxes, scale_factor, car_cls_rot_feat):
+
+        # TODO: this is a dangerous hack: we assume only one image per batch
+        device_id = car_cls_rot_feat.get_device()
+        pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
+        trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
+        trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
+        trans_pred_world = trans_pred_world.cpu().numpy()
+
+        return trans_pred_world
 
     def forward_dummy(self, img):
         outs = ()
@@ -402,16 +465,9 @@ class HybridTaskCascade(CascadeRCNN):
 
         # for translation, we don't have interleave or cascading for the moment
         if self.with_translation:
-            pos_bboxes = [res.pos_bboxes for res in sampling_results]
-            # TODO: this is a dangerous hack: we assume only one image per batch
-            for im_idx in range(len(pos_bboxes)):
-                pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx])
-                trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
-                pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
-
-                loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
-                for name, value in loss_translation.items():
-                    losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
+            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat)
+            for name, value in loss_translation.items():
+                losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
         return losses
 
@@ -432,6 +488,7 @@ class HybridTaskCascade(CascadeRCNN):
         # "ms" in variable names means multi-stage
         ms_bbox_result = {}
         ms_segm_result = {}
+        ms_6dof_result = {}
         ms_scores = []
         rcnn_test_cfg = self.test_cfg.rcnn
 
@@ -523,8 +580,25 @@ class HybridTaskCascade(CascadeRCNN):
                     ori_shape, scale_factor, rescale)
             ms_segm_result['ensemble'] = segm_result
 
+        if self.with_car_cls_rot:
+            if self.test_cfg.keep_all_stages:
+                raise NotImplementedError
+            else:
+                car_cls_coco = 2
+                stage_num = self.num_stages-1
+                pos_box = det_bboxes[det_labels == car_cls_coco]
+                car_cls_score_pred, quaternion_pred, car_cls_rot_feats = self._carcls_rot_forward_test(stage_num, x, pos_box, semantic_feat)
+            if self.with_translation:
+                trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats)
+            ms_6dof_result['ensemble'] = {'car_cls_score_pred': car_cls_score_pred,
+                                          'quaternion_pred': quaternion_pred,
+                                          'trans_pred_world': trans_pred_world}
         if not self.test_cfg.keep_all_stages:
-            if self.with_mask:
+            if self.with_translation:
+                results = (ms_bbox_result['ensemble'],
+                           ms_segm_result['ensemble'],
+                           ms_6dof_result['ensemble'])
+            elif self.with_mask:
                 results = (ms_bbox_result['ensemble'],
                            ms_segm_result['ensemble'])
             else:

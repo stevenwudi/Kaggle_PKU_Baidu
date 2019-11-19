@@ -78,7 +78,7 @@ class FCTranslationHead(nn.Module):
 
         return pos_gt_assigned_translations
 
-    def bbox_transform_pytorch(self, rois, scale_factor):
+    def bbox_transform_pytorch(self, rois, scale_factor, device_id):
         """Forward transform that maps proposal boxes to predicted ground-truth
         boxes using bounding-box regression deltas. See bbox_transform_inv for a
         description of the weights argument.
@@ -91,7 +91,6 @@ class FCTranslationHead(nn.Module):
         ctr_x = rois[:, 0] + 0.5 * widths
         ctr_y = rois[:, 1] + 0.5 * heights
 
-        device_id = scale_factor.get_device()
         pred_boxes = torch.zeros(rois.shape, dtype=rois.dtype).cuda(device_id)
 
         pred_boxes[:, 0] = ctr_x
@@ -129,6 +128,19 @@ class FCTranslationHead(nn.Module):
 
         translation_diff = torch.sqrt(torch.sum(diff**2, dim=1))
         return translation_diff
+
+    def pred_to_world_coord(self, translation_pred):
+
+        translation_pred[:, 0] *= self.t_x_std
+        translation_pred[:, 0] += self.t_x_mean
+
+        translation_pred[:, 1] *= self.t_y_std
+        translation_pred[:, 1] += self.t_y_mean
+
+        translation_pred[:, 2] *= self.t_z_std
+        translation_pred[:, 2] += self.t_z_mean
+
+        return translation_pred
 
 @HEADS.register_module
 class SharedTranslationHead(FCTranslationHead):
