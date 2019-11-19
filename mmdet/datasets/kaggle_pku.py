@@ -55,27 +55,30 @@ class KaggkePKUDataset(CustomDataset):
                                   [0, 0, 1]], dtype=np.float32)
         self.camera_matrix_inv = np.linalg.inv(self.camera_matrix)
 
-
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
 
-        train = pd.read_csv(ann_file)
-        self.print_statistics(train)
-
-        outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
-        #outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_no_mask.json')
-
-        if os.path.isfile(outfile):
-            annotations = json.load(open(outfile, 'r'))
+        annotations = []
+        if not self.test_mode:
+            train = pd.read_csv(ann_file)
+            train = self.clean_corrupted_images(train)
+            self.print_statistics(train)
+            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+            if os.path.isfile(outfile):
+                annotations = json.load(open(outfile, 'r'))
+            else:
+                for idx in tqdm(range(len(train))):
+                    annotation = self.load_anno_idx(idx, train)
+                    annotations.append(annotation)
+                with open(outfile, 'w') as f:
+                    json.dump(annotations, f, indent=4, cls=NumpyEncoder)
+            self.annotations = annotations
         else:
-            annotations = []
-            for idx in tqdm(range(len(train))):
-                annotation = self.load_anno_idx(idx, train)
-                annotations.append(annotation)
-            with open(outfile, 'w') as f:
-                json.dump(annotations, f, indent=4, cls=NumpyEncoder)
+            for fn in os.listdir(self.img_prefix):
+                filename = os.path.join(self.img_prefix, fn)
+                info = {'filename': filename}
+                annotations.append(info)
 
-        self.annotations = annotations
         return annotations
 
     def load_car_models(self):
@@ -218,6 +221,14 @@ class KaggkePKUDataset(CustomDataset):
                     'rles': rles
                 }
                 return annotation
+
+    def clean_corrupted_images(self, train):
+        # For training images, there are 5 corrupted images:
+        corrupted_images = ['ID_1a5a10365','ID_4d238ae90',
+                          'ID_408f58e9f', 'ID_bb1d991f6','ID_c44983aeb']
+        for ImageId in corrupted_images:
+            train = train[train.ImageId != ImageId]
+        return train
 
     def print_statistics(self, train):
         car_per_image = np.array([len(self._str2coords(s)) for s in train['PredictionString']])
