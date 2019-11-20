@@ -262,7 +262,7 @@ test_pipeline = [
     dict(type='CropBottom', bottom_half=1480),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(3384, 1230),
+        img_scale=(1700, 618),
         flip=False,
         transforms=[
             #dict(type='Resize', keep_ratio=True),

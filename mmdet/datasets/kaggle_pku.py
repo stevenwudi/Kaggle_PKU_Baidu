@@ -5,15 +5,13 @@ import os
 from tqdm import tqdm
 import cv2
 from mmcv.image import imread, imwrite
-from pycocotools.coco import COCO
 from pycocotools import mask as maskUtils
-from skimage import measure
 
 from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
-    quaternion_upper_hemispher, mesh_point_to_bbox, euler_angles_to_rotation_matrix
+    quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -38,8 +36,7 @@ class KaggkePKUDataset(CustomDataset):
 
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file,
-                         outdir='/data/Kaggle/wudi_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/wudi_data'):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480   # this
@@ -72,12 +69,12 @@ class KaggkePKUDataset(CustomDataset):
                     annotations.append(annotation)
                 with open(outfile, 'w') as f:
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
-            self.annotations = annotations
         else:
             for fn in os.listdir(self.img_prefix):
                 filename = os.path.join(self.img_prefix, fn)
                 info = {'filename': filename}
                 annotations.append(info)
+        self.annotations = annotations
 
         return annotations
 
@@ -222,10 +219,92 @@ class KaggkePKUDataset(CustomDataset):
                 }
                 return annotation
 
+    def visualise_pred(self, outputs, args):
+        car_cls_coco = 2
+
+        for idx in tqdm(range(len(self.annotations))):
+            ann = self.annotations[idx]
+            img_name = ann['filename']
+            if not os.path.isfile(img_name):
+                assert "Image file does not exist!"
+            else:
+                image = imread(img_name)
+                output = outputs[idx]
+                # output is a tuple of three elements
+                bboxes, segms, six_dof = output[0], output[1], output[2]
+                car_cls_score_pred = six_dof['car_cls_score_pred']
+                quaternion_pred = six_dof['quaternion_pred']
+                trans_pred_world = six_dof['trans_pred_world']
+                euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+                car_labels = np.argmax(car_cls_score_pred, axis=1)
+                kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
+                car_names = [car_id2name[x].name for x in kaggle_car_labels]
+
+                assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
+                       == len(trans_pred_world) == len(euler_angle)  ==len(car_names)
+                # now we start to plot the image from kaggle
+                coords = np.hstack((euler_angle, trans_pred_world))
+                img_kaggle = self.visualise_kaggle(image, coords)
+                img_mesh = self.visualise_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle, trans_pred_world)
+                imwrite(img_kaggle, os.path.join(args.out[:-4] +'_kaggle_vis/' + img_name.split('/')[-1]))
+                imwrite(img_mesh, os.path.join(args.out[:-4] +'_mes_vis/' + img_name.split('/')[-1]))
+
+
+    def visualise_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
+        from demo.visualisation_utils import draw_result_kaggle_pku
+
+
+        im_combime = draw_result_kaggle_pku(image,
+                                            bboxes,
+                                            segms,
+                                            car_names,
+                                            self.car_model_dict,
+                                            self.camera_matrix,
+                                            trans_pred_world,
+                                            euler_angle)
+
+
+        return im_combime
+
+    def visualise_kaggle(self, img, coords):
+        # You will also need functions from the previous cells
+        x_l = 1.02
+        y_l = 0.80
+        z_l = 2.31
+
+        img = img.copy()
+        for point in coords:
+            # Get values
+            x, y, z = point[3], point[4], point[5]
+            # yaw, pitch, roll = -pitch, -yaw, -roll
+            yaw, pitch, roll = -point[0], -point[1], -point[2]
+            yaw, pitch, roll = -pitch, -yaw, -roll
+            # Math
+            Rt = np.eye(4)
+            t = np.array([x, y, z])
+            Rt[:3, 3] = t
+            Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+            Rt = Rt[:3, :]
+            P = np.array([[x_l, -y_l, -z_l, 1],
+                          [x_l, -y_l, z_l, 1],
+                          [-x_l, -y_l, z_l, 1],
+                          [-x_l, -y_l, -z_l, 1],
+                          [0, 0, 0, 1]]).T
+            img_cor_points = np.dot(self.camera_matrix, np.dot(Rt, P))
+            img_cor_points = img_cor_points.T
+            img_cor_points[:, 0] /= img_cor_points[:, 2]
+            img_cor_points[:, 1] /= img_cor_points[:, 2]
+            img_cor_points = img_cor_points.astype(int)
+            # Drawing
+            img = draw_line(img, img_cor_points)
+            img = draw_points(img, img_cor_points[-1:])
+
+        return img
+
+
     def clean_corrupted_images(self, train):
         # For training images, there are 5 corrupted images:
-        corrupted_images = ['ID_1a5a10365','ID_4d238ae90',
-                          'ID_408f58e9f', 'ID_bb1d991f6','ID_c44983aeb']
+        corrupted_images = ['ID_1a5a10365','ID_4d238ae90', 'ID_408f58e9f', 'ID_bb1d991f6','ID_c44983aeb']
         for ImageId in corrupted_images:
             train = train[train.ImageId != ImageId]
         return train

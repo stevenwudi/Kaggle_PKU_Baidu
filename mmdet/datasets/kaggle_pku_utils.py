@@ -5,7 +5,7 @@
 """
 import numpy as np
 import math
-
+import cv2
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from math import sin, cos
@@ -414,6 +414,23 @@ def im_car_trans_geometric_ssd6d(dataset, boxes, euler_angle, car_cls, im_scale=
         car_trans_pred.append(pred_pose)
 
     return np.array(car_trans_pred)
+
+
+def draw_line(image, points):
+    color = (0, 0, 255)
+    cv2.line(image, tuple(points[0][:2]), tuple(points[3][:2]), color, 8)
+    cv2.line(image, tuple(points[0][:2]), tuple(points[1][:2]), color, 8)
+    cv2.line(image, tuple(points[1][:2]), tuple(points[2][:2]), color, 8)
+    cv2.line(image, tuple(points[2][:2]), tuple(points[3][:2]), color, 8)
+    return image
+
+
+def draw_points(image, points):
+    for (p_x, p_y, p_z) in points:
+        cv2.circle(image, (p_x, p_y), int(1000 / p_z), (0, 255, 0), -1)
+#         if p_x > image.shape[1] or p_y > image.shape[0]:
+#             print('Point', p_x, p_y, 'is out of image with shape', image.shape)
+    return image
 
 
 if __name__ == '__main__':

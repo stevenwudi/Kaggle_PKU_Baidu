@@ -102,30 +102,30 @@ def collect_results(result_part, size, tmpdir=None):
         return ordered_results
 
 
-def write_submission(outputs, data_loader, args):
+def write_submission(outputs, args):
     import pandas as pd
     import numpy as np
     from scipy.special import softmax
     from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
-    submission = args.out.replace('.pkl', '.json')
+    submission = args.out.replace('.pkl', '.csv')
 
-    predictions = []
-    for output in outputs:
+    predictions = {}
+    PATH = '/data/Kaggle/pku-autonomous-driving/'
+    ImageId = [x.replace('.jpg', '') for x in os.listdir(PATH + 'test_images')]
+
+    for idx, output in enumerate(outputs):
         conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
         euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
         translation = output[2]['trans_pred_world']
         coords = np.hstack((euler_angle, translation, conf[:, None]))
         coords_str = coords2str(coords)
-        predictions.append(coords_str)
+        predictions[ImageId[idx]] = coords_str
 
-    PATH = '/data/Kaggle/pku-autonomous-driving/'
     test = pd.read_csv(PATH + 'sample_submission.csv')
-    test['PredictionString'] = predictions
-    ImageId = [x.replace('.jpg', '') for x in os.listdir(PATH + 'test_images')]
-    test['ImageId'] = ImageId
+    for im_id in test['ImageId']:
+        test.loc[test['ImageId'] == im_id, ['PredictionString']] = [predictions[im_id]]
 
     test.to_csv(submission, index=False)
-    test.head()
 
 
 def coords2str(coords):
@@ -134,6 +134,7 @@ def coords2str(coords):
         for l in c:
             s.append('%.5f'%l)
     return ' '.join(s)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
@@ -212,7 +213,9 @@ def main():
             outputs = multi_gpu_test(model, data_loader, args.tmpdir)
     else:
         outputs = mmcv.load(args.out)
-    write_submission(outputs, data_loader, args)
+    #write_submission(outputs, args)
+    dataset.visualise_pred(outputs, args)
+
     rank, _ = get_dist_info()
     if args.out and rank == 0:
         print('\nwriting results to {}'.format(args.out))
