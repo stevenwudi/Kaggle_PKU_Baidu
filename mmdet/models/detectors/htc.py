@@ -129,7 +129,7 @@ class HybridTaskCascade(CascadeRCNN):
     def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat):
         pos_bboxes = [res.pos_bboxes for res in sampling_results]
         # TODO: this is a dangerous hack: we assume only one image per batch
-        if len(len(pos_bboxes)) > 0:
+        if len(pos_bboxes) > 1:
             raise NotImplementedError("Image batch size 1 is not implement!")
         for im_idx in range(len(pos_bboxes)):
             device_id = car_cls_rot_feat.get_device()
