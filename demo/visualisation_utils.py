@@ -167,7 +167,7 @@ def draw_result_kaggle_pku(img_original, bboxes, segms, car_names,
                            trans_pred_world,
                            euler_angle,
                            score_thr=0.1,
-                           transparency=0.3,
+                           transparency=0.5,
                            ):
     """Visualize the detection results on the image.
 
