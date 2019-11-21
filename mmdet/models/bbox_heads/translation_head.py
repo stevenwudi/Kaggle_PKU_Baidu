@@ -126,7 +126,7 @@ class FCTranslationHead(nn.Module):
         diff[:, 1] *= self.t_y_std
         diff[:, 2] *= self.t_z_std
 
-        translation_diff = torch.sqrt(torch.sum(diff**2, dim=1))
+        translation_diff = torch.mean(torch.sqrt(torch.sum(diff**2, dim=1)))
         return translation_diff
 
     def pred_to_world_coord(self, translation_pred):
