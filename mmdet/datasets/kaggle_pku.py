@@ -64,7 +64,7 @@ class KaggkePKUDataset(CustomDataset):
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
             else:
-                for idx in tqdm(range(len(train))):
+                for idx in tqdm(range(len(train[:10]))):
                     annotation = self.load_anno_idx(idx, train)
                     annotations.append(annotation)
                 with open(outfile, 'w') as f:
@@ -192,8 +192,8 @@ class KaggkePKUDataset(CustomDataset):
 
                     rles.append(encoded_ground_truth)
                     #bm = maskUtils.decode(encoded_ground_truth)
-            #if draw:
-            if False:
+            if draw:
+            # if False:
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
                 imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
@@ -439,6 +439,7 @@ class KaggkePKUDataset(CustomDataset):
         gt_bboxes_ignore = []
         gt_masks_ann = []
 
+        eular_angles = []
         quaternion_semispheres = []
         translations = []
 
@@ -469,6 +470,7 @@ class KaggkePKUDataset(CustomDataset):
                 mask = maskUtils.decode(ann_info['rles'][i])
                 gt_masks_ann.append(mask)
 
+                eular_angles.append(ann_info['eular_angles'][i])
                 quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
                 translations.append(translation)
 
@@ -493,6 +495,8 @@ class KaggkePKUDataset(CustomDataset):
             carlabels=gt_labels,
             bboxes_ignore=gt_bboxes_ignore,
             masks=gt_masks_ann,
+
+            eular_angles=eular_angles,
             quaternion_semispheres=quaternion_semispheres,
             translations=translations)
 
