@@ -320,7 +320,7 @@ total_epochs = 50
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation'
-#load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov18-18-08-41/epoch_47.pth'
+load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+# load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov18-18-08-41/epoch_47.pth'
 resume_from = None
 workflow = [('train', 1)]

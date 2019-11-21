@@ -36,7 +36,7 @@ class KaggkePKUDataset(CustomDataset):
 
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/Kaggle/wudi_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/yyj_data'):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480   # this
@@ -87,7 +87,7 @@ class KaggkePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/wudi_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/yyj_data/train_iamge_gt_vis'):
 
         labels = []
         bboxes = []
