@@ -40,8 +40,8 @@ class FCTranslationHead(nn.Module):
         # camera intrinsic also is saved here:
         self.fx, self.cx, self.fy, self.cy = 2304.5479, 1686.2379, 2305.8757, (2710 - 1480)/2
         # translation mean and std:
-        self.t_x_mean, self.t_y_mean, self.t_z_mean = -3, 9, 52
-        self.t_x_std,  self.t_y_std, self.t_z_std = 14.560, 6.826, 40.046
+        self.t_x_mean, self.t_y_mean, self.t_z_mean = -3, 9, 50
+        self.t_x_std,  self.t_y_std, self.t_z_std = 14.015, 4.695, 29.596
 
     def init_weights(self):
         super(FCTranslationHead, self).init_weights()
