@@ -21,9 +21,12 @@ def mesh_point_to_bbox(img):
 
 
 def euler_angles_to_quaternions(angle):
-    """Convert euler angels to quaternions representation.
+    """
+    Convert euler angels to quaternions representation.
+    该公式适用的yaw, pitch, roll与label里的定义不一样，需要做相应的变换 yaw, pitch, roll => pitch, yaw, roll
+
     Input:
-        angle: n x 3 matrix, each row is [roll, pitch, yaw]
+        angle: n x 3 matrix, each row is [yaw, pitch, roll]
     Output:
         q: n x 4 matrix, each row is corresponding quaternion.
     """
@@ -33,7 +36,9 @@ def euler_angles_to_quaternions(angle):
         angle = angle[None, :]
 
     n = angle.shape[0]
-    roll, pitch, yaw = angle[:, 0], angle[:, 1], angle[:, 2]
+
+    #yaw, pitch, roll => pitch, yaw, roll
+    pitch, yaw, roll = angle[:, 0], angle[:, 1], angle[:, 2]
     q = np.zeros((n, 4))
 
     cy = np.cos(yaw * 0.5)
@@ -108,7 +113,6 @@ def quaternion_to_euler_angle(q):
     Z = math.atan2(t3, t4)
 
     return X, Y, Z
-
 
 def intrinsic_vec_to_mat(intrinsic, shape=None):
     """Convert a 4 dim intrinsic vector to a 3x3 intrinsic
