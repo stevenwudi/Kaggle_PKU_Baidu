@@ -92,27 +92,31 @@ def quaternion_upper_hemispher(q):
 
 def quaternion_to_euler_angle(q):
 
-    """Convert quaternion to euler angel.
+    """
+    Convert quaternion to euler angel.
+    该公式适用的yaw, pitch, roll与label里的定义不一样，需要做相应的变换 yaw, pitch, roll => pitch, yaw, roll
+
     Input:
         q: 1 * 4 vector,
     Output:
-        angle: 1 x 3 vector, each row is [roll, pitch, yaw]
+        angle: 1 x 3 vector, each row is [yaw, pitch, roll]
     """
     w, x, y, z = q
     t0 = +2.0 * (w * x + y * z)
     t1 = +1.0 - 2.0 * (x * x + y * y)
-    X = math.atan2(t0, t1)
+    yaw = math.atan2(t0, t1)
 
     t2 = +2.0 * (w * y - z * x)
     t2 = +1.0 if t2 > +1.0 else t2
     t2 = -1.0 if t2 < -1.0 else t2
-    Y = math.asin(t2)
+    pitch = math.asin(t2)
 
     t3 = +2.0 * (w * z + x * y)
     t4 = +1.0 - 2.0 * (y * y + z * z)
-    Z = math.atan2(t3, t4)
+    roll = math.atan2(t3, t4)
 
-    return X, Y, Z
+    #transform label RPY: yaw, pitch, roll => pitch, yaw, roll
+    return pitch, yaw, roll
 
 def intrinsic_vec_to_mat(intrinsic, shape=None):
     """Convert a 4 dim intrinsic vector to a 3x3 intrinsic
