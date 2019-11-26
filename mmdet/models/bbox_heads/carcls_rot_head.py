@@ -236,7 +236,7 @@ class ConvFCCarClsRotHead(BBoxHead):
     def rotation_similiarity(self, quaternion_pred, quaternion_target):
         diff = torch.abs(torch.sum(quaternion_pred*quaternion_target, dim=1))
         dis_rot = torch.mean(2 * torch.acos(diff) * 180 / np.pi)
-        return dis_rot
+        return dis_rot.detach()
 
 
 @HEADS.register_module

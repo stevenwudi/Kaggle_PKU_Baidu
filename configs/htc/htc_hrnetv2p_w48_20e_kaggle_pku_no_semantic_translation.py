@@ -219,7 +219,7 @@ train_cfg = dict(
     stage_loss_weights=[1, 0.5, 0.25],
     car_cls_weight=1.0,
     rot_weight=100.,
-    translation_weight=1.,
+    translation_weight=1.0,
 )
 test_cfg = dict(
     rpn=dict(
@@ -306,7 +306,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[20, 40])
+    step=[10, 20])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
