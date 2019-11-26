@@ -4,7 +4,7 @@ model = dict(
     num_stages=3,
     interleaved=True,
     mask_info_flow=True,
-    car_cls_info_flow=True,
+    car_cls_info_flow=False,
     backbone=dict(
         type='HRNet',
         extra=dict(
@@ -217,9 +217,9 @@ train_cfg = dict(
             debug=False)
     ],
     stage_loss_weights=[1, 0.5, 0.25],
-    car_cls_weight=0.1,
-    rot_weight=10.,
-    translation_weight=1.,
+    car_cls_weight=1.0,
+    rot_weight=100.,
+    translation_weight=1.0,
 )
 test_cfg = dict(
     rpn=dict(
@@ -295,6 +295,7 @@ data = dict(
         data_root=data_root,
         ann_file=data_root + '',
         img_prefix=data_root + 'test_images/',
+        #img_prefix=data_root + 'train_images/',
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
@@ -305,7 +306,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[20, 40])
+    step=[10, 20])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -321,6 +322,6 @@ dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation'
 #load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov18-18-08-41/epoch_47.pth'
+load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov20-18-24-45/epoch_50.pth'
 resume_from = None
 workflow = [('train', 1)]

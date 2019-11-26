@@ -279,6 +279,7 @@ def imdraw_det_bboxes(img,
         t = trans_pred_world[bbox_idx]
         ea = euler_angle[bbox_idx]
         yaw, pitch, roll = ea[0], ea[1], ea[2]
+        yaw, pitch, roll = -pitch, -yaw, -roll
         Rt = np.eye(4)
         Rt[:3, 3] = t
         Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T

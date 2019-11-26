@@ -108,12 +108,13 @@ class HybridTaskCascade(CascadeRCNN):
         # forward all previous mask heads to obtain last_feat, and fuse it
         # with the normal mask feature
         if self.car_cls_info_flow:
+            raise NotImplementedError
             last_feat = None
-            for i in range(stage):
-                last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
-            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, last_feat, return_feat=False)
+            # for i in range(stage):
+            #     last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
+            last_feat, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, last_feat, return_logits=False, return_feat=False, return_last=False)
         else:
-            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats)
+            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, return_logits=True, return_last=True)
 
         car_cls_score_target, quaternion_target = car_cls_rot_head.get_target(sampling_results, carlabels, quaternion_semispheres, rcnn_train_cfg)
 
@@ -230,34 +231,26 @@ class HybridTaskCascade(CascadeRCNN):
                               x,
                               _bboxes,
                               semantic_feat=None):
-
-        car_cls_rot_roi_extractor = self.car_cls_rot_roi_extractor[stage]
-        car_cls_rot_head = self.car_cls_rot_head[stage]
-
+        # We have only one extractor
+        car_cls_rot_roi_extractor = self.car_cls_rot_roi_extractor[-1]
+        ## Another bug here between training and inferencing
         pos_rois = bbox2roi([_bboxes])
+        # pos_rois_shift = pos_rois
+        # pos_rois_shift[:, 1:] = pos_rois[:, :4]
         car_cls_rot_feats = car_cls_rot_roi_extractor(x[:car_cls_rot_roi_extractor.num_inputs], pos_rois)
 
-        # semantic feature fusion
-        # element-wise sum for original features and pooled semantic features
-        if self.with_semantic and 'car_cls_rot' in self.semantic_fusion:
-            car_cls_rot_semantic_feat = self.semantic_roi_extractor([semantic_feat], pos_rois)
-            if car_cls_rot_semantic_feat.shape[-2:] != car_cls_rot_feats.shape[-2:]:
-                car_cls_rot_semantic_feat = F.adaptive_avg_pool2d(
-                    car_cls_rot_semantic_feat, car_cls_rot_feats.shape[-2:])
-            car_cls_rot_feats += car_cls_rot_semantic_feat
-
-        # car cls rot information flow
-        # forward all previous mask heads to obtain last_feat, and fuse it
-        # with the normal mask feature
         if self.car_cls_info_flow:
-            last_feat = None
-            for i in range(stage):
-                last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
-            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, last_feat,
-                                                                                     return_feat=False)
-        else:
-            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats)
+            raise NotImplementedError
+            # The following code does not exist
+            # last_feat = None
+            # for i in range(self.num_stages):
+            #     car_cls_rot_head = self.car_cls_rot_head[i]
+            #     if self.car_cls_info_flow:
+            #         last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
 
+        # No information flow yet
+        car_cls_rot_head = self.car_cls_rot_head[-1]
+        car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, return_logits=True, return_last=True)
         car_cls_score_pred = car_cls_score_pred.cpu().numpy()
         quaternion_pred = quaternion_pred.cpu().numpy()
         return car_cls_score_pred, quaternion_pred, car_cls_rot_feat
@@ -473,8 +466,7 @@ class HybridTaskCascade(CascadeRCNN):
 
     def simple_test(self, img, img_meta, proposals=None, rescale=False):
         x = self.extract_feat(img)
-        proposal_list = self.simple_test_rpn(
-            x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
+        proposal_list = self.simple_test_rpn(x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
 
         if self.with_semantic:
             _, semantic_feat = self.semantic_head(x)
@@ -495,8 +487,7 @@ class HybridTaskCascade(CascadeRCNN):
         rois = bbox2roi(proposal_list)
         for i in range(self.num_stages):
             bbox_head = self.bbox_head[i]
-            cls_score, bbox_pred = self._bbox_forward_test(
-                i, x, rois, semantic_feat=semantic_feat)
+            cls_score, bbox_pred = self._bbox_forward_test(i, x, rois, semantic_feat=semantic_feat)
             ms_scores.append(cls_score)
 
             if self.test_cfg.keep_all_stages:
@@ -587,6 +578,8 @@ class HybridTaskCascade(CascadeRCNN):
                 car_cls_coco = 2
                 stage_num = self.num_stages-1
                 pos_box = det_bboxes[det_labels == car_cls_coco]
+                # !!!!!!!!!!!!!!!!!!!!! Quite import bug below, scale is needed!!!!!!!!!!!!!
+                pos_box = pos_box*scale_factor
                 car_cls_score_pred, quaternion_pred, car_cls_rot_feats = self._carcls_rot_forward_test(stage_num, x, pos_box, semantic_feat)
             if self.with_translation:
                 trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats)

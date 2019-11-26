@@ -139,8 +139,8 @@ def coords2str(coords):
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py', help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov18-18-08-41/epoch_47.pth',  help='checkpoint file')
-    parser.add_argument('--out', default='/data/Kaggle/wudi_data/work_dirs/Nov18-18-08-41-epoch_47.pkl', help='output result file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov20-18-24-45/epoch_50.pth',  help='checkpoint file')
+    parser.add_argument('--out', default='/data/Kaggle/wudi_data/work_dirs/Nov20-18-24-45-epoch_50.pkl', help='output result file')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
                         choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints',' kaggle'], help='eval types')
@@ -211,6 +211,8 @@ def main():
         else:
             model = MMDistributedDataParallel(model.cuda())
             outputs = multi_gpu_test(model, data_loader, args.tmpdir)
+        mmcv.dump(outputs, args.out)
+
     else:
         outputs = mmcv.load(args.out)
     #write_submission(outputs, args)
@@ -219,7 +221,6 @@ def main():
     rank, _ = get_dist_info()
     if args.out and rank == 0:
         print('\nwriting results to {}'.format(args.out))
-        mmcv.dump(outputs, args.out)
         eval_types = args.eval
         if eval_types:
             print('Starting evaluate {}'.format(' and '.join(eval_types)))
