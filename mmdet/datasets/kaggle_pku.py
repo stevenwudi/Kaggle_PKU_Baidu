@@ -37,7 +37,7 @@ class KaggkePKUDataset(CustomDataset):
 
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/Kaggle/wudi_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/yyj_data'):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480   # this
@@ -66,9 +66,15 @@ class KaggkePKUDataset(CustomDataset):
                 annotations = self.clean_outliers(annotations)
                 self.print_statistics_annotations(annotations)
             else:
+                ## we add train.txt and validation.txt, 3862 and 400 respectively
+                PATH = '/data/Kaggle/pku-autonomous-driving/'
+                ImageId =[i.strip() for i in open(PATH + 'train.txt').readlines()]
                 train = pd.read_csv(ann_file)
                 self.print_statistics(train)
                 for idx in tqdm(range(len(train))):
+                    filename = train['ImageId'].iloc[idx] +'.jpg'
+                    if filename not in ImageId:
+                        continue
                     annotation = self.load_anno_idx(idx, train)
                     annotations.append(annotation)
                 with open(outfile, 'w') as f:
@@ -91,7 +97,7 @@ class KaggkePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/wudi_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/yyj_data/train_iamge_gt_vis'):
 
         labels = []
         bboxes = []
@@ -196,8 +202,8 @@ class KaggkePKUDataset(CustomDataset):
 
                     rles.append(encoded_ground_truth)
                     #bm = maskUtils.decode(encoded_ground_truth)
-            #if draw:
-            if False:
+            if draw:
+            # if False:
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
                 imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
@@ -575,6 +581,7 @@ class KaggkePKUDataset(CustomDataset):
         gt_bboxes_ignore = []
         gt_masks_ann = []
 
+        eular_angles = []
         quaternion_semispheres = []
         translations = []
 
@@ -605,6 +612,7 @@ class KaggkePKUDataset(CustomDataset):
                 mask = maskUtils.decode(ann_info['rles'][i])
                 gt_masks_ann.append(mask)
 
+                eular_angles.append(ann_info['eular_angles'][i])
                 quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
                 translations.append(translation)
 
@@ -629,6 +637,8 @@ class KaggkePKUDataset(CustomDataset):
             carlabels=gt_labels,
             bboxes_ignore=gt_bboxes_ignore,
             masks=gt_masks_ann,
+
+            eular_angles=eular_angles,
             quaternion_semispheres=quaternion_semispheres,
             translations=translations)
 

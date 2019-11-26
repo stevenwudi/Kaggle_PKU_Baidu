@@ -248,7 +248,7 @@ train_pipeline = [
     #dict(type='Resize', img_scale=(1300, 800), keep_ratio=True),
     dict(type='Resize', img_scale=(1700, 618), keep_ratio=True),
     #dict(type='Resize', img_scale=(1000, 300), keep_ratio=True),
-    dict(type='RandomFlip', flip_ratio=0),
+    dict(type='RandomFlip', flip_ratio=1),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
@@ -320,8 +320,9 @@ log_config = dict(
 total_epochs = 50
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation'
-#load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov20-18-24-45/epoch_50.pth'
+work_dir = '/data/Kaggle/yyj_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation'
+load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+# load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov18-18-08-41/epoch_47.pth'
+
 resume_from = None
 workflow = [('train', 1)]
