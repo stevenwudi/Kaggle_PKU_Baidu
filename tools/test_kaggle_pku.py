@@ -111,7 +111,8 @@ def write_submission(outputs, args):
 
     predictions = {}
     PATH = '/data/Kaggle/pku-autonomous-driving/'
-    ImageId = [x.replace('.jpg', '') for x in os.listdir(PATH + 'test_images')]
+    ImageId =[i.strip() for i in open(PATH + 'validation.txt').readlines()]
+    # ImageId = [x.replace('.jpg', '') for x in os.listdir(PATH + 'test_images')]
 
     for idx, output in enumerate(outputs):
         conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
@@ -121,11 +122,18 @@ def write_submission(outputs, args):
         coords_str = coords2str(coords)
         predictions[ImageId[idx]] = coords_str
 
-    test = pd.read_csv(PATH + 'sample_submission.csv')
-    for im_id in test['ImageId']:
-        test.loc[test['ImageId'] == im_id, ['PredictionString']] = [predictions[im_id]]
+    pred_dict = {'ImageId':[],'PredictionString':[]}
+    for k,v in predictions.items():
+        pred_dict['ImageId'].append(k)
+        pred_dict['PredictionString'].append(v)
 
-    test.to_csv(submission, index=False)
+    df = pd.DataFrame(data=pred_dict)
+    # print('df',df.head)
+    # test = pd.read_csv(PATH + 'sample_submission.csv')
+    # for im_id in test['ImageId']:
+    #     test.loc[test['ImageId'] == im_id, ['PredictionString']] = [predictions[im_id]]
+
+    df.to_csv(submission, index=False)
 
 
 def coords2str(coords):
@@ -215,8 +223,8 @@ def main():
 
     else:
         outputs = mmcv.load(args.out)
-    #write_submission(outputs, args)
-    dataset.visualise_pred(outputs, args)
+    write_submission(outputs, args)
+    # dataset.visualise_pred(outputs, args)
 
     rank, _ = get_dist_info()
     if args.out and rank == 0:
