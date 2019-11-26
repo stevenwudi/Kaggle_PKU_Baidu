@@ -12,6 +12,7 @@ from .registry import DATASETS
 from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points
+from demo.visualisation_utils import draw_result_kaggle_pku
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -57,14 +58,18 @@ class KaggkePKUDataset(CustomDataset):
 
         annotations = []
         if not self.test_mode:
-            train = pd.read_csv(ann_file)
-            train = self.clean_corrupted_images(train)
-            self.print_statistics(train)
             outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
+                annotations = self.clean_corrupted_images(annotations)
+                annotations = self.clean_outliers(annotations)
+                self.print_statistics_annotations(annotations)
             else:
-                for idx in tqdm(range(len(train[:10]))):
+
+                train = pd.read_csv(ann_file)
+                self.print_statistics(train)
+                for idx in tqdm(range(len(train))):
                     annotation = self.load_anno_idx(idx, train)
                     annotations.append(annotation)
                 with open(outfile, 'w') as f:
@@ -241,7 +246,7 @@ class KaggkePKUDataset(CustomDataset):
                 car_names = [car_id2name[x].name for x in kaggle_car_labels]
 
                 assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
-                       == len(trans_pred_world) == len(euler_angle)  ==len(car_names)
+                       == len(trans_pred_world) == len(euler_angle) == len(car_names)
                 # now we start to plot the image from kaggle
                 coords = np.hstack((euler_angle, trans_pred_world))
                 img_kaggle = self.visualise_kaggle(image, coords)
@@ -249,10 +254,7 @@ class KaggkePKUDataset(CustomDataset):
                 imwrite(img_kaggle, os.path.join(args.out[:-4] +'_kaggle_vis/' + img_name.split('/')[-1]))
                 imwrite(img_mesh, os.path.join(args.out[:-4] +'_mes_vis/' + img_name.split('/')[-1]))
 
-
     def visualise_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
-        from demo.visualisation_utils import draw_result_kaggle_pku
-
 
         im_combime = draw_result_kaggle_pku(image,
                                             bboxes,
@@ -277,7 +279,7 @@ class KaggkePKUDataset(CustomDataset):
             # Get values
             x, y, z = point[3], point[4], point[5]
             # yaw, pitch, roll = -pitch, -yaw, -roll
-            yaw, pitch, roll = -point[0], -point[1], -point[2]
+            yaw, pitch, roll = point[0], point[1], point[2]
             yaw, pitch, roll = -pitch, -yaw, -roll
             # Math
             Rt = np.eye(4)
@@ -301,13 +303,134 @@ class KaggkePKUDataset(CustomDataset):
 
         return img
 
-
-    def clean_corrupted_images(self, train):
+    def clean_corrupted_images(self, annotations):
         # For training images, there are 5 corrupted images:
-        corrupted_images = ['ID_1a5a10365','ID_4d238ae90', 'ID_408f58e9f', 'ID_bb1d991f6','ID_c44983aeb']
-        for ImageId in corrupted_images:
-            train = train[train.ImageId != ImageId]
-        return train
+        corrupted_images = ['ID_1a5a10365', 'ID_4d238ae90', 'ID_408f58e9f', 'ID_bb1d991f6','ID_c44983aeb']
+        annotations_clean = [ann for ann in annotations if ann['filename'].split('/')[-1][:-4] not in corrupted_images]
+        return annotations_clean
+
+    def clean_outliers(self, annotations):
+        """
+        We get rid of the outliers in this dataset
+        :
+        if translation[0] < -80 or translation[0] > 80
+        or translation[1] < 1 or translation[1] > 50 or
+        translation[2] < 3 or translation[2] > 150
+
+        :param train:
+        :return:
+        """
+
+        corrupted_count = 0
+        clean_count = 0
+        annotations_clean = []
+
+        for idx in range(len(annotations)):
+            ann = annotations[idx]
+
+            bboxes = []
+            labels = []
+            eular_angles = []
+            quaternion_semispheres = []
+            translations = []
+            rles = []
+
+            for box_idx in range(len(ann['bboxes'])):
+                translation = ann['translations'][box_idx]
+                if translation[0] < -80 or translation[0] > 80 or \
+                        translation[1] < 1 or translation[1] > 50 \
+                        or translation[2] < 3 or translation[2] > 150:
+                    corrupted_count += 1
+                    continue
+                else:
+                    bboxes.append(ann['bboxes'][box_idx])
+                    labels.append(ann['labels'][box_idx])
+                    eular_angles.append(ann['eular_angles'][box_idx])
+                    quaternion_semispheres.append(ann['quaternion_semispheres'][box_idx])
+                    translations.append(ann['translations'][box_idx])
+                    rles.append(ann['rles'][box_idx])
+
+            bboxes = np.array(bboxes, dtype=np.float32)
+            labels = np.array(labels, dtype=np.int64)
+            eular_angles = np.array(eular_angles, dtype=np.float32)
+            quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
+            translations = np.array(translations, dtype=np.float32)
+            assert len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
+            clean_count += len(bboxes)
+            annotation = {
+                'filename': ann['filename'],
+                'width': ann['width'],
+                'height': ann['width'],
+                'bboxes': bboxes,
+                'labels': labels,
+                'eular_angles': eular_angles,
+                'quaternion_semispheres': quaternion_semispheres,
+                'translations': translations,
+                'rles': rles
+            }
+            annotations_clean.append(annotation)
+        print("Totaly corrupted count is: %d, clean count: %d" % (corrupted_count, clean_count))
+        return annotations_clean
+
+    def print_statistics_annotations(self, annotations):
+        """
+        Print some statistics from annotations
+        :param annotations:
+        :return:
+        """
+        car_per_image = []
+        xp, yp = [], []
+        xw, yw, zw = [], [], []
+        car_models = []
+        for idx in range(len(annotations)):
+            ann = annotations[idx]
+            car_per_image.append(len(ann['bboxes']))
+            for box_idx in range(len(ann['bboxes'])):
+                car_models.append(ann['labels'][box_idx])
+                translation = ann['translations'][box_idx]
+
+                xpt, ypt, xwt, ywt, zwt = self._get_img_coords(translation=translation)
+                xp.append(xpt)
+                yp.append(ypt)
+                xw.append(xwt)
+                yw.append(ywt)
+                zw.append(zwt)
+
+        car_per_image = np.array(car_per_image)
+        print('Total images: %d, car num sum: %d, minmin: %d, max: %d, mean: %d' %
+              (len(annotations), car_per_image.sum(), car_per_image.min(), car_per_image.max(), car_per_image.mean()))
+        """
+        Total images: 4257, car num sum: 49607, minmin: 1, max: 44, mean: 11
+        """
+        xp, yp = np.array(xp), np.array(yp)
+        print("x min: %d, max: %d, mean: %d" % (int(min(xp)), int(max(xp)), int(xp.mean())))
+        print("y min: %d, max: %d, mean: %d" % (int(min(yp)), int(max(yp)), int(yp.mean())))
+        """
+        x min: -851, max: 4116, mean: 1551
+        y min: 1482, max: 3427, mean: 1820
+        """
+
+        xw, yw, zw = np.array(xw), np.array(yw), np.array(zw)
+        print("x min: %d, max: %d, mean: %d, std: %.3f" % (int(min(xw)), int(max(xw)), int(xw.mean()), xw.std()))
+        print("y min: %d, max: %d, mean: %d, std: %.3f" % (int(min(yw)), int(max(yw)), int(yw.mean()), yw.std()))
+        print("z min: %d, max: %d, mean: %d, std: %.3f" % (int(min(zw)), int(max(zw)), int(zw.mean()), zw.std()))
+
+        """
+        x min: -90, max: 519, mean: -3, std: 14.560
+        y min: 1, max: 689, mean: 9, std: 6.826
+        z min: 3, max: 3502, mean: 52, std: 40.046
+        """
+
+        car_models = np.array(car_models)
+        print("Car model: max: %d, min: %d, total: %d" % (car_models.max(), car_models.min(), len(car_models)))
+        # Car model: max: 76, min: 2, total: 49684
+        print('Unique car models:')
+        print(np.unique(car_models))
+        # array([2, 6, 7, 8, 9, 12, 14, 16, 18, 19, 20, 23, 25, 27, 28, 31, 32,
+        #        35, 37, 40, 43, 46, 47, 48, 50, 51, 54, 56, 60, 61, 66, 70, 71, 76])
+        print("Number of unique car models: %d" % len(np.unique(car_models)))
+        # 34
+
 
     def print_statistics(self, train):
         car_per_image = np.array([len(self._str2coords(s)) for s in train['PredictionString']])
@@ -347,6 +470,11 @@ class KaggkePKUDataset(CustomDataset):
         x min: -90, max: 519, mean: -3, std: 14.560
         y min: 1, max: 689, mean: 9, std: 6.826
         z min: 3, max: 3502, mean: 52, std: 40.046
+        
+        # Clean
+        x min: -79, max: 79, mean: -3, std: 14.015
+        y min: 1, max: 42, mean: 9, std: 4.695
+        z min: 3, max: 150, mean: 50, std: 29.596
         """
         # Next we filter our 99.9% data distribution
         xmin, xmax = -80, 80
@@ -389,25 +517,34 @@ class KaggkePKUDataset(CustomDataset):
                 coords[-1]['id'] = int(coords[-1]['id'])
         return coords
 
-    def _get_img_coords(self, s):
+    def _get_img_coords(self, s=None, translation=None):
         '''
         Input is a PredictionString (e.g. from train dataframe)
         Output is two arrays:
             xs: x coordinates in the image
             ys: y coordinates in the image
         '''
-        coords = self._str2coords(s)
-        xs = [c['x'] for c in coords]
-        ys = [c['y'] for c in coords]
-        zs = [c['z'] for c in coords]
-        P = np.array(list(zip(xs, ys, zs))).T
-        img_p = np.dot(self.camera_matrix, P).T
-        img_p[:, 0] /= img_p[:, 2]
-        img_p[:, 1] /= img_p[:, 2]
-        img_xs = img_p[:, 0]
-        img_ys = img_p[:, 1]
-        img_zs = img_p[:, 2]  # z = Distance from the camera
-        return img_xs, img_ys
+        if translation.any():
+            xs, ys, zs = translation
+            P = np.array([xs, ys, zs]).T
+            img_p = np.dot(self.camera_matrix, P).T
+            img_p[0] /= img_p[2]
+            img_p[1] /= img_p[2]
+            return img_p[0], img_p[1], xs, ys, zs
+
+        else:
+            coords = self._str2coords(s)
+            xs = [c['x'] for c in coords]
+            ys = [c['y'] for c in coords]
+            zs = [c['z'] for c in coords]
+            P = np.array(list(zip(xs, ys, zs))).T
+            img_p = np.dot(self.camera_matrix, P).T
+            img_p[:, 0] /= img_p[:, 2]
+            img_p[:, 1] /= img_p[:, 2]
+            img_xs = img_p[:, 0]
+            img_ys = img_p[:, 1]
+            img_zs = img_p[:, 2]  # z = Distance from the camera
+            return img_xs, img_ys
 
     def get_ann_info(self, idx):
         ann_info = self.img_infos[idx]
