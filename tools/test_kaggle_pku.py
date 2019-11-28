@@ -1,6 +1,6 @@
 import argparse
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import os.path as osp
 import shutil
@@ -66,7 +66,7 @@ def collect_results(result_part, size, tmpdir=None):
     if tmpdir is None:
         MAX_LEN = 512
         # 32 is whitespace
-        dir_tensor = torch.full((MAX_LEN, ),
+        dir_tensor = torch.full((MAX_LEN,),
                                 32,
                                 dtype=torch.uint8,
                                 device='cuda')
@@ -111,28 +111,25 @@ def write_submission(outputs, args):
 
     predictions = {}
     PATH = '/data/Kaggle/pku-autonomous-driving/'
-    ImageId =[i.strip() for i in open(PATH + 'validation.txt').readlines()]
-    # ImageId = [x.replace('.jpg', '') for x in os.listdir(PATH + 'test_images')]
+    ImageId = [i.strip() for i in open(PATH + 'validation.txt').readlines()]
+    ImageId = [x.replace('.jpg', '') for x in ImageId]
 
     for idx, output in enumerate(outputs):
-        conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
+        # Wudi change the conf to car prediction
+        #conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
+        conf = output[0][2][:, -1]
         euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
         translation = output[2]['trans_pred_world']
         coords = np.hstack((euler_angle, translation, conf[:, None]))
         coords_str = coords2str(coords)
         predictions[ImageId[idx]] = coords_str
 
-    pred_dict = {'ImageId':[],'PredictionString':[]}
-    for k,v in predictions.items():
+    pred_dict = {'ImageId': [], 'PredictionString': []}
+    for k, v in predictions.items():
         pred_dict['ImageId'].append(k)
         pred_dict['PredictionString'].append(v)
 
     df = pd.DataFrame(data=pred_dict)
-    # print('df',df.head)
-    # test = pd.read_csv(PATH + 'sample_submission.csv')
-    # for im_id in test['ImageId']:
-    #     test.loc[test['ImageId'] == im_id, ['PredictionString']] = [predictions[im_id]]
-
     df.to_csv(submission, index=False)
 
 
@@ -140,18 +137,23 @@ def coords2str(coords):
     s = []
     for c in coords:
         for l in c:
-            s.append('%.5f'%l)
+            s.append('%.5f' % l)
     return ' '.join(s)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py', help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov20-18-24-45/epoch_50.pth',  help='checkpoint file')
-    parser.add_argument('--out', default='/data/Kaggle/wudi_data/work_dirs/Nov20-18-24-45-epoch_50.pkl', help='output result file')
+    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+                        help='train config file path')
+    parser.add_argument('--checkpoint',
+                        default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth',
+                        help='checkpoint file')
+    parser.add_argument('--out', default='/data/Kaggle/wudi_data/work_dirs/cyh_Nov27-14-16-45.pkl',
+                        help='output result file')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
-                        choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints',' kaggle'], help='eval types')
+                        choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
+                        help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
@@ -212,7 +214,8 @@ def main():
     else:
         model.CLASSES = dataset.CLASSES
 
-    if not os.path.exists(args.out):
+    #if not os.path.exists(args.out):
+    if True:
         if not distributed:
             model = MMDataParallel(model, device_ids=[0])
             outputs = single_gpu_test(model, data_loader, args.show)
@@ -224,7 +227,7 @@ def main():
     else:
         outputs = mmcv.load(args.out)
     write_submission(outputs, args)
-    # dataset.visualise_pred(outputs, args)
+    dataset.visualise_pred(outputs, args)
 
     rank, _ = get_dist_info()
     if args.out and rank == 0:

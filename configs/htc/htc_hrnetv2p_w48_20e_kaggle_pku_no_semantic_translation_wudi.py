@@ -294,8 +294,8 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        img_prefix=data_root + 'validation_images/',
-        #img_prefix=data_root + 'train_images/',
+        #img_prefix=data_root + 'validation_images/',
+        img_prefix=data_root + 'test_images/',
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='Adam', lr=0.0001)
