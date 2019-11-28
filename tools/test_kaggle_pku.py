@@ -143,7 +143,7 @@ def coords2str(coords):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py',
+    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
     parser.add_argument('--checkpoint',
                         default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth',
