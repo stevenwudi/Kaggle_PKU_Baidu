@@ -102,27 +102,32 @@ def collect_results(result_part, size, tmpdir=None):
         return ordered_results
 
 
-def write_submission(outputs, args):
+def write_submission(outputs, args, img_prefix, conf_thresh=0.9):
     import pandas as pd
     import numpy as np
     from scipy.special import softmax
     from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
-    submission = args.out.replace('.pkl', '.csv')
-
+    submission = args.out.replace('.pkl', '')
+    submission += '_' + img_prefix.split('/')[-2]
+    submission += '_conf_' + str(conf_thresh)
+    submission += '.csv'
     predictions = {}
-    PATH = '/data/Kaggle/pku-autonomous-driving/'
-    ImageId = [i.strip() for i in open(PATH + 'validation.txt').readlines()]
-    ImageId = [x.replace('.jpg', '') for x in ImageId]
+    # PATH = '/data/Kaggle/pku-autonomous-driving/'
+    # ImageId = [i.strip() for i in open(PATH + 'validation.txt').readlines()]
+    # ImageId = [x.replace('.jpg', '') for x in ImageId]
+    ImageId = [x.replace('.jpg', '') for x in os.listdir(img_prefix)]
 
-    for idx, output in enumerate(outputs):
+    for idx_img, output in enumerate(outputs):
         # Wudi change the conf to car prediction
         #conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
         conf = output[0][2][:, -1]
+        idx = conf > conf_thresh
+
         euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
         translation = output[2]['trans_pred_world']
-        coords = np.hstack((euler_angle, translation, conf[:, None]))
+        coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
         coords_str = coords2str(coords)
-        predictions[ImageId[idx]] = coords_str
+        predictions[ImageId[idx_img]] = coords_str
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
     for k, v in predictions.items():
@@ -145,15 +150,10 @@ def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint',
-                        default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth',
-                        help='checkpoint file')
-    parser.add_argument('--out', default='/data/Kaggle/wudi_data/work_dirs/cyh_Nov27-14-16-45.pkl',
-                        help='output result file')
+    #parser.add_argument('--checkpoint', default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth', help='checkpoint file')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
-    parser.add_argument('--eval', type=str, nargs='+',
-                        choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
-                        help='eval types')
+    parser.add_argument('--eval', type=str, nargs='+', choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'], help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
@@ -167,17 +167,14 @@ def parse_args():
 def main():
     args = parse_args()
 
-    assert args.out or args.show or args.json_out, \
-        ('Please specify at least one operation (save or show the results) '
-         'with the argument "--out" or "--show" or "--json_out"')
-
-    if args.out is not None and not args.out.endswith(('.pkl', '.pickle')):
-        raise ValueError('The output file must be a pkl file.')
-
     if args.json_out is not None and args.json_out.endswith('.json'):
         args.json_out = args.json_out[:-5]
 
     cfg = mmcv.Config.fromfile(args.config)
+    # Wudi change the args.out directly related to the model checkpoint file data
+    args.out = os.path.join(cfg.work_dir, 'work_dirs',cfg.data.test.img_prefix.split('/')[-2].replace('images','') +
+                            args.checkpoint.split('/')[-2].split('_')[-1] + '.pkl')
+
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
@@ -214,8 +211,7 @@ def main():
     else:
         model.CLASSES = dataset.CLASSES
 
-    #if not os.path.exists(args.out):
-    if True:
+    if not os.path.exists(args.out):
         if not distributed:
             model = MMDataParallel(model, device_ids=[0])
             outputs = single_gpu_test(model, data_loader, args.show)
@@ -226,7 +222,7 @@ def main():
 
     else:
         outputs = mmcv.load(args.out)
-    write_submission(outputs, args)
+    write_submission(outputs, args, dataset.img_prefix)
     dataset.visualise_pred(outputs, args)
 
     rank, _ = get_dist_info()
