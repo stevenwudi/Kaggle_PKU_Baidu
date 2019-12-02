@@ -110,13 +110,14 @@ def check_match(idx):
 
 if __name__ == '__main__':
     # validation_prediction = '../input/autonomous-driving-validation-data/prediction_for_validation_data.csv'
+    car_conf_score_thres = 0.1
     validation_prediction = '/data/Kaggle/wudi_data/work_dirs/cyh_Nov27-14-16-45.csv'
     valid_df = pd.read_csv(validation_prediction)
     expanded_valid_df = expand_df(valid_df, ['pitch', 'yaw', 'roll', 'x', 'y', 'z', 'Score'])
 
     valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df.ImageId = valid_df.ImageId
-    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score>0.5]
+    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score>car_conf_score_thres]
     valid_df = valid_df.fillna('')
 
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
