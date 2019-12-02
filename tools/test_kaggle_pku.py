@@ -150,8 +150,9 @@ def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    #parser.add_argument('--checkpoint', default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth', help='checkpoint file')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth', help='checkpoint file')
+    #parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth', help='checkpoint file')
+    parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+', choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'], help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
@@ -222,8 +223,8 @@ def main():
 
     else:
         outputs = mmcv.load(args.out)
-    write_submission(outputs, args, dataset.img_prefix)
-    dataset.visualise_pred(outputs, args)
+    write_submission(outputs, args, dataset.img_prefix, conf_thresh=args.conf)
+    #dataset.visualise_pred(outputs, args)
 
     rank, _ = get_dist_info()
     if args.out and rank == 0:
