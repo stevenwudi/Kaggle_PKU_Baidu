@@ -5,6 +5,8 @@ import os
 import os.path as osp
 import shutil
 import tempfile
+import pandas as pd
+import numpy as np
 
 import mmcv
 import torch
@@ -13,9 +15,12 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import get_dist_info, load_checkpoint
 
 from mmdet.apis import init_dist
-from mmdet.core import coco_eval, results2json, wrap_fp16_model
+from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
+
+from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_images
+from tqdm import tqdm
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -102,26 +107,31 @@ def collect_results(result_part, size, tmpdir=None):
         return ordered_results
 
 
-def write_submission(outputs, args, img_prefix, conf_thresh=0.9):
-    import pandas as pd
-    import numpy as np
-    from scipy.special import softmax
-    from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
+def write_submission(outputs, args, img_prefix,
+                     conf_thresh=0.9,
+                     filter_mask=False):
     submission = args.out.replace('.pkl', '')
     submission += '_' + img_prefix.split('/')[-2]
     submission += '_conf_' + str(conf_thresh)
+    if filter_mask:
+        submission += '_filter_mask.csv'
     submission += '.csv'
     predictions = {}
-    # PATH = '/data/Kaggle/pku-autonomous-driving/'
-    # ImageId = [i.strip() for i in open(PATH + 'validation.txt').readlines()]
-    # ImageId = [x.replace('.jpg', '') for x in ImageId]
+
     ImageId = [x.replace('.jpg', '') for x in os.listdir(img_prefix)]
 
-    for idx_img, output in enumerate(outputs):
+    CAR_IDX = 2  # this is the coco car class
+    for idx_img, output in tqdm(enumerate(outputs)):
         # Wudi change the conf to car prediction
-        #conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
-        conf = output[0][2][:, -1]
-        idx = conf > conf_thresh
+        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+        idx_conf = conf > conf_thresh
+        if filter_mask:
+            # this filtering step will takes 2 second per iterations
+            idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+            # the final id should require both
+            idx = idx_conf * idx_keep_mask
+        else:
+            idx = idx_conf
 
         euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
         translation = output[2]['trans_pred_world']
@@ -135,7 +145,9 @@ def write_submission(outputs, args, img_prefix, conf_thresh=0.9):
         pred_dict['PredictionString'].append(v)
 
     df = pd.DataFrame(data=pred_dict)
+    print("Writing submission csv file to: %s" % submission)
     df.to_csv(submission, index=False)
+    return True
 
 
 def coords2str(coords):
@@ -148,13 +160,17 @@ def coords2str(coords):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+    parser.add_argument('--config',
+                        default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth', help='checkpoint file')
-    #parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint',
+                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth',
+                        help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
-    parser.add_argument('--eval', type=str, nargs='+', choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'], help='eval types')
+    parser.add_argument('--eval', type=str, nargs='+',
+                        choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
+                        help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
@@ -173,7 +189,7 @@ def main():
 
     cfg = mmcv.Config.fromfile(args.config)
     # Wudi change the args.out directly related to the model checkpoint file data
-    args.out = os.path.join(cfg.work_dir, 'work_dirs',cfg.data.test.img_prefix.split('/')[-2].replace('images','') +
+    args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-2].replace('images', '') +
                             args.checkpoint.split('/')[-2].split('_')[-1] + '.pkl')
 
     # set cudnn_benchmark
@@ -223,40 +239,12 @@ def main():
 
     else:
         outputs = mmcv.load(args.out)
-    write_submission(outputs, args, dataset.img_prefix, conf_thresh=args.conf)
+
+    # write submission here
+    write_submission(outputs, args, dataset.img_prefix,
+                     conf_thresh=0.9, filter_mask=False)
+    # evaluate mAP
     #dataset.visualise_pred(outputs, args)
-
-    rank, _ = get_dist_info()
-    if args.out and rank == 0:
-        print('\nwriting results to {}'.format(args.out))
-        eval_types = args.eval
-        if eval_types:
-            print('Starting evaluate {}'.format(' and '.join(eval_types)))
-            if eval_types == ['proposal_fast']:
-                result_file = args.out
-                coco_eval(result_file, eval_types, dataset.coco)
-            else:
-                if not isinstance(outputs[0], dict):
-                    result_files = results2json(dataset, outputs, args.out)
-                    coco_eval(result_files, eval_types, dataset.coco)
-                else:
-                    for name in outputs[0]:
-                        print('\nEvaluating {}'.format(name))
-                        outputs_ = [out[name] for out in outputs]
-                        result_file = args.out + '.{}'.format(name)
-                        result_files = results2json(dataset, outputs_,
-                                                    result_file)
-                        coco_eval(result_files, eval_types, dataset.coco)
-
-    # Save predictions in the COCO json format
-    if args.json_out and rank == 0:
-        if not isinstance(outputs[0], dict):
-            results2json(dataset, outputs, args.json_out)
-        else:
-            for name in outputs[0]:
-                outputs_ = [out[name] for out in outputs]
-                result_file = args.json_out + '.{}'.format(name)
-                results2json(dataset, outputs_, result_file)
 
 
 if __name__ == '__main__':
