@@ -23,6 +23,7 @@ class HybridTaskCascade(CascadeRCNN):
                  car_cls_info_flow=True,
                  with_semantic_loss=False,
                  with_car_cls_rot=False,
+                 with_translation=True,
                  **kwargs):
         super(HybridTaskCascade, self).__init__(num_stages, backbone, **kwargs)
         assert self.with_bbox and self.with_mask
@@ -40,6 +41,8 @@ class HybridTaskCascade(CascadeRCNN):
 
         # The following is for 6DoF estimation
         self.with_car_cls_rot = with_car_cls_rot
+        self.with_translation = with_translation
+
 
     @property
     def with_semantic(self):
@@ -105,12 +108,13 @@ class HybridTaskCascade(CascadeRCNN):
         # forward all previous mask heads to obtain last_feat, and fuse it
         # with the normal mask feature
         if self.car_cls_info_flow:
+            raise NotImplementedError
             last_feat = None
-            for i in range(stage):
-                last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
-            car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats, last_feat, return_feat=False)
+            # for i in range(stage):
+            #     last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
+            last_feat, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, last_feat, return_logits=False, return_feat=False, return_last=False)
         else:
-            car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats)
+            car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, return_logits=True, return_last=True)
 
         car_cls_score_target, quaternion_target = car_cls_rot_head.get_target(sampling_results, carlabels, quaternion_semispheres, rcnn_train_cfg)
 
@@ -121,7 +125,22 @@ class HybridTaskCascade(CascadeRCNN):
         loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
                                                  car_cls_score_target, quaternion_target,
                                                  car_cls_weight, rot_weight)
-        return loss_car_cls_rot
+        return loss_car_cls_rot, car_cls_rot_feat
+
+    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat):
+        pos_bboxes = [res.pos_bboxes for res in sampling_results]
+        # TODO: this is a dangerous hack: we assume only one image per batch
+        if len(pos_bboxes) > 1:
+            raise NotImplementedError("Image batch size 1 is not implement!")
+        for im_idx in range(len(pos_bboxes)):
+            device_id = car_cls_rot_feat.get_device()
+            pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
+            trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
+            pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+
+            loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
+
+        return loss_translation
 
     def _mask_forward_train(self,
                             stage,
@@ -207,6 +226,46 @@ class HybridTaskCascade(CascadeRCNN):
             mask_pred = mask_head(mask_feats)
         return mask_pred
 
+    def _carcls_rot_forward_test(self,
+                              stage,
+                              x,
+                              _bboxes,
+                              semantic_feat=None):
+        # We have only one extractor
+        car_cls_rot_roi_extractor = self.car_cls_rot_roi_extractor[-1]
+        ## Another bug here between training and inferencing
+        pos_rois = bbox2roi([_bboxes])
+        # pos_rois_shift = pos_rois
+        # pos_rois_shift[:, 1:] = pos_rois[:, :4]
+        car_cls_rot_feats = car_cls_rot_roi_extractor(x[:car_cls_rot_roi_extractor.num_inputs], pos_rois)
+
+        if self.car_cls_info_flow:
+            raise NotImplementedError
+            # The following code does not exist
+            # last_feat = None
+            # for i in range(self.num_stages):
+            #     car_cls_rot_head = self.car_cls_rot_head[i]
+            #     if self.car_cls_info_flow:
+            #         last_feat = self.car_cls_rot_head[i](car_cls_rot_feats, last_feat, return_logits=False)
+
+        # No information flow yet
+        car_cls_rot_head = self.car_cls_rot_head[-1]
+        car_cls_score_pred, quaternion_pred, car_cls_rot_feat = car_cls_rot_head(car_cls_rot_feats, return_logits=True, return_last=True)
+        car_cls_score_pred = car_cls_score_pred.cpu().numpy()
+        quaternion_pred = quaternion_pred.cpu().numpy()
+        return car_cls_score_pred, quaternion_pred, car_cls_rot_feat
+
+    def _translation_forward_test(self, pos_bboxes, scale_factor, car_cls_rot_feat):
+
+        # TODO: this is a dangerous hack: we assume only one image per batch
+        device_id = car_cls_rot_feat.get_device()
+        pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
+        trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
+        trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
+        trans_pred_world = trans_pred_world.cpu().numpy()
+
+        return trans_pred_world
+
     def forward_dummy(self, img):
         outs = ()
         # backbone
@@ -245,6 +304,23 @@ class HybridTaskCascade(CascadeRCNN):
                 else:
                     mask_pred = mask_head(mask_feats)
                 outs = outs + (mask_pred, )
+
+        # car cls and rot head
+        if self.with_car_cls_rot:
+            pos_rois = rois[:100]
+            car_cls_rot_roi_extractor = self.car_cls_rot_roi_extractor[-1]
+            car_cls_rot_feats = car_cls_rot_roi_extractor(x[:car_cls_rot_roi_extractor.num_inputs], pos_rois)
+            for i in range(self.num_stages):
+                car_cls_rot_head = self.car_cls_rot_head[i]
+                if self.car_cls_info_flow:
+                    last_feat = None
+                    for ii in range(i):
+                        last_feat = self.car_cls_rot_head[ii](car_cls_rot_feats, last_feat, return_logits=False)
+                    car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats, last_feat, return_feat=False)
+                else:
+                    car_cls_score_pred, quaternion_pred = car_cls_rot_head(car_cls_rot_feats)
+
+                outs = outs + (car_cls_score_pred, quaternion_pred)
         return outs
 
     def forward_train(self,
@@ -259,6 +335,7 @@ class HybridTaskCascade(CascadeRCNN):
                       carlabels=None,
                       quaternion_semispheres=None,
                       translations=None,
+                      scale_factor=1.0,
                       ):
         x = self.extract_feat(img)
 
@@ -366,7 +443,7 @@ class HybridTaskCascade(CascadeRCNN):
 
             if self.with_car_cls_rot:
 
-                loss_car_cls_rot = self._carcls_rot_forward_train(i, x, sampling_results,
+                loss_car_cls_rot, car_cls_rot_feat = self._carcls_rot_forward_train(i, x, sampling_results,
                                                                  carlabels, quaternion_semispheres,
                                                                  rcnn_train_cfg, semantic_feat)
                 for name, value in loss_car_cls_rot.items():
@@ -379,12 +456,17 @@ class HybridTaskCascade(CascadeRCNN):
                     proposal_list = self.bbox_head[i].refine_bboxes(
                         rois, roi_labels, bbox_pred, pos_is_gts, img_meta)
 
+        # for translation, we don't have interleave or cascading for the moment
+        if self.with_translation:
+            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat)
+            for name, value in loss_translation.items():
+                losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
+
         return losses
 
     def simple_test(self, img, img_meta, proposals=None, rescale=False):
         x = self.extract_feat(img)
-        proposal_list = self.simple_test_rpn(
-            x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
+        proposal_list = self.simple_test_rpn(x, img_meta, self.test_cfg.rpn) if proposals is None else proposals
 
         if self.with_semantic:
             _, semantic_feat = self.semantic_head(x)
@@ -398,14 +480,14 @@ class HybridTaskCascade(CascadeRCNN):
         # "ms" in variable names means multi-stage
         ms_bbox_result = {}
         ms_segm_result = {}
+        ms_6dof_result = {}
         ms_scores = []
         rcnn_test_cfg = self.test_cfg.rcnn
 
         rois = bbox2roi(proposal_list)
         for i in range(self.num_stages):
             bbox_head = self.bbox_head[i]
-            cls_score, bbox_pred = self._bbox_forward_test(
-                i, x, rois, semantic_feat=semantic_feat)
+            cls_score, bbox_pred = self._bbox_forward_test(i, x, rois, semantic_feat=semantic_feat)
             ms_scores.append(cls_score)
 
             if self.test_cfg.keep_all_stages:
@@ -489,8 +571,27 @@ class HybridTaskCascade(CascadeRCNN):
                     ori_shape, scale_factor, rescale)
             ms_segm_result['ensemble'] = segm_result
 
+        if self.with_car_cls_rot:
+            if self.test_cfg.keep_all_stages:
+                raise NotImplementedError
+            else:
+                car_cls_coco = 2
+                stage_num = self.num_stages-1
+                pos_box = det_bboxes[det_labels == car_cls_coco]
+                # !!!!!!!!!!!!!!!!!!!!! Quite import bug below, scale is needed!!!!!!!!!!!!!
+                pos_box = pos_box*scale_factor
+                car_cls_score_pred, quaternion_pred, car_cls_rot_feats = self._carcls_rot_forward_test(stage_num, x, pos_box, semantic_feat)
+            if self.with_translation:
+                trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats)
+            ms_6dof_result['ensemble'] = {'car_cls_score_pred': car_cls_score_pred,
+                                          'quaternion_pred': quaternion_pred,
+                                          'trans_pred_world': trans_pred_world}
         if not self.test_cfg.keep_all_stages:
-            if self.with_mask:
+            if self.with_translation:
+                results = (ms_bbox_result['ensemble'],
+                           ms_segm_result['ensemble'],
+                           ms_6dof_result['ensemble'])
+            elif self.with_mask:
                 results = (ms_bbox_result['ensemble'],
                            ms_segm_result['ensemble'])
             else:

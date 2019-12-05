@@ -4,7 +4,7 @@ model = dict(
     num_stages=3,
     interleaved=True,
     mask_info_flow=True,
-    car_cls_info_flow=True,
+    car_cls_info_flow=False,
     backbone=dict(
         type='HRNet',
         extra=dict(
@@ -111,6 +111,7 @@ model = dict(
 
     with_semantic_loss=False,
     with_car_cls_rot=True,
+    with_translation=True,
     # This is DI WU's customised model
     semantic_fusion=('bbox', 'mask', 'car_cls_rot'),
     car_cls_rot_roi_extractor=dict(
@@ -121,7 +122,6 @@ model = dict(
 
     car_cls_rot_head=dict(
         type='SharedCarClsRotHead',
-        num_fcs=2,
         in_channels=256,
         fc_out_channels=1024,
         roi_feat_size=14,
@@ -131,6 +131,14 @@ model = dict(
         # target_stds=[0.1, 0.1, 0.2, 0.2],
         loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
         loss_quaternion=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+
+    translation_head=dict(
+        type='SharedTranslationHead',
+        in_channels_bboxes=4,
+        in_channels_carclsrot=1024,
+        fc_out_channels=100,
+        num_translation_reg=3,
+        loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
 )
 
 # model training and testing settings
@@ -209,9 +217,9 @@ train_cfg = dict(
             debug=False)
     ],
     stage_loss_weights=[1, 0.5, 0.25],
-    car_cls_weight=0.1,
-    rot_weight=10.,
-    translation_weight=1.,
+    car_cls_weight=1.0,
+    rot_weight=100.,
+    translation_weight=1.0,
 )
 test_cfg = dict(
     rpn=dict(
@@ -230,6 +238,7 @@ test_cfg = dict(
 # dataset settings
 dataset_type = 'KaggkePKUDataset'
 data_root = '/data/Kaggle/pku-autonomous-driving/'
+# data_root = '/data/Kaggle/ApolloScape_3D_car/train/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [
@@ -238,27 +247,29 @@ train_pipeline = [
          with_carcls_rot=True, with_translation=True),
     dict(type='CropBottom', bottom_half=1480),
     #dict(type='Resize', img_scale=(1300, 800), keep_ratio=True),
-    dict(type='Resize', img_scale=(1700, 1400), keep_ratio=True),
+    dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
     #dict(type='Resize', img_scale=(1000, 300), keep_ratio=True),
-
-    dict(type='RandomFlip', flip_ratio=0.5),
+    dict(type='RandomFlip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect',
         keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks',
-              'carlabels',  'quaternion_semispheres', 'translations']),
+              'carlabels',  'quaternion_semispheres', 'translations',
+              'scale_factor']),
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='CropBottom', bottom_half=1480),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(3384, 1230),
+        img_scale=(1664, 576),
         flip=False,
         transforms=[
-            dict(type='Resize', keep_ratio=True),
-            dict(type='RandomFlip', flip_ratio=0.5),
+            #dict(type='Resize', keep_ratio=True),
+            dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
+            #dict(type='RandomFlip', flip_ratio=0.5),
+            dict(type='RandomFlip', flip_ratio=0),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
             dict(type='ImageToTensor', keys=['img']),
@@ -272,20 +283,27 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + 'train.csv',
+        # ann_file=data_root + 'apollo_train.csv',
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
+        data_root=data_root,
         ann_file=data_root + 'train.csv',
+        # ann_file=data_root + 'apollo_train.csv',
         img_prefix=data_root + 'train_images/',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
+        data_root=data_root,
         ann_file=data_root + '',
-        img_prefix=data_root + 'test_images/',
+        # img_prefix=data_root + 'images/',
+        # img_prefix=data_root + 'train_images/',
+        img_prefix=data_root + 'validation_images/',
+        # img_prefix=data_root + 'test_images/',
         pipeline=test_pipeline))
 # optimizer
-optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='Adam', lr=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -293,7 +311,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[50, 100])
+    step=[30, 60])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -304,14 +322,12 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 200
+total_epochs = 80
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-<<<<<<< HEAD
-work_dir = '/data/Kaggle/cwx_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic'
+work_dir = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adame4_pre_apollo1130_306080'
 load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+# load_from = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth'
 
-work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic'
-load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 resume_from = None
 workflow = [('train', 1)]

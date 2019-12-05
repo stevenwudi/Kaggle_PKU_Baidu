@@ -28,9 +28,9 @@ class SamplingResult(object):
         else:
             self.pos_gt_assigned_quaternion_semispheres = None
         if assign_result.assigned_translations is not None:
-            self.pog_gt_assigned_translations = assign_result.assigned_translations[pos_inds]
+            self.pos_gt_assigned_translations = assign_result.assigned_translations[pos_inds]
         else:
-            self.pog_gt_assigned_translations = None
+            self.pos_gt_assigned_translations = None
 
 
     @property

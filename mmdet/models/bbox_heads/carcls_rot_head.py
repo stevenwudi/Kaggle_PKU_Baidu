@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch
-import numpy  as np
+import numpy as np
 
 from mmdet.models.registry import HEADS
 from mmdet.models.utils import ConvModule
@@ -141,8 +141,18 @@ class ConvFCCarClsRotHead(BBoxHead):
                     nn.init.xavier_uniform_(m.weight)
                     nn.init.constant_(m.bias, 0)
 
-    def forward(self, x, res_feat=None, return_logits=True, return_feat=True):
-        # shared part
+    def forward(self, x, res_feat=None, return_logits=False, return_feat=False, return_last=False):
+        """
+
+        :param x:
+        :param res_feat:
+        :param return_logits:
+        :param return_feat: used for interleaving (currently no use!)
+        :param return_last:  used for tranlsation estimation
+        :return:
+        """
+
+        # Currently, res_feat has no use!
         if self.num_shared_convs > 0:
             for conv in self.shared_convs:
                 x = conv(x)
@@ -156,6 +166,7 @@ class ConvFCCarClsRotHead(BBoxHead):
         # separate branches
         x_cls = x
         x_reg = x
+        last_feat = x
 
         for conv in self.cls_convs:
             x_cls = conv(x_cls)
@@ -179,7 +190,17 @@ class ConvFCCarClsRotHead(BBoxHead):
         quaternion_pred = self.fc_reg(x_reg) if self.with_reg else None
         # Di WU also normalise the quaternion here
         quaternion_pred = nn.functional.normalize(quaternion_pred, p=2, dim=1)
-        return car_cls_score_pred, quaternion_pred
+
+        outs = []
+        if return_logits:
+            outs.append(car_cls_score_pred)
+            outs.append(quaternion_pred)
+        if return_feat:
+            raise NotImplementedError
+            #outs.append(res_feat)
+        if return_last:
+            outs.append(last_feat)
+        return outs if len(outs) > 1 else outs[0]
 
     def get_target(self, sampling_results, carlabels, quaternion_semispheres,
                    rcnn_train_cfg):
@@ -212,11 +233,10 @@ class ConvFCCarClsRotHead(BBoxHead):
 
         return losses
 
-
     def rotation_similiarity(self, quaternion_pred, quaternion_target):
         diff = torch.abs(torch.sum(quaternion_pred*quaternion_target, dim=1))
-        dis_rot = 2 * torch.acos(diff) * 180 / np.pi
-        return dis_rot
+        dis_rot = torch.mean(2 * torch.acos(diff) * 180 / np.pi)
+        return dis_rot.detach()
 
 
 @HEADS.register_module

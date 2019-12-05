@@ -25,6 +25,7 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
                  bbox_head=None,
                  mask_roi_extractor=None,
                  mask_head=None,
+                 translation_head=None,
                  car_cls_rot_roi_extractor=None,
                  car_cls_rot_head=None,
                  train_cfg=None,
@@ -101,6 +102,9 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
             else:
                 self.share_roi_extractor = True
                 self.car_cls_rot_roi_extractor = self.bbox_roi_extractor
+
+        if translation_head is not None:
+            self.translation_head = builder.build_head(translation_head)
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg

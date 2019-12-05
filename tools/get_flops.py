@@ -8,7 +8,7 @@ from mmdet.utils import get_model_complexity_info
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('config', help='train config file path')
+    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py', help='train config file path')
     parser.add_argument(
         '--shape',
         type=int,
