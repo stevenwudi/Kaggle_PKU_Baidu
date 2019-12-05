@@ -1,6 +1,6 @@
 import argparse
 import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 
 import os.path as osp
 import shutil
@@ -112,6 +112,7 @@ def write_submission(outputs, args):
     predictions = {}
     PATH = '/data/Kaggle/pku-autonomous-driving/'
     ImageId = [i.strip() for i in open(PATH + 'validation.txt').readlines()]
+    # ImageId = [i.strip() for i in os.listdir('/data/Kaggle/pku-autonomous-driving/test_images')]#test
     ImageId = [x.replace('.jpg', '') for x in ImageId]
 
     for idx, output in enumerate(outputs):
@@ -143,12 +144,15 @@ def coords2str(coords):
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+    # parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py',
                         help='train config file path')
     parser.add_argument('--checkpoint',
-                        default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth',
-                        help='checkpoint file')
-    parser.add_argument('--out', default='/data/Kaggle/wudi_data/work_dirs/cyh_Nov27-14-16-45.pkl',
+                        # default='/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth',
+                        # default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth',
+                        # default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adame4_nopre_apollo1130_Dec03-19-50-51/epoch_50.pth',help='checkpoint file')
+                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adame4_pre_apollo1130_306080_Dec04-19-17-58/epoch_80.pth',help='checkpoint file')
+    parser.add_argument('--out', default='/data/Kaggle/cwx_data/work_dirs/Dec04-19-17_kaggle_apollo_80_valid.pkl',
                         help='output result file')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',

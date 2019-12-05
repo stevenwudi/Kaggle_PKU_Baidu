@@ -110,7 +110,10 @@ def check_match(idx):
 
 if __name__ == '__main__':
     # validation_prediction = '../input/autonomous-driving-validation-data/prediction_for_validation_data.csv'
-    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/cyh_Nov27-14-16-45.csv'
+    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/cyh_Nov27-14-16-45.csv'
+    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec01-10-14_kaggle_apollo_50_valid.csv'
+    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec03-19-50_kaggle_apollo_50_valid.csv'
+    validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec04-19-17_kaggle_apollo_80_valid.csv'
     valid_df = pd.read_csv(validation_prediction)
     expanded_valid_df = expand_df(valid_df, ['pitch', 'yaw', 'roll', 'x', 'y', 'z', 'Score'])
 

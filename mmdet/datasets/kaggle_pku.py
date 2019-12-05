@@ -37,7 +37,7 @@ class KaggkePKUDataset(CustomDataset):
 
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/Kaggle/yyj_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/cwx_data'):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480   # this
@@ -58,7 +58,7 @@ class KaggkePKUDataset(CustomDataset):
 
         annotations = []
         if not self.test_mode:
-            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + 'kaggleapollo1130.json')
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
@@ -67,8 +67,12 @@ class KaggkePKUDataset(CustomDataset):
                 self.print_statistics_annotations(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
-                PATH = '/data/Kaggle/pku-autonomous-driving/'
-                ImageId =[i.strip() for i in open(PATH + 'train.txt').readlines()]
+                outfilekaggle = '/data/cyh/kaggle/train.json'
+                annotations = json.load(open(outfilekaggle, 'r'))
+                annotations = self.clean_corrupted_images(annotations)
+                annotations = self.clean_outliers(annotations)
+                PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
+                ImageId =[i.strip() for i in open(PATH + 'train-list.txt').readlines()]
                 train = pd.read_csv(ann_file)
                 self.print_statistics(train)
                 for idx in tqdm(range(len(train))):
@@ -81,7 +85,11 @@ class KaggkePKUDataset(CustomDataset):
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
         else:
             for fn in os.listdir(self.img_prefix):
-                filename = os.path.join(self.img_prefix, fn)
+            # PATH = '/data/Kaggle/pku-autonomous-driving/validation.txt'
+            # ImageList = [x.strip() for x in open(PATH).readlines()]
+            # for fn in ImageList:
+            #     filename = os.path.join('/data/Kaggle/pku-autonomous-driving/validation_images', fn)
+                filename = os.path.join('/data/Kaggle/pku-autonomous-driving/validation_images', fn)
                 info = {'filename': filename}
                 annotations.append(info)
         self.annotations = annotations
@@ -89,15 +97,15 @@ class KaggkePKUDataset(CustomDataset):
         return annotations
 
     def load_car_models(self):
-        car_model_dir = os.path.join(self.data_root, 'car_models_json')
+        car_model_dir = os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json')
         car_model_dict = {}
         for car_name in tqdm(os.listdir(car_model_dir)):
-            with open(os.path.join(self.data_root, 'car_models_json', car_name)) as json_file:
+            with open(os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json', car_name)) as json_file:
                 car_model_dict[car_name[:-5]] = json.load(json_file)
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/yyj_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis'):
 
         labels = []
         bboxes = []
@@ -529,7 +537,7 @@ class KaggkePKUDataset(CustomDataset):
             xs: x coordinates in the image
             ys: y coordinates in the image
         '''
-        if translation.any():
+        if translation is not None:
             xs, ys, zs = translation
             P = np.array([xs, ys, zs]).T
             img_p = np.dot(self.camera_matrix, P).T
