@@ -97,7 +97,7 @@ def check_match(idx):
 
             # set the result
             if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
-            #if min_tr_dist < thre_tr_dist:
+                # if min_tr_dist < thre_tr_dist:
                 if not keep_gt:
                     train_dict[img_id].pop(min_idx)
                 result_flg.append(1)
@@ -110,16 +110,15 @@ def check_match(idx):
 
 if __name__ == '__main__':
     # validation_prediction = '../input/autonomous-driving-validation-data/prediction_for_validation_data.csv'
-    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/cyh_Nov27-14-16-45.csv'
-    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec01-10-14_kaggle_apollo_50_valid.csv'
-    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec03-19-50_kaggle_apollo_50_valid.csv'
-    validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec04-19-17_kaggle_apollo_80_valid.csv'
+    car_conf_score_thres = 0.1
+    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/Dec01-10-14-39_validation_images_conf_0.9.csv'
     valid_df = pd.read_csv(validation_prediction)
     expanded_valid_df = expand_df(valid_df, ['pitch', 'yaw', 'roll', 'x', 'y', 'z', 'Score'])
 
-    valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
+    valid_df.ImageId = [x.replace('.jpg', '') for x in
+                        os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df.ImageId = valid_df.ImageId
-    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score>0.5]
+    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score > car_conf_score_thres]
     valid_df = valid_df.fillna('')
 
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')

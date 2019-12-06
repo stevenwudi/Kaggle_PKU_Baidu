@@ -5,6 +5,8 @@ os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 import os.path as osp
 import shutil
 import tempfile
+import pandas as pd
+import numpy as np
 
 import mmcv
 import torch
@@ -13,9 +15,12 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import get_dist_info, load_checkpoint
 
 from mmdet.apis import init_dist
-from mmdet.core import coco_eval, results2json, wrap_fp16_model
+from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
+
+from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_images
+from tqdm import tqdm
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -102,28 +107,41 @@ def collect_results(result_part, size, tmpdir=None):
         return ordered_results
 
 
-def write_submission(outputs, args):
-    import pandas as pd
-    import numpy as np
-    from scipy.special import softmax
-    from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
-    submission = args.out.replace('.pkl', '.csv')
-
+def write_submission(outputs, args, img_prefix,
+                     conf_thresh=0.9,
+                     filter_mask=False):
+    submission = args.out.replace('.pkl', '')
+    submission += '_' + img_prefix.split('/')[-2]
+    submission += '_conf_' + str(conf_thresh)
+    if filter_mask:
+        submission += '_filter_mask.csv'
+    submission += '.csv'
     predictions = {}
     PATH = '/data/Kaggle/pku-autonomous-driving/'
     ImageId = [i.strip() for i in open(PATH + 'validation.txt').readlines()]
     # ImageId = [i.strip() for i in os.listdir('/data/Kaggle/pku-autonomous-driving/test_images')]#test
     ImageId = [x.replace('.jpg', '') for x in ImageId]
 
-    for idx, output in enumerate(outputs):
+    ImageId = [x.replace('.jpg', '') for x in os.listdir(img_prefix)]
+
+    CAR_IDX = 2  # this is the coco car class
+    for idx_img, output in tqdm(enumerate(outputs)):
         # Wudi change the conf to car prediction
-        #conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
-        conf = output[0][2][:, -1]
+        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+        idx_conf = conf > conf_thresh
+        if filter_mask:
+            # this filtering step will takes 2 second per iterations
+            idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+            # the final id should require both
+            idx = idx_conf * idx_keep_mask
+        else:
+            idx = idx_conf
+
         euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
         translation = output[2]['trans_pred_world']
-        coords = np.hstack((euler_angle, translation, conf[:, None]))
+        coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
         coords_str = coords2str(coords)
-        predictions[ImageId[idx]] = coords_str
+        predictions[ImageId[idx_img]] = coords_str
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
     for k, v in predictions.items():
@@ -131,7 +149,9 @@ def write_submission(outputs, args):
         pred_dict['PredictionString'].append(v)
 
     df = pd.DataFrame(data=pred_dict)
+    print("Writing submission csv file to: %s" % submission)
     df.to_csv(submission, index=False)
+    return True
 
 
 def coords2str(coords):
@@ -171,17 +191,14 @@ def parse_args():
 def main():
     args = parse_args()
 
-    assert args.out or args.show or args.json_out, \
-        ('Please specify at least one operation (save or show the results) '
-         'with the argument "--out" or "--show" or "--json_out"')
-
-    if args.out is not None and not args.out.endswith(('.pkl', '.pickle')):
-        raise ValueError('The output file must be a pkl file.')
-
     if args.json_out is not None and args.json_out.endswith('.json'):
         args.json_out = args.json_out[:-5]
 
     cfg = mmcv.Config.fromfile(args.config)
+    # Wudi change the args.out directly related to the model checkpoint file data
+    args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-2].replace('images', '') +
+                            args.checkpoint.split('/')[-2].split('_')[-1] + '.pkl')
+
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
@@ -218,8 +235,7 @@ def main():
     else:
         model.CLASSES = dataset.CLASSES
 
-    #if not os.path.exists(args.out):
-    if True:
+    if not os.path.exists(args.out):
         if not distributed:
             model = MMDataParallel(model, device_ids=[0])
             outputs = single_gpu_test(model, data_loader, args.show)
@@ -230,40 +246,12 @@ def main():
 
     else:
         outputs = mmcv.load(args.out)
-    write_submission(outputs, args)
-    dataset.visualise_pred(outputs, args)
 
-    rank, _ = get_dist_info()
-    if args.out and rank == 0:
-        print('\nwriting results to {}'.format(args.out))
-        eval_types = args.eval
-        if eval_types:
-            print('Starting evaluate {}'.format(' and '.join(eval_types)))
-            if eval_types == ['proposal_fast']:
-                result_file = args.out
-                coco_eval(result_file, eval_types, dataset.coco)
-            else:
-                if not isinstance(outputs[0], dict):
-                    result_files = results2json(dataset, outputs, args.out)
-                    coco_eval(result_files, eval_types, dataset.coco)
-                else:
-                    for name in outputs[0]:
-                        print('\nEvaluating {}'.format(name))
-                        outputs_ = [out[name] for out in outputs]
-                        result_file = args.out + '.{}'.format(name)
-                        result_files = results2json(dataset, outputs_,
-                                                    result_file)
-                        coco_eval(result_files, eval_types, dataset.coco)
-
-    # Save predictions in the COCO json format
-    if args.json_out and rank == 0:
-        if not isinstance(outputs[0], dict):
-            results2json(dataset, outputs, args.json_out)
-        else:
-            for name in outputs[0]:
-                outputs_ = [out[name] for out in outputs]
-                result_file = args.json_out + '.{}'.format(name)
-                results2json(dataset, outputs_, result_file)
+    # write submission here
+    write_submission(outputs, args, dataset.img_prefix,
+                     conf_thresh=0.9, filter_mask=False)
+    # evaluate mAP
+    #dataset.visualise_pred(outputs, args)
 
 
 if __name__ == '__main__':

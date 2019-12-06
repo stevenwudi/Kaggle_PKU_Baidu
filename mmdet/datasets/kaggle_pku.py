@@ -436,7 +436,7 @@ class NumpyEncoder(json.JSONEncoder):
 
 
 @DATASETS.register_module
-class KaggkePKUDataset(CustomDataset):
+class KagglePKUDataset(CustomDataset):
 
     CLASSES = ('car',)
 
