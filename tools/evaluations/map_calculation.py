@@ -119,7 +119,7 @@ if __name__ == '__main__':
 
     valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df.ImageId = valid_df.ImageId
-    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score>0.5]
+    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score>0.1]
     valid_df = valid_df.fillna('')
 
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')

@@ -307,9 +307,6 @@ log_config = dict(
 total_epochs = 200
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-<<<<<<< HEAD
-work_dir = '/data/Kaggle/cwx_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic'
-load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 
 work_dir = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic'
 load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
