@@ -236,7 +236,7 @@ test_cfg = dict(
         mask_thr_binary=0.5),
     keep_all_stages=False)
 # dataset settings
-dataset_type = 'KaggkePKUDataset'
+dataset_type = 'KagglePKUDataset'
 data_root = '/data/Kaggle/pku-autonomous-driving/'
 # data_root = '/data/Kaggle/ApolloScape_3D_car/train/'
 img_norm_cfg = dict(
@@ -311,8 +311,8 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[30, 60])
-checkpoint_config = dict(interval=1)
+    step=[15, 30, 55, 70])
+checkpoint_config = dict(interval=2)
 # yapf:disable
 log_config = dict(
     interval=50,
@@ -322,12 +322,12 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 80
+total_epochs = 100
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adame4_pre_apollo1130_306080'
-load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+work_dir = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1206_resume50'
+load_from = None#'/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 # load_from = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth'
 
-resume_from = None
+resume_from = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth'
 workflow = [('train', 1)]

@@ -59,10 +59,16 @@ class KagglePKUDataset(CustomDataset):
         annotations = []
         if not self.test_mode:
             outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + 'kaggleapollo1130.json')
-
+            outfile = '/data/Kaggle/cwx_data/apollo_trainkaggleapollo1130.json'
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
                 annotations = self.clean_corrupted_images(annotations)
+                
+                
+                
+                
+                
+                
                 annotations = self.clean_outliers(annotations)
                 self.print_statistics_annotations(annotations)
             else:
