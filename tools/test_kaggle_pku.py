@@ -1,6 +1,6 @@
 import argparse
 import os
-# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '7'
 
 import os.path as osp
 import shutil
@@ -117,7 +117,6 @@ def write_submission(outputs, args, img_prefix,
         submission += '_filter_mask.csv'
     submission += '.csv'
     predictions = {}
-
     ImageId = [x.replace('.jpg', '') for x in os.listdir(img_prefix)]
 
     CAR_IDX = 2  # this is the coco car class

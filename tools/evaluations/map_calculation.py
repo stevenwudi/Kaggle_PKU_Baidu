@@ -110,6 +110,10 @@ def check_match(idx):
 
 if __name__ == '__main__':
     # validation_prediction = '../input/autonomous-driving-validation-data/prediction_for_validation_data.csv'
+    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/cyh_Nov27-14-16-45.csv'
+    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec01-10-14_kaggle_apollo_50_valid.csv'
+    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec03-19-50_kaggle_apollo_50_valid.csv'
+    validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec04-19-17_kaggle_apollo_80_valid.csv'
     car_conf_score_thres = 0.1
     validation_prediction = '/data/Kaggle/wudi_data/work_dirs/Dec01-10-14-39_validation_images_conf_0.9.csv'
     valid_df = pd.read_csv(validation_prediction)
@@ -120,7 +124,6 @@ if __name__ == '__main__':
     valid_df.ImageId = valid_df.ImageId
     expanded_valid_df = expanded_valid_df[expanded_valid_df.Score > car_conf_score_thres]
     valid_df = valid_df.fillna('')
-
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
     train_df = train_df[train_df.ImageId.isin(valid_df.ImageId.unique())]
     # data description page says, The pose information is formatted as
