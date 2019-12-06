@@ -122,13 +122,8 @@ if __name__ == '__main__':
     valid_df.ImageId = [x.replace('.jpg', '') for x in
                         os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df.ImageId = valid_df.ImageId
-<<<<<<< HEAD
-    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score>0.1]
-=======
     expanded_valid_df = expanded_valid_df[expanded_valid_df.Score > car_conf_score_thres]
->>>>>>> master
     valid_df = valid_df.fillna('')
-
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
     train_df = train_df[train_df.ImageId.isin(valid_df.ImageId.unique())]
     # data description page says, The pose information is formatted as
