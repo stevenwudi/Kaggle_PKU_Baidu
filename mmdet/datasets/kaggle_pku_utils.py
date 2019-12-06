@@ -9,6 +9,8 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from math import sin, cos
+import os
+from pycocotools import mask as maskUtils
 
 
 def mesh_point_to_bbox(img):
@@ -37,7 +39,7 @@ def euler_angles_to_quaternions(angle):
 
     n = angle.shape[0]
 
-    #yaw, pitch, roll => pitch, yaw, roll
+    # yaw, pitch, roll => pitch, yaw, roll
     pitch, yaw, roll = angle[:, 0], angle[:, 1], angle[:, 2]
     q = np.zeros((n, 4))
 
@@ -91,7 +93,6 @@ def quaternion_upper_hemispher(q):
 
 
 def quaternion_to_euler_angle(q):
-
     """
     Convert quaternion to euler angel.
     该公式适用的yaw, pitch, roll与label里的定义不一样，需要做相应的变换 yaw, pitch, roll => pitch, yaw, roll
@@ -115,8 +116,9 @@ def quaternion_to_euler_angle(q):
     t4 = +1.0 - 2.0 * (y * y + z * z)
     roll = math.atan2(t3, t4)
 
-    #transform label RPY: yaw, pitch, roll => pitch, yaw, roll
+    # transform label RPY: yaw, pitch, roll => pitch, yaw, roll
     return pitch, yaw, roll
+
 
 def intrinsic_vec_to_mat(intrinsic, shape=None):
     """Convert a 4 dim intrinsic vector to a 3x3 intrinsic
@@ -202,12 +204,12 @@ def rotation_matrix_to_euler_angles(R, check=True):
         shouldBeIdentity = np.dot(Rt, R)
         I = np.identity(3, dtype=R.dtype)
         n = np.linalg.norm(I - shouldBeIdentity)
-        #return n < 3 *(1e-6)
+        # return n < 3 *(1e-6)
         # Di Wu relax the condition for TLESS dataset
         return n < 1e-5
 
     if check:
-        assert(isRotationMatrix(R))
+        assert (isRotationMatrix(R))
 
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
     singular = sy < 1e-6
@@ -246,8 +248,8 @@ def convert_pose_mat_to_6dof(pose_file_in, pose_file_out):
         rpy = rotation_matrix_to_euler_angles(mat[:3, :3])
         output_motion = np.hstack((xyz, rpy)).flatten()
         out_str = '%s %s\n' % (image_name, np.array2string(output_motion,
-            separator=',',
-            formatter={'float_kind':lambda x: "%.7f" % x})[1:-1])
+                                                           separator=',',
+                                                           formatter={'float_kind': lambda x: "%.7f" % x})[1:-1])
         f.write(out_str)
     f.close()
 
@@ -394,7 +396,7 @@ def im_car_trans_geometric_ssd6d(dataset, boxes, euler_angle, car_cls, im_scale=
 
         # lr denotes diagonal length of the precomputed bounding box and ls denotes the diagonal length
         # of the predicted bounding box on the image plane
-        ls = np.sqrt((box[2] - box[0]) ** 2 + (box[3] - box[1])**2)
+        ls = np.sqrt((box[2] - box[0]) ** 2 + (box[3] - box[1]) ** 2)
         # project 3D points to 2d image plane
         # https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
         euler_angle_i = euler_angle[car_idx]
@@ -406,14 +408,14 @@ def im_car_trans_geometric_ssd6d(dataset, boxes, euler_angle, car_cls, im_scale=
 
         u = fx * x_y_z_R_T_hat[0, :] + cx
         v = fy * x_y_z_R_T_hat[1, :] + cy
-        lr = np.sqrt((u.max() - u.min())**2 + (v.max() - v.min())**2)
+        lr = np.sqrt((u.max() - u.min()) ** 2 + (v.max() - v.min()) ** 2)
 
         zs = lr * zr / ls
 
         xc = (box[0] + box[2]) / 2
         yc = (box[1] + box[3]) / 2
-        xc_syn = (u.max() + u.min())/2
-        yc_syn = (v.max() + v.min())/2
+        xc_syn = (u.max() + u.min()) / 2
+        yc_syn = (v.max() + v.min()) / 2
 
         xt = zs * (xc - xc_syn) / fx
         yt = zs * (yc - yc_syn) / fy
@@ -436,9 +438,52 @@ def draw_line(image, points):
 def draw_points(image, points):
     for (p_x, p_y, p_z) in points:
         cv2.circle(image, (p_x, p_y), int(1000 / p_z), (0, 255, 0), -1)
-#         if p_x > image.shape[1] or p_y > image.shape[0]:
-#             print('Point', p_x, p_y, 'is out of image with shape', image.shape)
+    #         if p_x > image.shape[1] or p_y > image.shape[0]:
+    #             print('Point', p_x, p_y, 'is out of image with shape', image.shape)
     return image
+
+
+def filter_igore_masked_images(
+        img_name,
+        mask_list,
+        img_prefix,
+        iou_threshold=0.5):
+    """
+    We filter out the ignore mask according to IoU
+    :param mask_list:
+    :param img_prefix:
+    :return:
+    """
+    # a hard coded path for extractin ignore test mask region
+    if 'valid' in img_prefix:
+        mask_dir = img_prefix.replace('validation_images', 'train_masks')
+    else:
+        mask_dir = img_prefix.replace('test_images', 'test_masks')
+
+    mask_file = os.path.join(mask_dir, img_name + '.jpg')
+    if os.path.isfile(mask_file):
+        mask_im = cv2.imread(mask_file)
+        mask_im = np.mean(mask_im, axis=2)
+        mask_im[mask_im > 0] = 1
+    else:
+        # there is no ignore mask
+        return [True] * len(mask_list)
+
+    idx_keep_mask = [False] * len(mask_list)
+    for i, mask_car_rle in enumerate(mask_list):
+        mask_car = maskUtils.decode(mask_car_rle)
+        im_combime = np.zeros(mask_im.shape)
+        im_combime[1480:, :] = mask_car
+
+        # now we calculate the IoU:
+        area_car = im_combime.sum()
+        interception = im_combime * mask_im
+        area_interception = interception.sum()
+        iou_car = area_interception / area_car
+        if iou_car < iou_threshold:
+            idx_keep_mask[i] = True
+
+    return idx_keep_mask
 
 
 if __name__ == '__main__':
