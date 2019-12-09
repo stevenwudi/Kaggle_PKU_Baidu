@@ -127,14 +127,19 @@ class HybridTaskCascade(CascadeRCNN):
                                                  car_cls_weight, rot_weight)
         return loss_car_cls_rot, car_cls_rot_feat
 
-    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat):
+    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta):
         pos_bboxes = [res.pos_bboxes for res in sampling_results]
         # TODO: this is a dangerous hack: we assume only one image per batch
         if len(pos_bboxes) > 1:
             raise NotImplementedError("Image batch size 1 is not implement!")
         for im_idx in range(len(pos_bboxes)):
             device_id = car_cls_rot_feat.get_device()
-            pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
+            if self.translation_head.bbox_relative:
+                ori_shape = img_meta[im_idx]['ori_shape']
+                # then we use relative information instead the absolute world space
+                pred_boxes = self.translation_head.bbox_transform_pytorch_relative(pos_bboxes[im_idx], scale_factor[im_idx], device_id, ori_shape)
+            else:
+                pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
             trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
             pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
 
@@ -458,7 +463,7 @@ class HybridTaskCascade(CascadeRCNN):
 
         # for translation, we don't have interleave or cascading for the moment
         if self.with_translation:
-            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat)
+            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat, img_meta)
             for name, value in loss_translation.items():
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 

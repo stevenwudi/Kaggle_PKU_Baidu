@@ -110,10 +110,10 @@ def check_match(idx):
 
 if __name__ == '__main__':
     validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_Dec01-10-14-39_validation_images_conf_0.1.csv'
+    car_conf_score_thres = 0.1
     valid_df = pd.read_csv(validation_prediction)
     valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df = valid_df.fillna('')
-
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
     train_df = train_df[train_df.ImageId.isin(valid_df.ImageId.unique())]
 

@@ -138,6 +138,7 @@ model = dict(
         in_channels_carclsrot=1024,
         fc_out_channels=100,
         num_translation_reg=3,
+        bbox_relative=True,  # if bbox_relative=False, then it requires training/test input the same
         loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
 )
 
@@ -324,8 +325,8 @@ total_epochs = 50
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data'
-#load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-load_from = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth'
+load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+#load_from = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth'
 
 resume_from = None
 workflow = [('train', 1)]

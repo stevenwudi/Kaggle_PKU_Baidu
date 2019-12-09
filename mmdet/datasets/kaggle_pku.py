@@ -17,15 +17,16 @@ from demo.visualisation_utils import draw_result_kaggle_pku
 
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types """
+
     def default(self, obj):
         if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,
-            np.int16, np.int32, np.int64, np.uint8,
-            np.uint16, np.uint32, np.uint64)):
+                            np.int16, np.int32, np.int64, np.uint8,
+                            np.uint16, np.uint32, np.uint64)):
             return int(obj)
         elif isinstance(obj, (np.float_, np.float16, np.float32,
-            np.float64)):
+                              np.float64)):
             return float(obj)
-        elif isinstance(obj,(np.ndarray,)): #### This is the fix
+        elif isinstance(obj, (np.ndarray,)):  #### This is the fix
             return obj.tolist()
         elif isinstance(obj, (bytes)):
             return obj.decode("ascii")
@@ -34,13 +35,12 @@ class NumpyEncoder(json.JSONEncoder):
 
 @DATASETS.register_module
 class KagglePKUDataset(CustomDataset):
-
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/Kaggle/yyj_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/cwx_data'):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
-        self.bottom_half = 1480   # this
+        self.bottom_half = 1480  # this
         self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
                                 19, 20, 23, 25, 27, 28, 31, 32,
                                 35, 37, 40, 43, 46, 47, 48, 50,
@@ -49,16 +49,15 @@ class KagglePKUDataset(CustomDataset):
 
         # From camera.zip
         self.camera_matrix = np.array([[2304.5479, 0, 1686.2379],
-                                  [0, 2305.8757, 1354.9849],
-                                  [0, 0, 1]], dtype=np.float32)
-        self.camera_matrix_inv = np.linalg.inv(self.camera_matrix)
+                                       [0, 2305.8757, 1354.9849],
+                                       [0, 0, 1]], dtype=np.float32)
 
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
 
         annotations = []
         if not self.test_mode:
-            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '.json')
+            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + 'kaggleapollo1130.json')
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
@@ -67,12 +66,16 @@ class KagglePKUDataset(CustomDataset):
                 self.print_statistics_annotations(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
-                PATH = '/data/Kaggle/pku-autonomous-driving/'
-                ImageId =[i.strip() for i in open(PATH + 'train.txt').readlines()]
+                outfilekaggle = '/data/cyh/kaggle/train.json'
+                annotations = json.load(open(outfilekaggle, 'r'))
+                annotations = self.clean_corrupted_images(annotations)
+                annotations = self.clean_outliers(annotations)
+                PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
+                ImageId = [i.strip() for i in open(PATH + 'train-list.txt').readlines()]
                 train = pd.read_csv(ann_file)
                 self.print_statistics(train)
                 for idx in tqdm(range(len(train))):
-                    filename = train['ImageId'].iloc[idx] +'.jpg'
+                    filename = train['ImageId'].iloc[idx] + '.jpg'
                     if filename not in ImageId:
                         continue
                     annotation = self.load_anno_idx(idx, train)
@@ -81,23 +84,24 @@ class KagglePKUDataset(CustomDataset):
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
         else:
             for fn in os.listdir(self.img_prefix):
-                filename = os.path.join(self.img_prefix, fn)
+                filename = os.path.join('/data/Kaggle/pku-autonomous-driving/validation_images', fn)
                 info = {'filename': filename}
                 annotations.append(info)
+
         self.annotations = annotations
 
         return annotations
 
     def load_car_models(self):
-        car_model_dir = os.path.join(self.data_root, 'car_models_json')
+        car_model_dir = os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json')
         car_model_dict = {}
         for car_name in tqdm(os.listdir(car_model_dir)):
-            with open(os.path.join(self.data_root, 'car_models_json', car_name)) as json_file:
+            with open(os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json', car_name)) as json_file:
                 car_model_dict[car_name[:-5]] = json.load(json_file)
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/yyj_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis'):
 
         labels = []
         bboxes = []
@@ -106,7 +110,7 @@ class KagglePKUDataset(CustomDataset):
         quaternion_semispheres = []
         translations = []
 
-        img_name = self.img_prefix + train['ImageId'].iloc[idx] +'.jpg'
+        img_name = self.img_prefix + train['ImageId'].iloc[idx] + '.jpg'
         if not os.path.isfile(img_name):
             assert "Image file does not exist!"
         else:
@@ -170,13 +174,14 @@ class KagglePKUDataset(CustomDataset):
                     # project 3D points to 2d image plane
                     mask_seg = np.zeros(image.shape, dtype=np.uint8)
                     for t in triangles:
-                        coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]], dtype=np.int32)
+                        coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                                         dtype=np.int32)
                         # This will draw the mask for segmenation
                         cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
-                        #cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+                        # cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
 
                     mask_all += mask_seg
-                    #imwrite(mask_seg, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis','mask_demo.jpg'))
+                    # imwrite(mask_seg, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis','mask_demo.jpg'))
 
                     # Find mask
                     ground_truth_binary_mask = np.zeros(mask_seg.shape, dtype=np.uint8)
@@ -184,29 +189,29 @@ class KagglePKUDataset(CustomDataset):
                     if self.bottom_half > 0:  # this indicate w
                         ground_truth_binary_mask = ground_truth_binary_mask[int(self.bottom_half):, :]
 
-                    #x1, x2, y1, y2 = mesh_point_to_bbox(ground_truth_binary_mask)
+                    # x1, x2, y1, y2 = mesh_point_to_bbox(ground_truth_binary_mask)
 
                     # TODO: problem of masking
                     # Taking a kernel for dilation and erosion,
                     # the kernel size is set at 1/10th of the average width and heigh of the car
 
-                    kernel_size = int(((y2-y1)/2 + (x2-x1)/2) / 10)
+                    kernel_size = int(((y2 - y1) / 2 + (x2 - x1) / 2) / 10)
                     kernel = np.ones((kernel_size, kernel_size), np.uint8)
                     # Following is the code to find mask
                     ground_truth_binary_mask_img = ground_truth_binary_mask.sum(axis=2).astype(np.uint8)
-                    ground_truth_binary_mask_img[ground_truth_binary_mask_img>1] = 1
+                    ground_truth_binary_mask_img[ground_truth_binary_mask_img > 1] = 1
                     ground_truth_binary_mask_img = cv2.dilate(ground_truth_binary_mask_img, kernel, iterations=1)
                     ground_truth_binary_mask_img = cv2.erode(ground_truth_binary_mask_img, kernel, iterations=1)
                     fortran_ground_truth_binary_mask = np.asfortranarray(ground_truth_binary_mask_img)
                     encoded_ground_truth = maskUtils.encode(fortran_ground_truth_binary_mask)
 
                     rles.append(encoded_ground_truth)
-                    #bm = maskUtils.decode(encoded_ground_truth)
+                    # bm = maskUtils.decode(encoded_ground_truth)
             if draw:
-            # if False:
+                # if False:
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
-                imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
+                imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))
 
             if len(bboxes):
                 bboxes = np.array(bboxes, dtype=np.float32)
@@ -214,7 +219,8 @@ class KagglePKUDataset(CustomDataset):
                 eular_angles = np.array(eular_angles, dtype=np.float32)
                 quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
                 translations = np.array(translations, dtype=np.float32)
-                assert len(gt) == len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
+                assert len(gt) == len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(
+                    translations)
 
                 annotation = {
                     'filename': img_name,
@@ -255,9 +261,10 @@ class KagglePKUDataset(CustomDataset):
                 # now we start to plot the image from kaggle
                 coords = np.hstack((euler_angle, trans_pred_world))
                 img_kaggle = self.visualise_kaggle(image, coords)
-                img_mesh = self.visualise_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle, trans_pred_world)
-                imwrite(img_kaggle, os.path.join(args.out[:-4] +'_kaggle_vis/' + img_name.split('/')[-1]))
-                imwrite(img_mesh, os.path.join(args.out[:-4] +'_mes_vis/' + img_name.split('/')[-1]))
+                img_mesh = self.visualise_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,
+                                               trans_pred_world)
+                imwrite(img_kaggle, os.path.join(args.out[:-4] + '_kaggle_vis/' + img_name.split('/')[-1]))
+                imwrite(img_mesh, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
 
     def visualise_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
 
@@ -269,7 +276,6 @@ class KagglePKUDataset(CustomDataset):
                                             self.camera_matrix,
                                             trans_pred_world,
                                             euler_angle)
-
 
         return im_combime
 
@@ -310,7 +316,7 @@ class KagglePKUDataset(CustomDataset):
 
     def clean_corrupted_images(self, annotations):
         # For training images, there are 5 corrupted images:
-        corrupted_images = ['ID_1a5a10365', 'ID_4d238ae90', 'ID_408f58e9f', 'ID_bb1d991f6','ID_c44983aeb']
+        corrupted_images = ['ID_1a5a10365', 'ID_4d238ae90', 'ID_408f58e9f', 'ID_bb1d991f6', 'ID_c44983aeb']
         annotations_clean = [ann for ann in annotations if ann['filename'].split('/')[-1][:-4] not in corrupted_images]
         return annotations_clean
 
@@ -436,7 +442,6 @@ class KagglePKUDataset(CustomDataset):
         print("Number of unique car models: %d" % len(np.unique(car_models)))
         # 34
 
-
     def print_statistics(self, train):
         car_per_image = np.array([len(self._str2coords(s)) for s in train['PredictionString']])
         print('Total images: %d, car num sum: %d, minmin: %d, max: %d, mean: %d' %
@@ -486,10 +491,12 @@ class KagglePKUDataset(CustomDataset):
         ymin, ymax = 1, 50
         xs_cdf = sum((xs > xmin) * (xs < xmax))
         ys_cdf = sum((ys > ymin) * (ys < ymax))
-        xs_ys_cdf = sum((xs > xmin) * (xs < xmax) * (ys > ymin) * (ys <ymax))
-        print('X within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (xmin, xmax, xs_cdf / len(xs), len(xs)-xs_cdf))
-        print('Y within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (ymin, ymax, ys_cdf / len(ys), len(ys)-ys_cdf))
-        print('Both will have cdf of: %.6f, outlier number: %d' % (xs_ys_cdf / len(ys), len(ys)- xs_ys_cdf))
+        xs_ys_cdf = sum((xs > xmin) * (xs < xmax) * (ys > ymin) * (ys < ymax))
+        print('X within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (
+        xmin, xmax, xs_cdf / len(xs), len(xs) - xs_cdf))
+        print('Y within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (
+        ymin, ymax, ys_cdf / len(ys), len(ys) - ys_cdf))
+        print('Both will have cdf of: %.6f, outlier number: %d' % (xs_ys_cdf / len(ys), len(ys) - xs_ys_cdf))
 
         car_models = []
         for ps in train['PredictionString']:
@@ -529,7 +536,7 @@ class KagglePKUDataset(CustomDataset):
             xs: x coordinates in the image
             ys: y coordinates in the image
         '''
-        if translation.any():
+        if translation is not None:
             xs, ys, zs = translation
             P = np.array([xs, ys, zs]).T
             img_p = np.dot(self.camera_matrix, P).T
@@ -576,7 +583,7 @@ class KagglePKUDataset(CustomDataset):
                 decoded into binary masks.
         """
         gt_bboxes = []
-        gt_class_labels = []    # this will always be fixed as car class
+        gt_class_labels = []  # this will always be fixed as car class
         gt_labels = []
         gt_bboxes_ignore = []
         gt_masks_ann = []
@@ -587,7 +594,7 @@ class KagglePKUDataset(CustomDataset):
 
         for i in range(len(ann_info['bboxes'])):
             x1, y1, x2, y2 = ann_info['bboxes'][i]
-            w, h = x2-x1, y2-y1
+            w, h = x2 - x1, y2 - y1
             if w < 1 or h < 1:
                 continue
             translation = ann_info['translations'][i]
@@ -600,7 +607,7 @@ class KagglePKUDataset(CustomDataset):
                 bbox = [x1, y1 - self.bottom_half, x2, y2 - self.bottom_half]
             else:
                 bbox = [x1, y1, x2, y2]
-            if ann_info.get('iscrowd', False):   # TODO: train mask need to include
+            if ann_info.get('iscrowd', False):  # TODO: train mask need to include
                 gt_bboxes_ignore.append(bbox)
             else:
                 gt_bboxes.append(bbox)

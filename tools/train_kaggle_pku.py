@@ -1,7 +1,9 @@
 from __future__ import division
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
+#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 import torch
 from datetime import datetime
 
@@ -16,7 +18,7 @@ from mmdet.models import build_detector
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py', help='train config file path')
+    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py', help='train config file path')
     parser.add_argument('--work_dir', help='the dir to save logs and models')
     parser.add_argument('--resume_from', help='the checkpoint file to resume from')
     parser.add_argument('--validate', action='store_true', help='whether to evaluate the checkpoint during training')
