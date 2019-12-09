@@ -236,7 +236,7 @@ test_cfg = dict(
         mask_thr_binary=0.5),
     keep_all_stages=False)
 # dataset settings
-dataset_type = 'KaggkePKUDataset'
+dataset_type = 'KagglePKUDataset'
 data_root = '/data/Kaggle/pku-autonomous-driving/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
@@ -263,10 +263,13 @@ test_pipeline = [
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1664, 576),
+        #img_scale=(3384, 1230),
         flip=False,
         transforms=[
             #dict(type='Resize', keep_ratio=True),
             dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
+            #dict(type='Resize', img_scale=(3384, 1230), keep_ratio=True),
+
             #dict(type='RandomFlip', flip_ratio=0.5),
             dict(type='RandomFlip', flip_ratio=0),
             dict(type='Normalize', **img_norm_cfg),
@@ -294,8 +297,8 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        #img_prefix=data_root + 'validation_images/',
-        img_prefix=data_root + 'test_images/',
+        img_prefix=data_root + 'validation_images/',
+        #img_prefix=data_root + 'test_images/',
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='Adam', lr=0.0001)
@@ -306,7 +309,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[15, 30])
+    step=[15, 40])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(

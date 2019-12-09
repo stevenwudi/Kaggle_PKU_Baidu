@@ -159,8 +159,8 @@ for idx in range(10):
                 min_idx = idx
 
         # set the result
-        if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
-            # if min_tr_dist < thre_tr_dist:
+        #if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
+        if min_tr_dist < thre_tr_dist:
             if not keep_gt:
                 gt_RT.pop(min_idx)
             result_flg.append(1)

@@ -164,7 +164,7 @@ def parse_args():
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
     parser.add_argument('--checkpoint',
-                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth',
+                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adame4_pre_apollo1130_306080_Dec04-19-17-58/epoch_80.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -242,7 +242,7 @@ def main():
 
     # write submission here
     write_submission(outputs, args, dataset.img_prefix,
-                     conf_thresh=0.9, filter_mask=False)
+                     conf_thresh=0.1, filter_mask=False)
     # evaluate mAP
     #dataset.visualise_pred(outputs, args)
 
