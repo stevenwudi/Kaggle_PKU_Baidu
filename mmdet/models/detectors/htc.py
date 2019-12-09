@@ -260,11 +260,16 @@ class HybridTaskCascade(CascadeRCNN):
         quaternion_pred = quaternion_pred.cpu().numpy()
         return car_cls_score_pred, quaternion_pred, car_cls_rot_feat
 
-    def _translation_forward_test(self, pos_bboxes, scale_factor, car_cls_rot_feat):
+    def _translation_forward_test(self, pos_bboxes, scale_factor, car_cls_rot_feat, ori_shape):
 
         # TODO: this is a dangerous hack: we assume only one image per batch
         device_id = car_cls_rot_feat.get_device()
-        pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
+
+        if self.translation_head.bbox_relative:
+            # then we use relative information instead the absolute world space
+            pred_boxes = self.translation_head.bbox_transform_pytorch_relative(pos_bboxes, scale_factor, device_id, ori_shape)
+        else:
+            pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
         trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
         trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
         trans_pred_world = trans_pred_world.cpu().numpy()
@@ -587,7 +592,7 @@ class HybridTaskCascade(CascadeRCNN):
                 pos_box = pos_box*scale_factor
                 car_cls_score_pred, quaternion_pred, car_cls_rot_feats = self._carcls_rot_forward_test(stage_num, x, pos_box, semantic_feat)
             if self.with_translation:
-                trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats)
+                trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats, ori_shape)
             ms_6dof_result['ensemble'] = {'car_cls_score_pred': car_cls_score_pred,
                                           'quaternion_pred': quaternion_pred,
                                           'trans_pred_world': trans_pred_world}
