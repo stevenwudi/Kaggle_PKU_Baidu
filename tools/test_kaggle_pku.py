@@ -160,13 +160,14 @@ def coords2str(coords):
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config',
-                        default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+                        default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py',
                         help='train config file path')
     parser.add_argument('--checkpoint',
-                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth',
+                        # default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth',
+                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
-    parser.add_argument('--json_out', help='output result file name without extension', type=str)
+    parser.add_argument('--json_out', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28',help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
                         choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
                         help='eval types')
@@ -188,7 +189,8 @@ def main():
 
     cfg = mmcv.Config.fromfile(args.config)
     # Wudi change the args.out directly related to the model checkpoint file data
-    args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-2].replace('images', '') +
+    # args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-2].replace('images', '') +
+    args.out = os.path.join('/data/Kaggle/cwx_data/work_dirs', cfg.data.test.img_prefix.split('/')[-2].replace('images', '') +
                             args.checkpoint.split('/')[-2].split('_')[-1] + '.pkl')
 
     # set cudnn_benchmark
