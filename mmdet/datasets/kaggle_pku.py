@@ -61,15 +61,10 @@ class KagglePKUDataset(CustomDataset):
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
-                annotations = self.clean_corrupted_images(annotations)
-                annotations = self.clean_outliers(annotations)
-                self.print_statistics_annotations(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
                 outfilekaggle = '/data/cyh/kaggle/train.json'
                 annotations = json.load(open(outfilekaggle, 'r'))
-                annotations = self.clean_corrupted_images(annotations)
-                annotations = self.clean_outliers(annotations)
                 PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
                 ImageId = [i.strip() for i in open(PATH + 'train-list.txt').readlines()]
                 train = pd.read_csv(ann_file)
@@ -82,12 +77,19 @@ class KagglePKUDataset(CustomDataset):
                     annotations.append(annotation)
                 with open(outfile, 'w') as f:
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
+            annotations = self.clean_corrupted_images(annotations)
+            annotations = self.clean_outliers(annotations)
+            self.print_statistics_annotations(annotations)
+
         else:
             for fn in os.listdir(self.img_prefix):
                 filename = os.path.join(self.img_prefix, fn)
                 info = {'filename': filename}
                 annotations.append(info)
 
+        # CWX mess it up?
+        for ann in annotations:
+            ann['height'] = 2710
         self.annotations = annotations
 
         return annotations
@@ -371,7 +373,7 @@ class KagglePKUDataset(CustomDataset):
             annotation = {
                 'filename': ann['filename'],
                 'width': ann['width'],
-                'height': ann['width'],
+                'height': ann['height'],
                 'bboxes': bboxes,
                 'labels': labels,
                 'eular_angles': eular_angles,

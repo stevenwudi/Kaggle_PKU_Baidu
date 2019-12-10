@@ -238,8 +238,7 @@ test_cfg = dict(
     keep_all_stages=False)
 # dataset settings
 dataset_type = 'KagglePKUDataset'
-#data_root = '/data/Kaggle/pku-autonomous-driving/'
-data_root = '/data/Kaggle/ApolloScape_3D_car/train/'
+
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [
@@ -280,13 +279,17 @@ test_pipeline = [
             dict(type='Collect', keys=['img']),
         ])
 ]
+
+data_root = '/data/Kaggle/pku-autonomous-driving/'
+#data_root = '/data/Kaggle/ApolloScape_3D_car/train/'
 data = dict(
     imgs_per_gpu=1,
     workers_per_gpu=2,
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'apollo_kaggle_combined_6725.json',  #
+        ann_file=data_root + 'train.json',  #
+        #ann_file=data_root + 'apollo_kaggle_combined_6725.json',  #
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
     val=dict(
@@ -299,8 +302,8 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        img_prefix=data_root + 'validation_images',  # We create 400 validation images
-        #img_prefix=data_root + 'test_images/',
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='Adam', lr=0.0001)
@@ -325,9 +328,9 @@ log_config = dict(
 total_epochs = 50
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-work_dir = '/data/Kaggle/wudi_data/word_dirs'
+work_dir = '/data/Kaggle/wudi_data/'
 load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-#load_from = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth'
+#load_from = '/data/Kaggle/wudi_data_Dec10-01-27-22/epoch_36.pth'
 
 resume_from = None
 workflow = [('train', 1)]
