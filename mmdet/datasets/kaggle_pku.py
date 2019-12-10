@@ -57,7 +57,7 @@ class KagglePKUDataset(CustomDataset):
 
         annotations = []
         if not self.test_mode:
-            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + 'kaggleapollo1130.json')
+            outfile = ann_file
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
@@ -84,7 +84,7 @@ class KagglePKUDataset(CustomDataset):
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
         else:
             for fn in os.listdir(self.img_prefix):
-                filename = os.path.join('/data/Kaggle/pku-autonomous-driving/validation_images', fn)
+                filename = os.path.join(self.img_prefix, fn)
                 info = {'filename': filename}
                 annotations.append(info)
 
