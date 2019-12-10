@@ -45,7 +45,7 @@ class MaxIoUAssigner(BaseAssigner):
         self.ignore_wrt_candidates = ignore_wrt_candidates
 
     def assign(self, bboxes, gt_bboxes, gt_bboxes_ignore=None, gt_labels=None,
-               carlabels=None, quaternion_semispheres=None, translations=None
+               carlabels=None, quaternion_semispheres=None, translations=None,keypoints=None
                ):
         """Assign gt to bboxes.
 
@@ -90,11 +90,11 @@ class MaxIoUAssigner(BaseAssigner):
             overlaps[:, ignore_max_overlaps > self.ignore_iof_thr] = -1
 
         assign_result = self.assign_wrt_overlaps(overlaps, gt_labels,
-                                                 carlabels, quaternion_semispheres, translations)
+                                                 carlabels, quaternion_semispheres, translations,keypoints)
         return assign_result
 
     def assign_wrt_overlaps(self, overlaps, gt_labels=None,
-                            carlabels=None, quaternion_semispheres=None, translations=None):
+                            carlabels=None, quaternion_semispheres=None, translations=None,keypoints=None):
         """Assign w.r.t. the overlaps of bboxes with gts.
 
         Args:
@@ -148,6 +148,7 @@ class MaxIoUAssigner(BaseAssigner):
             assigned_carlabels = assigned_gt_inds.new_zeros((num_bboxes, ))
             assigned_quaternion_semispheres = assigned_gt_inds.new_zeros((num_bboxes, 4), dtype=torch.float)
             assigned_translations = assigned_gt_inds.new_zeros((num_bboxes, 3), dtype=torch.float)
+            assigned_keypoints = assigned_gt_inds.new_zeros((num_bboxes, 132), dtype=torch.float)
 
             pos_inds = torch.nonzero(assigned_gt_inds > 0).squeeze()
             if pos_inds.numel() > 0:
@@ -155,14 +156,16 @@ class MaxIoUAssigner(BaseAssigner):
                 assigned_carlabels[pos_inds] = carlabels[assigned_gt_inds[pos_inds] - 1]
                 assigned_quaternion_semispheres[pos_inds] = quaternion_semispheres[assigned_gt_inds[pos_inds] - 1]
                 assigned_translations[pos_inds] = translations[assigned_gt_inds[pos_inds] - 1]
+                assigned_keypoints[pos_inds] = keypoints[assigned_gt_inds[pos_inds] - 1]
 
         else:
             assigned_labels = None
             assigned_carlabels = None
             assigned_quaternion_semispheres = None
             assigned_translations = None
+            assigned_keypoints = None
 
         return AssignResult(
             num_gts, assigned_gt_inds, max_overlaps, labels=assigned_labels,
             assigned_carlabels=assigned_carlabels, assigned_quaternion_semispheres=assigned_quaternion_semispheres,
-            assigned_translations=assigned_translations)
+            assigned_translations=assigned_translations,assigned_keypoints=assigned_keypoints)

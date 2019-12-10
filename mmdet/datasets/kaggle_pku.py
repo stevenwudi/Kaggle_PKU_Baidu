@@ -13,6 +13,7 @@ from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points
 from demo.visualisation_utils import draw_result_kaggle_pku
+from glob import glob
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -37,7 +38,7 @@ class KagglePKUDataset(CustomDataset):
 
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/Kaggle/cwx_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/cwx_data',with_keypoint=True):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480   # this
@@ -58,27 +59,24 @@ class KagglePKUDataset(CustomDataset):
 
         annotations = []
         if not self.test_mode:
-            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + 'kaggleapollo1130.json')
-            outfile = '/data/Kaggle/cwx_data/apollo_trainkaggleapollo1130.json'
+            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + 'apollo_keypoints.json')
+            # outfile = '/data/Kaggle/cwx_data/apollo_trainkaggleapollo1130.json'
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
                 annotations = self.clean_corrupted_images(annotations)
-                
-                
-                
-                
-                
-                
                 annotations = self.clean_outliers(annotations)
                 self.print_statistics_annotations(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
-                outfilekaggle = '/data/cyh/kaggle/train.json'
-                annotations = json.load(open(outfilekaggle, 'r'))
-                annotations = self.clean_corrupted_images(annotations)
-                annotations = self.clean_outliers(annotations)
+                #we first use apollo only
+                # outfilekaggle = '/data/cyh/kaggle/train.json'
+                # annotations = json.load(open(outfilekaggle, 'r'))
+                # annotations = self.clean_corrupted_images(annotations)
+                # annotations = self.clean_outliers(annotations)
                 PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
-                ImageId =[i.strip() for i in open(PATH + 'train-list.txt').readlines()]
+                # ImageId =[i.strip() for i in open(PATH + 'train-list.txt').readlines()]
+                #wo first use 200 for test
+                ImageId =[i.strip() for i in open(PATH + 'validation-list.txt').readlines()]
                 train = pd.read_csv(ann_file)
                 self.print_statistics(train)
                 for idx in tqdm(range(len(train))):
@@ -111,7 +109,7 @@ class KagglePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_apollo_image_gt_vis',show_keypoints= True,with_keypoint=True):
 
         labels = []
         bboxes = []
@@ -119,7 +117,9 @@ class KagglePKUDataset(CustomDataset):
         eular_angles = []
         quaternion_semispheres = []
         translations = []
-
+        #cwx:keypont define,we have 66 keypoint in apollo
+        if with_keypoint:
+            keypoints = []
         img_name = self.img_prefix + train['ImageId'].iloc[idx] +'.jpg'
         if not os.path.isfile(img_name):
             assert "Image file does not exist!"
@@ -221,7 +221,37 @@ class KagglePKUDataset(CustomDataset):
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
                 imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
+            if with_keypoint:
+                keypoints_draw = []
+                keypoints_draw_all = []
+                keypoints_all = []
+                if 'Camera' in img_name:
+                    pose_fodler = img_name.replace('images','keypoints').replace('.jpg','')
+                    keypoint = np.array([[float(0), float(0)] for i in range(0, 66)])
+                    #if (len(glob(pose_fodler + '/*.txt'))==len(bboxes)):
+                    if True:
+                        for kp_path in glob(pose_fodler + '/*.txt'):
+                            kps = [x.rstrip().split('\t') for x in open(kp_path).readlines()]
+                            for idx in range(len(kps)):
+                                keypoint[int(kps[idx][0])] = [float(kps[idx][1]), float(kps[idx][2])]
+                                keypoints_draw.append([float(kps[idx][1]), float(kps[idx][2])])
+                            keypoints.append(keypoint)#ech file,car
+                            keypoints_draw_all.append(keypoints_draw)
 
+                    else:#no the same car nums,we ignore
+                        keypoints = [keypoint for i in range(0,len(bboxes))]
+                if show_keypoints:
+                    for kpfile in glob(pose_fodler + '/*.txt'):
+                        keypoints_all.append([x.rstrip().split('\t') for x in open(kpfile).readlines()])
+                    for keypoint in keypoints_all:
+                        for kp in keypoint:
+                            cv2.putText(image, str(int(kp[0])), (int(float(kp[1])), int(float(kp[2]))),
+                                        cv2.FONT_HERSHEY_TRIPLEX, 1, (0, 0, 255))
+                            cv2.circle(image, (int(float(kp[1])), int(float(kp[2]))), 5, (0, 255, 255), -1)
+                    kps = np.array(keypoints_draw_all, np.int32)
+                    x1, y1, x2, y2 = kps[:, 0].min(), kps[:, 1].min(), kps[:, 0].max(), kps[:, 1].max()
+                    cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255))
+                    cv2.imwrite(os.path.join(draw_dir, os.path.basename(img_name)), image)
             if len(bboxes):
                 bboxes = np.array(bboxes, dtype=np.float32)
                 labels = np.array(labels, dtype=np.int64)
@@ -229,18 +259,34 @@ class KagglePKUDataset(CustomDataset):
                 quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
                 translations = np.array(translations, dtype=np.float32)
                 assert len(gt) == len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
+                if with_keypoint:
+                    keypoints = np.array(keypoints, dtype=np.float32)
+                    assert len(gt) == len(keypoints)
+                    annotation = {
+                        'filename': img_name,
+                        'width': self.image_shape[1],
+                        'height': self.image_shape[0],
+                        'bboxes': bboxes,
+                        'labels': labels,
+                        'eular_angles': eular_angles,
+                        'quaternion_semispheres': quaternion_semispheres,
+                        'translations': translations,
+                        'rles': rles,
+                        'keypoints': keypoints
+                    }
+                else:
+                    annotation = {
+                        'filename': img_name,
+                        'width': self.image_shape[1],
+                        'height': self.image_shape[0],
+                        'bboxes': bboxes,
+                        'labels': labels,
+                        'eular_angles': eular_angles,
+                        'quaternion_semispheres': quaternion_semispheres,
+                        'translations': translations,
+                        'rles': rles
+                    }
 
-                annotation = {
-                    'filename': img_name,
-                    'width': self.image_shape[1],
-                    'height': self.image_shape[0],
-                    'bboxes': bboxes,
-                    'labels': labels,
-                    'eular_angles': eular_angles,
-                    'quaternion_semispheres': quaternion_semispheres,
-                    'translations': translations,
-                    'rles': rles
-                }
                 return annotation
 
     def visualise_pred(self, outputs, args):
@@ -353,6 +399,7 @@ class KagglePKUDataset(CustomDataset):
             quaternion_semispheres = []
             translations = []
             rles = []
+            keypoints = []
 
             for box_idx in range(len(ann['bboxes'])):
                 translation = ann['translations'][box_idx]
@@ -368,13 +415,14 @@ class KagglePKUDataset(CustomDataset):
                     quaternion_semispheres.append(ann['quaternion_semispheres'][box_idx])
                     translations.append(ann['translations'][box_idx])
                     rles.append(ann['rles'][box_idx])
+                    keypoints.append(ann['keypoints'][box_idx])
 
             bboxes = np.array(bboxes, dtype=np.float32)
             labels = np.array(labels, dtype=np.int64)
             eular_angles = np.array(eular_angles, dtype=np.float32)
             quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
             translations = np.array(translations, dtype=np.float32)
-            assert len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
+            assert len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations) == len(keypoints)
             clean_count += len(bboxes)
             annotation = {
                 'filename': ann['filename'],
@@ -385,7 +433,8 @@ class KagglePKUDataset(CustomDataset):
                 'eular_angles': eular_angles,
                 'quaternion_semispheres': quaternion_semispheres,
                 'translations': translations,
-                'rles': rles
+                'rles': rles,
+                'keypoints':keypoints
             }
             annotations_clean.append(annotation)
         print("Totaly corrupted count is: %d, clean count: %d" % (corrupted_count, clean_count))
@@ -595,9 +644,12 @@ class KagglePKUDataset(CustomDataset):
         gt_bboxes_ignore = []
         gt_masks_ann = []
 
+        gt_keyoints = []
+
         eular_angles = []
         quaternion_semispheres = []
         translations = []
+
 
         for i in range(len(ann_info['bboxes'])):
             x1, y1, x2, y2 = ann_info['bboxes'][i]
@@ -630,6 +682,25 @@ class KagglePKUDataset(CustomDataset):
                 quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
                 translations.append(translation)
 
+
+        #todo if no visiable,the keypoint no need cut off,staatics the boxes
+        for i in range(len(ann_info['keypoints'])):
+            # x,y = ann_info['keypoints'][i]
+            if self.bottom_half:
+                # kp = [x,y-self.bottom_half]
+                kps = [[kp[0], kp[1]-self.bottom_half] for kp in ann_info['keypoints'][i]]
+            else:
+                # kp = [x,y]
+                kps = ann_info['keypoints'][i]
+            gt_keyoints.append(kps)
+
+        if gt_keyoints:
+            gt_keyoints_arr = np.array(gt_keyoints,dtype=np.float32)
+            gt_keyoints = gt_keyoints_arr.reshape(gt_keyoints_arr.shape[0],-1)#np.array(gt_keyoints, dtype=np.float32)
+        else:
+            gt_keyoints = np.zeros((0, 132), dtype=np.float32)
+
+
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
             quaternion_semispheres = np.array(quaternion_semispheres, dtype=np.float32)
@@ -654,7 +725,8 @@ class KagglePKUDataset(CustomDataset):
 
             eular_angles=eular_angles,
             quaternion_semispheres=quaternion_semispheres,
-            translations=translations)
+            translations=translations,
+            keypoints=gt_keyoints)#cwx:add gt_keypoints
 
         return ann
 

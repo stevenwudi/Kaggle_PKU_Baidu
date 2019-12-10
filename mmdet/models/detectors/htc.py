@@ -24,6 +24,7 @@ class HybridTaskCascade(CascadeRCNN):
                  with_semantic_loss=False,
                  with_car_cls_rot=False,
                  with_translation=True,
+                 with_keypoint=True,
                  **kwargs):
         super(HybridTaskCascade, self).__init__(num_stages, backbone, **kwargs)
         assert self.with_bbox and self.with_mask
@@ -42,6 +43,7 @@ class HybridTaskCascade(CascadeRCNN):
         # The following is for 6DoF estimation
         self.with_car_cls_rot = with_car_cls_rot
         self.with_translation = with_translation
+        self.with_keypoint = with_keypoint
 
 
     @property
@@ -141,6 +143,21 @@ class HybridTaskCascade(CascadeRCNN):
             loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
 
         return loss_translation
+
+    def _keypoint_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat):
+        pos_bboxes = [res.pos_bboxes for res in sampling_results]
+        # TODO: this is a dangerous hack: we assume only one image per batch
+        if len(pos_bboxes) > 1:
+            raise NotImplementedError("Image batch size 1 is not implement!")
+        for im_idx in range(len(pos_bboxes)):
+            device_id = car_cls_rot_feat.get_device()
+            pred_boxes = self.keypoint_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
+            keypoint_pred = self.keypoint_head(pred_boxes, car_cls_rot_feat)
+            pos_gt_assigned_keypoint = self.keypoint_head.get_target(sampling_results)
+
+            loss_keypoint = self.keypoint_head.loss(keypoint_pred, pos_gt_assigned_keypoint)
+
+        return loss_keypoint
 
     def _mask_forward_train(self,
                             stage,
@@ -266,6 +283,17 @@ class HybridTaskCascade(CascadeRCNN):
 
         return trans_pred_world
 
+    def _keypoint_forward_test(self, pos_bboxes, scale_factor, car_cls_rot_feat):
+
+        # TODO: this is a dangerous hack: we assume only one image per batch
+        device_id = car_cls_rot_feat.get_device()
+        pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
+        trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
+        trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
+        trans_pred_world = trans_pred_world.cpu().numpy()
+
+        return trans_pred_world
+
     def forward_dummy(self, img):
         outs = ()
         # backbone
@@ -335,6 +363,7 @@ class HybridTaskCascade(CascadeRCNN):
                       carlabels=None,
                       quaternion_semispheres=None,
                       translations=None,
+                      keypoints=None,
                       scale_factor=1.0,
                       ):
         x = self.extract_feat(img)
@@ -384,7 +413,8 @@ class HybridTaskCascade(CascadeRCNN):
                                                      gt_labels[j],
                                                      carlabels[j],
                                                      quaternion_semispheres[j],
-                                                     translations[j])
+                                                     translations[j],
+                                                     keypoints[j])
                 sampling_result = bbox_sampler.sample(
                     assign_result,
                     proposal_list[j],
@@ -393,6 +423,7 @@ class HybridTaskCascade(CascadeRCNN):
                     carlabels[j],
                     quaternion_semispheres[j],
                     translations[j],
+                    keypoints[j],
                     feats=[lvl_feat[j][None] for lvl_feat in x])
                 sampling_results.append(sampling_result)
 
@@ -423,7 +454,8 @@ class HybridTaskCascade(CascadeRCNN):
                                 gt_bboxes_ignore[j], gt_labels[j],
                                 carlabels[j],
                                 quaternion_semispheres[j],
-                                translations[j])
+                                translations[j],
+                                keypoints[j])
                             sampling_result = bbox_sampler.sample(
                                 assign_result,
                                 proposal_list[j],
@@ -432,6 +464,7 @@ class HybridTaskCascade(CascadeRCNN):
                                 carlabels[j],
                                 quaternion_semispheres[j],
                                 translations[j],
+                                keypoints[j],
                                 feats=[lvl_feat[j][None] for lvl_feat in x])
                             sampling_results.append(sampling_result)
                 loss_mask = self._mask_forward_train(i, x, sampling_results,
@@ -460,6 +493,11 @@ class HybridTaskCascade(CascadeRCNN):
         if self.with_translation:
             loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat)
             for name, value in loss_translation.items():
+                losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
+
+        if self.with_keypoint:
+            loss_keypoint = self._keypoint_forward_train(sampling_results, scale_factor, car_cls_rot_feat)
+            for name, value in loss_keypoint.items():
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
         return losses
@@ -586,6 +624,10 @@ class HybridTaskCascade(CascadeRCNN):
             ms_6dof_result['ensemble'] = {'car_cls_score_pred': car_cls_score_pred,
                                           'quaternion_pred': quaternion_pred,
                                           'trans_pred_world': trans_pred_world}
+
+        if self.with_keypoint:
+            pass
+
         if not self.test_cfg.keep_all_stages:
             if self.with_translation:
                 results = (ms_bbox_result['ensemble'],

@@ -31,6 +31,10 @@ class SamplingResult(object):
             self.pos_gt_assigned_translations = assign_result.assigned_translations[pos_inds]
         else:
             self.pos_gt_assigned_translations = None
+        if assign_result.assigned_keypoints is not None:
+            self.pos_gt_assigned_keypoints = assign_result.assigned_keypoints[pos_inds]
+        else:
+            self.pos_gt_assigned_keypoints = None
 
 
     @property

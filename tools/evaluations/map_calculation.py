@@ -115,7 +115,8 @@ if __name__ == '__main__':
     # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec03-19-50_kaggle_apollo_50_valid.csv'
     validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec04-19-17_kaggle_apollo_80_valid.csv'
     car_conf_score_thres = 0.1
-    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/Dec01-10-14-39_validation_images_conf_0.9.csv'
+    # validation_prediction = '/data/Kaggle/wudi_data/work_dirs/Dec01-10-14-39_validation_images_conf_0.9.csv'
+    validation_prediction = '/data/Kaggle/cwx_data/work_dirs/validation_Dec07-22-48-28_validation_images_conf_0.9.csv'
     valid_df = pd.read_csv(validation_prediction)
     expanded_valid_df = expand_df(valid_df, ['pitch', 'yaw', 'roll', 'x', 'y', 'z', 'Score'])
 

@@ -226,7 +226,7 @@ class RandomFlip(object):
                 quaternion_semisphere = np.array(quaternion_semisphere, dtype=np.float32)
                 results['ann_info']['quaternion_semispheres'][idx] = quaternion_semisphere
 
-            # flip transation
+            # flip transation  todo
             for idx in range(len(results['ann_info'].get('translations', []))):
                 results['ann_info']['translations'][idx][0] = -results['ann_info']['translations'][idx][0] ## x inverse
 
