@@ -7,6 +7,8 @@ from multiprocessing import Pool
 import os
 
 
+
+
 def expand_df(df, PredictionStringCols):
     df = df.dropna().copy()
     df['NumCars'] = [int((x.count(' ') + 1) / 7) for x in df['PredictionString']]
@@ -103,16 +105,18 @@ def check_match(idx):
             else:
                 result_flg.append(0)
             scores.append(pcar['carid_or_score'])
-            #scores.append(1.0)
+            # scores.append(1.0)
 
     return result_flg, scores
 
 
-if __name__ == '__main__':
-    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation__Dec11-10-21-18_validation_images_conf_0.1.csv'
-    car_conf_score_thres = 0.1
+def map_main(validation_prediction):
+    global train_df
+    global valid_df
+    # validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28_validation_images_conf_0.1.csv'
     valid_df = pd.read_csv(validation_prediction)
-    valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
+    valid_df.ImageId = [x.replace('.jpg', '') for x in
+                        os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df = valid_df.fillna('')
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
     train_df = train_df[train_df.ImageId.isin(valid_df.ImageId.unique())]
@@ -137,3 +141,7 @@ if __name__ == '__main__':
         ap_list.append(ap)
     map = np.mean(ap_list)
     print('map:', map)
+
+
+if __name__ == '__main__':
+    map_main()

@@ -14,6 +14,8 @@ from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points
 from demo.visualisation_utils import draw_result_kaggle_pku
 
+from albumentations.augmentations import transforms
+
 
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types """
@@ -79,6 +81,9 @@ class KagglePKUDataset(CustomDataset):
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
             annotations = self.clean_corrupted_images(annotations)
             annotations = self.clean_outliers(annotations)
+            # CWX mess it up?
+            for ann in annotations:
+                ann['height'] = 2710
             self.print_statistics_annotations(annotations)
 
         else:
@@ -86,13 +91,36 @@ class KagglePKUDataset(CustomDataset):
                 filename = os.path.join(self.img_prefix, fn)
                 info = {'filename': filename}
                 annotations.append(info)
+            # We also generate the albumentation enhances valid images
+            # below is a hard coded list....
+            if False:
+                self.generate_albu_valid(annotations)
 
-        # CWX mess it up?
-        for ann in annotations:
-            ann['height'] = 2710
         self.annotations = annotations
 
         return annotations
+
+    def generate_albu_valid(self, annotations):
+
+        num_albu = len(self.pipeline_dict[-1].transforms[-3].transforms)
+        for i_albu in range(num_albu):
+            params = self.pipeline_dict[-1].transforms[-3].transforms[i_albu]
+            # always set p=1 so that we will always tranform the image
+            params['p'] = 1
+            operation = getattr(transforms, params['type'])
+            # delete the 'type'
+            params_input = params.copy()
+            del params_input['type']
+
+            im_out_dir = self.img_prefix + '_' + params['type']
+            if not os.path.exists(im_out_dir):
+                os.mkdir(im_out_dir)
+            print('Generating: %s' % params['type'])
+            for im_idx in tqdm(range(len(annotations))):
+                image = imread(annotations[im_idx]['filename'])
+                img_aug = operation(**params_input)(image=image)['image']
+                im_out_file = annotations[im_idx]['filename'].split('/')[-1]
+                imwrite(img_aug, os.path.join(im_out_dir, im_out_file))
 
     def load_car_models(self):
         car_model_dir = os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json')
@@ -495,9 +523,9 @@ class KagglePKUDataset(CustomDataset):
         ys_cdf = sum((ys > ymin) * (ys < ymax))
         xs_ys_cdf = sum((xs > xmin) * (xs < xmax) * (ys > ymin) * (ys < ymax))
         print('X within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (
-        xmin, xmax, xs_cdf / len(xs), len(xs) - xs_cdf))
+            xmin, xmax, xs_cdf / len(xs), len(xs) - xs_cdf))
         print('Y within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (
-        ymin, ymax, ys_cdf / len(ys), len(ys) - ys_cdf))
+            ymin, ymax, ys_cdf / len(ys), len(ys) - ys_cdf))
         print('Both will have cdf of: %.6f, outlier number: %d' % (xs_ys_cdf / len(ys), len(ys) - xs_ys_cdf))
 
         car_models = []

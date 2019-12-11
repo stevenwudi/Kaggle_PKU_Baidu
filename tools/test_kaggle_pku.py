@@ -1,6 +1,6 @@
 import argparse
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import os.path as osp
 import shutil
@@ -21,6 +21,7 @@ from mmdet.models import build_detector
 
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_images
 from tqdm import tqdm
+from tools.evaluations.map_calculation import map_main
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -140,7 +141,7 @@ def write_submission(outputs, args, img_prefix,
             coords_str = coords2str(coords)
             predictions[ImageId[idx_img]] = coords_str
         else:
-            predictions[ImageId[idx_img]] = []
+            predictions[ImageId[idx_img]] = ""
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
     for k, v in predictions.items():
@@ -150,7 +151,7 @@ def write_submission(outputs, args, img_prefix,
     df = pd.DataFrame(data=pred_dict)
     print("Writing submission csv file to: %s" % submission)
     df.to_csv(submission, index=False)
-    return True
+    return submission
 
 
 def coords2str(coords):
@@ -167,7 +168,7 @@ def parse_args():
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
     parser.add_argument('--checkpoint',
-                        default='/data/Kaggle/wudi_data/_Dec11-10-21-18/epoch_17.pth',
+                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -244,10 +245,13 @@ def main():
         outputs = mmcv.load(args.out)
 
     # write submission here
-    write_submission(outputs, args, dataset.img_prefix,
-                     conf_thresh=0.1, filter_mask=False)
+    submission = write_submission(outputs, args, dataset.img_prefix,
+                                  conf_thresh=0.1, filter_mask=False)
+    # Visualise the prediction, this will take 5 sec..
+    # dataset.visualise_pred(outputs, args)
+
     # evaluate mAP
-    dataset.visualise_pred(outputs, args)
+    map_main(submission)
 
 
 if __name__ == '__main__':
