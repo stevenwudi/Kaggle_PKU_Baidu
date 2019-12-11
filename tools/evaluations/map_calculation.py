@@ -109,7 +109,7 @@ def check_match(idx):
 
 
 if __name__ == '__main__':
-    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/pku-autonomous-drivingDec07-22-48-28_validation_images_conf_0.1.csv'
+    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation__Dec11-10-21-18_validation_images_conf_0.1.csv'
     car_conf_score_thres = 0.1
     valid_df = pd.read_csv(validation_prediction)
     valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]

@@ -1,5 +1,6 @@
 import argparse
 import os
+#os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import os.path as osp
 import shutil
@@ -166,7 +167,7 @@ def parse_args():
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
     parser.add_argument('--checkpoint',
-                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth',
+                        default='/data/Kaggle/wudi_data/_Dec11-10-21-18/epoch_17.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -192,7 +193,7 @@ def main():
     cfg = mmcv.Config.fromfile(args.config)
     # Wudi change the args.out directly related to the model checkpoint file data
     args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
-                            args.checkpoint.split('/')[-2].split('_')[-1] + '.pkl')
+                            args.checkpoint.split('/')[-2] + '.pkl')
 
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -246,7 +247,7 @@ def main():
     write_submission(outputs, args, dataset.img_prefix,
                      conf_thresh=0.1, filter_mask=False)
     # evaluate mAP
-    #dataset.visualise_pred(outputs, args)
+    dataset.visualise_pred(outputs, args)
 
 
 if __name__ == '__main__':

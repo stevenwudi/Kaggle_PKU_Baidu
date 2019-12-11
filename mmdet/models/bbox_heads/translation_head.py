@@ -115,8 +115,13 @@ class FCTranslationHead(nn.Module):
         description of the weights argument.
         This is a pytorch head
         """
+        ### TODO delete the following 3 lines #####
+        #pad_shape = [1230, 3384]
+        # pad_shape[0] *= 1248/576
+        # pad_shape[1] *= 3392/1600
+        #####
 
-        rois = rois / scale_factor  # We transform it back to the original pixel space before resizing
+        rois = rois / scale_factor  # We transform invidiat back to the original pixel space (1280, 3384) before resizing
         widths = rois[:, 2] - rois[:, 0]
         heights = rois[:, 3] - rois[:, 1]
         ctr_x = rois[:, 0] + 0.5 * widths

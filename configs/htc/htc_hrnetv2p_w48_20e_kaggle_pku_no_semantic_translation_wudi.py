@@ -263,14 +263,13 @@ test_pipeline = [
     dict(type='CropBottom', bottom_half=1480),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(1664, 576),
+        img_scale=(1664, 576),   #(576, 1600, 3)
         #img_scale=(3384, 1230),
         flip=False,
         transforms=[
             #dict(type='Resize', keep_ratio=True),
             dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
             #dict(type='Resize', img_scale=(3384, 1230), keep_ratio=True),
-
             #dict(type='RandomFlip', flip_ratio=0.5),
             dict(type='RandomFlip', flip_ratio=0),
             dict(type='Normalize', **img_norm_cfg),
@@ -302,8 +301,8 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
-        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
+        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
 # optimizer
 optimizer = dict(type='Adam', lr=0.0001)
@@ -329,8 +328,8 @@ total_epochs = 50
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
-load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+#load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 #load_from = '/data/Kaggle/wudi_data_Dec10-01-27-22/epoch_36.pth'
-
-resume_from = None
+load_from = None
+resume_from = '/data/Kaggle/wudi_data/_Dec11-10-21-18/epoch_17.pth'
 workflow = [('train', 1)]

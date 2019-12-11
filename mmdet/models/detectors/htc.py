@@ -589,11 +589,12 @@ class HybridTaskCascade(CascadeRCNN):
                 stage_num = self.num_stages-1
                 pos_box = det_bboxes[det_labels == car_cls_coco]
                 # !!!!!!!!!!!!!!!!!!!!! Quite import bug below, scale is needed!!!!!!!!!!!!!
-                pos_box = pos_box*scale_factor
+                pos_box = (pos_box * scale_factor if rescale else det_bboxes)
+
                 if len(pos_box):
                     car_cls_score_pred, quaternion_pred, car_cls_rot_feats = self._carcls_rot_forward_test(stage_num, x, pos_box, semantic_feat)
                 else:
-                    car_cls_score_pred, quaternion_pred, car_cls_rot_feats = [], [],[]
+                    car_cls_score_pred, quaternion_pred, car_cls_rot_feats = [], [], []
             if self.with_translation:
                 if len(pos_box):
                     trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats, ori_shape)
