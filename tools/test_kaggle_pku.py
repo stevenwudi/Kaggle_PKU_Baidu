@@ -119,8 +119,6 @@ def write_submission(outputs, args, img_prefix,
     submission += '.csv'
     predictions = {}
 
-    ImageId = [x.replace('.jpg', '') for x in os.listdir(img_prefix)]
-
     CAR_IDX = 2  # this is the coco car class
     for idx_img, output in tqdm(enumerate(outputs)):
         # Wudi change the conf to car prediction
@@ -139,9 +137,12 @@ def write_submission(outputs, args, img_prefix,
             translation = output[2]['trans_pred_world']
             coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
             coords_str = coords2str(coords)
-            predictions[ImageId[idx_img]] = coords_str
+
+            file_name = os.path.basename(output[2]["file_name"])
+            ImageId = ".".join(file_name.split(".")[:-1])
+            predictions[ImageId] = coords_str
         else:
-            predictions[ImageId[idx_img]] = ""
+            predictions[ImageId] = ""
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
     for k, v in predictions.items():
@@ -248,7 +249,7 @@ def main():
     submission = write_submission(outputs, args, dataset.img_prefix,
                                   conf_thresh=0.1, filter_mask=False)
     # Visualise the prediction, this will take 5 sec..
-    # dataset.visualise_pred(outputs, args)
+    #dataset.visualise_pred(outputs, args)
 
     # evaluate mAP
     map_main(submission)
