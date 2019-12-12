@@ -242,7 +242,7 @@ img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375],
 # Add albumentation transform
 albu_train_transforms = [
     dict(type='RandomBrightnessContrast', brightness_limit=0.3, contrast_limit=0.3, p=0.2),
-    dict(type='RGBShift', r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.2),
+    dict(type='RGBShift', r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.4),
     dict(type='JpegCompression', quality_lower=20, quality_upper=95, p=0.2),
     dict(type='RandomBrightness', limit=0.3, p=0.2),
     dict(type='GaussianBlur', blur_limit=20, p=0.2),
