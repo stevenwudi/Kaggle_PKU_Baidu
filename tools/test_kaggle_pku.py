@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '7'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import os.path as osp
 import shutil
@@ -21,6 +21,7 @@ from mmdet.models import build_detector
 
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_images
 from tqdm import tqdm
+from tools.evaluations.map_calculation import map_main
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -111,32 +112,36 @@ def write_submission(outputs, args, img_prefix,
                      conf_thresh=0.9,
                      filter_mask=False):
     submission = args.out.replace('.pkl', '')
-    submission += '_' + img_prefix.split('/')[-2]
+    submission += '_' + img_prefix.split('/')[-1]
     submission += '_conf_' + str(conf_thresh)
     if filter_mask:
         submission += '_filter_mask.csv'
     submission += '.csv'
     predictions = {}
+
     ImageId = [x.replace('.jpg', '') for x in os.listdir(img_prefix)]
 
     CAR_IDX = 2  # this is the coco car class
     for idx_img, output in tqdm(enumerate(outputs)):
         # Wudi change the conf to car prediction
-        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
-        idx_conf = conf > conf_thresh
-        if filter_mask:
-            # this filtering step will takes 2 second per iterations
-            idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
-            # the final id should require both
-            idx = idx_conf * idx_keep_mask
-        else:
-            idx = idx_conf
+        if len(output[0][CAR_IDX]):
+            conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+            idx_conf = conf > conf_thresh
+            if filter_mask:
+                # this filtering step will takes 2 second per iterations
+                idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                # the final id should require both
+                idx = idx_conf * idx_keep_mask
+            else:
+                idx = idx_conf
 
-        euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
-        translation = output[2]['trans_pred_world']
-        coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
-        coords_str = coords2str(coords)
-        predictions[ImageId[idx_img]] = coords_str
+            euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+            translation = output[2]['trans_pred_world']
+            coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
+            coords_str = coords2str(coords)
+            predictions[ImageId[idx_img]] = coords_str
+        else:
+            predictions[ImageId[idx_img]] = ""
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
     for k, v in predictions.items():
@@ -146,7 +151,7 @@ def write_submission(outputs, args, img_prefix,
     df = pd.DataFrame(data=pred_dict)
     print("Writing submission csv file to: %s" % submission)
     df.to_csv(submission, index=False)
-    return True
+    return submission
 
 
 def coords2str(coords):
@@ -163,7 +168,7 @@ def parse_args():
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
     parser.add_argument('--checkpoint',
-                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo1130_Dec01-10-14-39/epoch_50.pth',
+                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -188,8 +193,8 @@ def main():
 
     cfg = mmcv.Config.fromfile(args.config)
     # Wudi change the args.out directly related to the model checkpoint file data
-    args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-2].replace('images', '') +
-                            args.checkpoint.split('/')[-2].split('_')[-1] + '.pkl')
+    args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
+                            args.checkpoint.split('/')[-2] + '.pkl')
 
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -240,10 +245,13 @@ def main():
         outputs = mmcv.load(args.out)
 
     # write submission here
-    write_submission(outputs, args, dataset.img_prefix,
-                     conf_thresh=0.9, filter_mask=False)
+    submission = write_submission(outputs, args, dataset.img_prefix,
+                                  conf_thresh=0.1, filter_mask=False)
+    # Visualise the prediction, this will take 5 sec..
+    # dataset.visualise_pred(outputs, args)
+
     # evaluate mAP
-    #dataset.visualise_pred(outputs, args)
+    map_main(submission)
 
 
 if __name__ == '__main__':

@@ -328,3 +328,50 @@ def show_result_pyplot(img,
         img, result, class_names, score_thr=score_thr, show=False)
     plt.figure(figsize=fig_size)
     plt.imshow(mmcv.bgr2rgb(img))
+
+
+def visual_PnP(img, PnP_pred, camera_matrix, vertices, triangles):
+    """Draw bboxes and class labels (with scores) on an image.
+
+    Args:
+        img (str or ndarray): The image to be displayed.
+        bboxes (ndarray): Bounding boxes (with scores), shaped (n, 4) or
+            (n, 5).
+        labels (ndarray): Labels of bboxes.
+        class_names (list[str]): Names of each classes.
+        score_thr (float): Minimum score of bboxes to be shown.
+        bbox_color (str or tuple or :obj:`Color`): Color of bbox lines.
+        text_color (str or tuple or :obj:`Color`): Color of texts.
+        thickness (int): Thickness of lines.
+        font_scale (float): Font scales of texts.
+        show (bool): Whether to show the image.
+        win_name (str): The window name.
+        wait_time (int): Value of waitKey param.
+        out_file (str or None): The filename to write the image.
+    """
+
+    for pcar_idx in range(len(PnP_pred)):
+        # now we draw mesh
+        pcar = PnP_pred[pcar_idx]
+        t = pcar['x'], pcar['y'], pcar['z']
+        yaw, pitch, roll = pcar['yaw'], pcar['pitch'], pcar['roll']
+        Rt = np.eye(4)
+        Rt[:3, 3] = t
+        Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+        Rt = Rt[:3, :]
+        P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+        P[:, :-1] = vertices
+        P = P.T
+        img_cor_points = np.dot(camera_matrix, np.dot(Rt, P))
+        img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        color_mesh = np.random.randint(0, 256, (1, 3), dtype=np.uint8)
+
+        color_tuple = tuple([int(x) for x in color_mesh[0]])
+        for t in triangles:
+            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]], dtype=np.int32)
+            cv2.polylines(img, np.int32([coord]), 1, color=color_tuple)
+
+    return img
