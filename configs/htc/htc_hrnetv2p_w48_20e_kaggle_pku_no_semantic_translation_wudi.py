@@ -363,7 +363,8 @@ evaluation = dict(
     interval=1,
 )
 # optimizer
-optimizer = dict(type='Adam', lr=0.0001)
+#optimizer = dict(type='Adam', lr=0.0001)
+optimizer = dict(type='Adam', lr=0)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -383,8 +384,8 @@ log_config = dict(
 # yapf:enable
 # runtime settings
 total_epochs = 50
-#dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
-dist_params = dict(backend='nccl')
+dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
+#dist_params = dict(backend='nccl')
 
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
