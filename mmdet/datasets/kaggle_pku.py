@@ -86,8 +86,6 @@ class KagglePKUDataset(CustomDataset):
                 ann['height'] = 2710
             self.print_statistics_annotations(annotations)
 
-            # debug purpose
-            annotations = annotations[:3]
         else:
 
             outfile = '/data/Kaggle/pku-autonomous-driving/validation.json'
