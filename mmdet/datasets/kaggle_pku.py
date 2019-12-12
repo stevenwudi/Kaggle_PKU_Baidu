@@ -87,7 +87,7 @@ class KagglePKUDataset(CustomDataset):
             self.print_statistics_annotations(annotations)
 
             # debug purpose
-            annotations = annotations[:4]
+            # annotations = annotations[:4]
         else:
 
             outfile = '/data/Kaggle/pku-autonomous-driving/validation.json'
