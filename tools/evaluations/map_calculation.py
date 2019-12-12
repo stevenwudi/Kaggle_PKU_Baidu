@@ -11,9 +11,12 @@ from mmdet.utils import check_match, expand_df
 def match(t):
     return check_match(*t)
 
-if __name__ == '__main__':
-    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_Dec01-10-14-39_validation_images_conf_0.1.csv'
-    car_conf_score_thres = 0.1
+
+def map_main(validation_prediction):
+    global train_df
+    global valid_df
+    # validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_Dec01-10-14-39_validation_images_conf_0.1.csv'
+    # validation_prediction = '/data/Kaggle/train_df.csv'
     valid_df = pd.read_csv(validation_prediction)
     valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df = valid_df.fillna('')
@@ -40,3 +43,9 @@ if __name__ == '__main__':
         ap_list.append(ap)
     map = np.mean(ap_list)
     print('map:', map)
+
+
+if __name__ == '__main__':
+    validation_prediction = '/data/Kaggle/train_df.csv'
+    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28_validation_images_conf_0.1.csv'
+    map_main(validation_prediction)

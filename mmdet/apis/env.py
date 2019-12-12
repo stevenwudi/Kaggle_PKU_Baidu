@@ -29,7 +29,7 @@ def _init_dist_pytorch(backend, **kwargs):
     num_gpus = torch.cuda.device_count()
     torch.cuda.set_device(rank % num_gpus)
     dist.init_process_group(backend=backend, world_size=num_gpus, rank=rank, **kwargs)
-    # dist.init_process_group(backend=backend, **kwargs)
+    #dist.init_process_group(backend=backend, **kwargs)
 
 
 def _init_dist_mpi(backend, **kwargs):
