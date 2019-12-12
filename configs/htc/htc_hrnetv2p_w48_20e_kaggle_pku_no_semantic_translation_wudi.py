@@ -263,22 +263,22 @@ train_pipeline = [
     dict(type='RandomFlip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
-    dict(
-        type='Albu',
-        transforms=albu_train_transforms,
-        bbox_params=dict(
-            type='BboxParams',
-            format='pascal_voc',
-            label_fields=['gt_labels'],
-            min_visibility=0.0,
-            filter_lost_elements=True),
-        keymap={
-            'img': 'img',
-            'gt_masks': 'gt_masks',
-            'gt_bboxes': 'gt_bboxes'
-        },
-        update_pad_shape=False,
-        skip_img_without_anno=True),
+    # dict(
+    #     type='Albu',
+    #     transforms=albu_train_transforms,
+    #     bbox_params=dict(
+    #         type='BboxParams',
+    #         format='pascal_voc',
+    #         label_fields=['gt_labels'],
+    #         min_visibility=0.0,
+    #         filter_lost_elements=True),
+    #     keymap={
+    #         'img': 'img',
+    #         'gt_masks': 'gt_masks',
+    #         'gt_bboxes': 'gt_bboxes'
+    #     },
+    #     update_pad_shape=False,
+    #     skip_img_without_anno=True),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect',
          keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks',
@@ -322,7 +322,7 @@ test_pipeline = [
         ])
 ]
 
-#data_root = '/data/Kaggle/pku-autonomous-driving/'
+# data_root = '/data/Kaggle/pku-autonomous-driving/'
 data_root = '/data/Kaggle/ApolloScape_3D_car/train/'
 data = dict(
     imgs_per_gpu=1,
@@ -330,33 +330,38 @@ data = dict(
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        #ann_file=data_root + 'train.json',   This will only have around 3000 images
+        # ann_file=data_root + 'train.json',   This will only have around 3000 images
         ann_file=data_root + 'apollo_kaggle_combined_6725.json',  #
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'train.csv',
-        img_prefix=data_root + 'train_images/',
+        ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+        img_prefix=data_root + 'validation_images/',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
-        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightness',  # valid variation
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur',  # valid variation
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise',  # valid variation
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast',  # valid variation
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
+        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightness',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
+        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
 
         # img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
+
+evaluation = dict(
+    conf_thresh=0.1,
+    interval=1,
+)
 # optimizer
 optimizer = dict(type='Adam', lr=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
@@ -378,10 +383,13 @@ log_config = dict(
 # yapf:enable
 # runtime settings
 total_epochs = 50
+#dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
 dist_params = dict(backend='nccl')
+
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
 # load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-load_from = '/data/Kaggle/wudi_data/Dec11-12-19-56/epoch_41.pth'
+load_from = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth'
+#load_from = '/data/Kaggle/wudi_data/Dec11-12-19-56/epoch_41.pth'
 resume_from = None
 workflow = [('train', 1)]

@@ -19,7 +19,7 @@ def parse_args():
     parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py', help='train config file path')
     parser.add_argument('--work_dir', help='the dir to save logs and models')
     parser.add_argument('--resume_from', help='the checkpoint file to resume from')
-    parser.add_argument('--validate', action='store_true', help='whether to evaluate the checkpoint during training')
+    parser.add_argument('--validate', default=True, help='whether to evaluate the checkpoint during training')
     parser.add_argument('--gpus', type=int, default=1, help='number of gpus to use (only applicable to non-distributed training)')
     parser.add_argument('--seed', type=int, default=None, help='random seed')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')

@@ -54,7 +54,7 @@ def parse_losses(losses):
     return loss, log_vars
 
 
-def batch_processor(model, data, current_lr=0.001, train_mode="train"):
+def batch_processor(model, data, current_lr=0.001):
     losses = model(**data)
     loss, log_vars = parse_losses(losses)
     log_vars['current_lr'] = current_lr
@@ -232,6 +232,15 @@ def _non_dist_train(model, dataset, cfg, validate=False):
         optimizer_config = cfg.optimizer_config
     runner.register_training_hooks(cfg.lr_config, optimizer_config,
                                    cfg.checkpoint_config, cfg.log_config)
+
+    # register eval hooks
+    if validate:
+        val_dataset_cfg = cfg.data.val
+        eval_cfg = cfg.evaluation
+        if isinstance(model.module, RPN):
+            runner.register_hook(CocoDistEvalRecallHook(val_dataset_cfg, **eval_cfg))
+        else:
+            runner.register_hook(KaggleEvalHook(val_dataset_cfg, **eval_cfg))
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)

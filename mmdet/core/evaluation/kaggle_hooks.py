@@ -18,14 +18,16 @@ from . import DistEvalHook
 
 from mmdet.utils import check_match, coords2str
 
+
 def match(t):
     return check_match(*t[0])
+
 
 class KaggleEvalHook(DistEvalHook):
 
     def __init__(self, dataset, conf_thresh, interval=1):
         self.ann_file = dataset.ann_file
-        self.conf_thresh = conf_thresh 
+        self.conf_thresh = conf_thresh
 
         super(KaggleEvalHook, self).__init__(dataset, interval)
 
@@ -52,16 +54,18 @@ class KaggleEvalHook(DistEvalHook):
             pred_dict['ImageId'].append(k)
             pred_dict['PredictionString'].append(v)
 
-        train_df = pd.DataFrame(data=pred_dict)
-        valid_df = pd.read_csv(self.ann_file)
+        pred_df = pd.DataFrame(data=pred_dict)
+        pred_df.to_csv('/data/Kaggle/train_df.csv', index=False)
+
+        gt_df = pd.read_csv(self.ann_file)
         max_workers = 1
-        
-        n_gt = len(train_df)
+
+        n_gt = len(pred_df)
         ap_list = []
         p = Pool(processes=max_workers)
 
-        for result_flg, scores in p.imap(match, 
-                                         zip([(i, train_df, valid_df) for i in range(10)])):
+        for result_flg, scores in p.imap(match,
+                                         zip([(i, gt_df, pred_df) for i in range(10)])):
             if np.sum(result_flg) > 0:
                 n_tp = np.sum(result_flg)
                 recall = n_tp / n_gt
@@ -70,10 +74,7 @@ class KaggleEvalHook(DistEvalHook):
                 ap = 0
             ap_list.append(ap)
         mean_ap = np.mean(ap_list)
-        print(mean_ap)
+        print('Valid 400 images mAP is: %4.f' % mean_ap)
         runner.log_buffer.output['valuation_mAP'] = mean_ap
         runner.log_buffer.ready = True
-
-
-
 
