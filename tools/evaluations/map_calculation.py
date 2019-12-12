@@ -43,3 +43,9 @@ def map_main(validation_prediction):
         ap_list.append(ap)
     map = np.mean(ap_list)
     print('map:', map)
+
+
+if __name__ == '__main__':
+    validation_prediction = '/data/Kaggle/train_df.csv'
+    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28_validation_images_conf_0.1.csv'
+    map_main(validation_prediction)

@@ -54,7 +54,7 @@ def parse_losses(losses):
     return loss, log_vars
 
 
-def batch_processor(model, data, current_lr=0.001):
+def batch_processor(model, data, current_lr=0.001, train_mode="train"):
     losses = model(**data)
     loss, log_vars = parse_losses(losses)
     log_vars['current_lr'] = current_lr
