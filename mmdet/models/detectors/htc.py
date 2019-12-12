@@ -473,6 +473,7 @@ class HybridTaskCascade(CascadeRCNN):
         else:
             semantic_feat = None
 
+        file_name = img_meta[0]['filename']
         img_shape = img_meta[0]['img_shape']
         ori_shape = img_meta[0]['ori_shape']
         scale_factor = img_meta[0]['scale_factor']
@@ -585,7 +586,8 @@ class HybridTaskCascade(CascadeRCNN):
                 trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats)
             ms_6dof_result['ensemble'] = {'car_cls_score_pred': car_cls_score_pred,
                                           'quaternion_pred': quaternion_pred,
-                                          'trans_pred_world': trans_pred_world}
+                                          'trans_pred_world': trans_pred_world,
+                                          'file_name': file_name}
         if not self.test_cfg.keep_all_stages:
             if self.with_translation:
                 results = (ms_bbox_result['ensemble'],
