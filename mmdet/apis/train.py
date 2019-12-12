@@ -7,7 +7,7 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import DistSamplerSeedHook, Runner, obj_from_dict
 
 from mmdet import datasets
-from mmdet.core import (CocoDistEvalmAPHook, CocoDistEvalRecallHook,
+from mmdet.core import (CocoDistEvalmAPHook, CocoDistEvalRecallHook, KaggleEvalHook,
                         DistEvalmAPHook, DistOptimizerHook, Fp16OptimizerHook)
 from mmdet.datasets import DATASETS, build_dataloader
 from mmdet.models import RPN
@@ -54,7 +54,7 @@ def parse_losses(losses):
     return loss, log_vars
 
 
-def batch_processor(model, data, current_lr, train_mode):
+def batch_processor(model, data, current_lr=0.001, train_mode="train"):
     losses = model(**data)
     loss, log_vars = parse_losses(losses)
     log_vars['current_lr'] = current_lr
@@ -190,19 +190,13 @@ def _dist_train(model, dataset, cfg, validate=False):
     # register eval hooks
     if validate:
         val_dataset_cfg = cfg.data.val
-        eval_cfg = cfg.get('evaluation', {})
+        eval_cfg = cfg.evaluation
         if isinstance(model.module, RPN):
             # TODO: implement recall hooks for other datasets
             runner.register_hook(
                 CocoDistEvalRecallHook(val_dataset_cfg, **eval_cfg))
         else:
-            dataset_type = DATASETS.get(val_dataset_cfg.type)
-            if issubclass(dataset_type, datasets.CocoDataset):
-                runner.register_hook(
-                    CocoDistEvalmAPHook(val_dataset_cfg, **eval_cfg))
-            else:
-                runner.register_hook(
-                    DistEvalmAPHook(val_dataset_cfg, **eval_cfg))
+            runner.register_hook(KaggleEvalHook(val_dataset_cfg, **eval_cfg))
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)
