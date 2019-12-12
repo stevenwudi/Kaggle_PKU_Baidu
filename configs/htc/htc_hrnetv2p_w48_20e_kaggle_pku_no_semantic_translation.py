@@ -236,7 +236,7 @@ test_cfg = dict(
         mask_thr_binary=0.5),
     keep_all_stages=False)
 # dataset settings
-dataset_type = 'KaggkePKUDataset'
+dataset_type = 'KagglePKUDataset'
 data_root = '/data/Kaggle/pku-autonomous-driving/'
 # data_root = '/data/Kaggle/ApolloScape_3D_car/train/'
 img_norm_cfg = dict(
@@ -283,25 +283,26 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + 'train.csv',
-        # ann_file=data_root + 'apollo_train.csv',
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + 'train.csv',
-        # ann_file=data_root + 'apollo_train.csv',
-        img_prefix=data_root + 'train_images/',
+        ann_file=data_root + 'validation.csv',
+        img_prefix=data_root + 'validation_images/',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        # img_prefix=data_root + 'images/',
-        # img_prefix=data_root + 'train_images/',
         img_prefix=data_root + 'validation_images/',
-        # img_prefix=data_root + 'test_images/',
-        pipeline=test_pipeline))
+        pipeline=test_pipeline),
+    )
+evaluation=dict(
+        conf_thresh=0.1,
+        interval=1,
+    )
+
 # optimizer
 optimizer = dict(type='Adam', lr=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
@@ -323,11 +324,13 @@ log_config = dict(
 # yapf:enable
 # runtime settings
 total_epochs = 80
-dist_params = dict(backend='nccl')
+dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
 log_level = 'INFO'
-work_dir = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adame4_pre_apollo1130_306080'
+work_dir = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Adam'
 load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 # load_from = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth'
 
 resume_from = None
 workflow = [('train', 1)]
+
+
