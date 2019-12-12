@@ -127,14 +127,19 @@ class HybridTaskCascade(CascadeRCNN):
                                                  car_cls_weight, rot_weight)
         return loss_car_cls_rot, car_cls_rot_feat
 
-    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat):
+    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta):
         pos_bboxes = [res.pos_bboxes for res in sampling_results]
         # TODO: this is a dangerous hack: we assume only one image per batch
         if len(pos_bboxes) > 1:
             raise NotImplementedError("Image batch size 1 is not implement!")
         for im_idx in range(len(pos_bboxes)):
             device_id = car_cls_rot_feat.get_device()
-            pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
+            if self.translation_head.bbox_relative:
+                ori_shape = img_meta[im_idx]['ori_shape']
+                # then we use relative information instead the absolute world space
+                pred_boxes = self.translation_head.bbox_transform_pytorch_relative(pos_bboxes[im_idx], scale_factor[im_idx], device_id, ori_shape)
+            else:
+                pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
             trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
             pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
 
@@ -255,11 +260,16 @@ class HybridTaskCascade(CascadeRCNN):
         quaternion_pred = quaternion_pred.cpu().numpy()
         return car_cls_score_pred, quaternion_pred, car_cls_rot_feat
 
-    def _translation_forward_test(self, pos_bboxes, scale_factor, car_cls_rot_feat):
+    def _translation_forward_test(self, pos_bboxes, scale_factor, car_cls_rot_feat, ori_shape):
 
         # TODO: this is a dangerous hack: we assume only one image per batch
         device_id = car_cls_rot_feat.get_device()
-        pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
+
+        if self.translation_head.bbox_relative:
+            # then we use relative information instead the absolute world space
+            pred_boxes = self.translation_head.bbox_transform_pytorch_relative(pos_bboxes, scale_factor, device_id, ori_shape)
+        else:
+            pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
         trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
         trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
         trans_pred_world = trans_pred_world.cpu().numpy()
@@ -458,7 +468,7 @@ class HybridTaskCascade(CascadeRCNN):
 
         # for translation, we don't have interleave or cascading for the moment
         if self.with_translation:
-            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat)
+            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat, img_meta)
             for name, value in loss_translation.items():
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
@@ -579,10 +589,17 @@ class HybridTaskCascade(CascadeRCNN):
                 stage_num = self.num_stages-1
                 pos_box = det_bboxes[det_labels == car_cls_coco]
                 # !!!!!!!!!!!!!!!!!!!!! Quite import bug below, scale is needed!!!!!!!!!!!!!
-                pos_box = pos_box*scale_factor
-                car_cls_score_pred, quaternion_pred, car_cls_rot_feats = self._carcls_rot_forward_test(stage_num, x, pos_box, semantic_feat)
+                pos_box = (pos_box * scale_factor if rescale else det_bboxes)
+
+                if len(pos_box):
+                    car_cls_score_pred, quaternion_pred, car_cls_rot_feats = self._carcls_rot_forward_test(stage_num, x, pos_box, semantic_feat)
+                else:
+                    car_cls_score_pred, quaternion_pred, car_cls_rot_feats = [], [], []
             if self.with_translation:
-                trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats)
+                if len(pos_box):
+                    trans_pred_world = self._translation_forward_test(pos_box[:, :4], scale_factor, car_cls_rot_feats, ori_shape)
+                else:
+                    trans_pred_world = []
             ms_6dof_result['ensemble'] = {'car_cls_score_pred': car_cls_score_pred,
                                           'quaternion_pred': quaternion_pred,
                                           'trans_pred_world': trans_pred_world}

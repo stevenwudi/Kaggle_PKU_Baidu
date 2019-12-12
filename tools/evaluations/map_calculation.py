@@ -1,11 +1,12 @@
 import numpy as np  # linear algebra
 import pandas as pd  # data processing, CSV file I/O (e.g. pd.read_csv)
-from math import sqrt, acos, pi, sin, cos
+from math import acos, pi
 from scipy.spatial.transform import Rotation as R
 from sklearn.metrics import average_precision_score
 from multiprocessing import Pool
-import sys
 import os
+
+
 
 
 def expand_df(df, PredictionStringCols):
@@ -104,28 +105,22 @@ def check_match(idx):
             else:
                 result_flg.append(0)
             scores.append(pcar['carid_or_score'])
+            # scores.append(1.0)
 
     return result_flg, scores
 
 
-if __name__ == '__main__':
-    # validation_prediction = '../input/autonomous-driving-validation-data/prediction_for_validation_data.csv'
-    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/cyh_Nov27-14-16-45.csv'
-    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec01-10-14_kaggle_apollo_50_valid.csv'
-    # validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec03-19-50_kaggle_apollo_50_valid.csv'
-    validation_prediction = '/data/Kaggle/cwx_data/work_dirs/Dec04-19-17_kaggle_apollo_80_valid.csv'
-    car_conf_score_thres = 0.1
-    validation_prediction = '/data/Kaggle/wudi_data/work_dirs/Dec01-10-14-39_validation_images_conf_0.9.csv'
+def map_main(validation_prediction):
+    global train_df
+    global valid_df
+    # validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28_validation_images_conf_0.1.csv'
     valid_df = pd.read_csv(validation_prediction)
-    expanded_valid_df = expand_df(valid_df, ['pitch', 'yaw', 'roll', 'x', 'y', 'z', 'Score'])
-
     valid_df.ImageId = [x.replace('.jpg', '') for x in
                         os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
-    valid_df.ImageId = valid_df.ImageId
-    expanded_valid_df = expanded_valid_df[expanded_valid_df.Score > car_conf_score_thres]
     valid_df = valid_df.fillna('')
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
     train_df = train_df[train_df.ImageId.isin(valid_df.ImageId.unique())]
+
     # data description page says, The pose information is formatted as
     # model type, yaw, pitch, roll, x, y, z
     # but it doesn't, and it should be
@@ -146,3 +141,7 @@ if __name__ == '__main__':
         ap_list.append(ap)
     map = np.mean(ap_list)
     print('map:', map)
+
+
+if __name__ == '__main__':
+    map_main()
