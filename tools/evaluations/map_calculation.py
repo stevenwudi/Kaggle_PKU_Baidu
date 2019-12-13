@@ -15,16 +15,13 @@ def match(t):
 def map_main(validation_prediction):
     global train_df
     global valid_df
-    # validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_Dec01-10-14-39_validation_images_conf_0.1.csv'
-    # validation_prediction = '/data/Kaggle/train_df.csv'
     valid_df = pd.read_csv(validation_prediction)
-    valid_df.ImageId = [x.replace('.jpg', '') for x in os.listdir('/data/Kaggle/pku-autonomous-driving/validation_images/')]
     valid_df = valid_df.fillna('')
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
     train_df = train_df[train_df.ImageId.isin(valid_df.ImageId.unique())]
 
     # data description page says, The pose information is formatted as
-    # model type, yaw, pitch, roll, x, y, z
+    # model type, yaw, piexpanded_train_dfexpanded_train_dfexpanded_train_dftch, roll, x, y, z
     # but it doesn't, and it should be
     # model type, pitch, yaw, roll, x, y, z
     expanded_train_df = expand_df(train_df, ['model_type', 'pitch', 'yaw', 'roll', 'x', 'y', 'z'])
@@ -46,6 +43,5 @@ def map_main(validation_prediction):
 
 
 if __name__ == '__main__':
-    validation_prediction = '/data/Kaggle/train_df.csv'
     validation_prediction = '/data/Kaggle/wudi_data/work_dirs/validation_htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28_validation_images_conf_0.1.csv'
     map_main(validation_prediction)

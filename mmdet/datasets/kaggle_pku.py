@@ -76,7 +76,7 @@ class KagglePKUDataset(CustomDataset):
                     if filename not in ImageId:
                         continue
                     annotation = self.load_anno_idx(idx, train)
-                    annotations.append(annotation) 
+                    annotations.append(annotation)
                 with open(outfile, 'w') as f:
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
             annotations = self.clean_corrupted_images(annotations)
@@ -86,8 +86,6 @@ class KagglePKUDataset(CustomDataset):
                 ann['height'] = 2710
             self.print_statistics_annotations(annotations)
 
-            # debug purpose
-            # annotations = annotations[:4]
         else:
             for fn in os.listdir(self.img_prefix):
                 filename = os.path.join(self.img_prefix, fn)
@@ -526,9 +524,9 @@ class KagglePKUDataset(CustomDataset):
         ys_cdf = sum((ys > ymin) * (ys < ymax))
         xs_ys_cdf = sum((xs > xmin) * (xs < xmax) * (ys > ymin) * (ys < ymax))
         print('X within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (
-        xmin, xmax, xs_cdf / len(xs), len(xs) - xs_cdf))
+            xmin, xmax, xs_cdf / len(xs), len(xs) - xs_cdf))
         print('Y within range (%d, %d) will have cdf of: %.6f, outlier number: %d' % (
-        ymin, ymax, ys_cdf / len(ys), len(ys) - ys_cdf))
+            ymin, ymax, ys_cdf / len(ys), len(ys) - ys_cdf))
 
         print('Both will have cdf of: %.6f, outlier number: %d' % (xs_ys_cdf / len(ys), len(ys) - xs_ys_cdf))
 
