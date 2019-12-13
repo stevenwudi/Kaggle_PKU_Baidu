@@ -87,19 +87,10 @@ class KagglePKUDataset(CustomDataset):
             self.print_statistics_annotations(annotations)
 
         else:
-            outfile = '/data/Kaggle/pku-autonomous-driving/validation.json'
-            if os.path.isfile(outfile):
-                annotations = json.load(open(outfile, 'r'))
-                annotations = self.clean_corrupted_images(annotations)
-                annotations = self.clean_outliers(annotations)
-            else:
-                ann_info = pd.read_csv(ann_file)
-                for idx in tqdm(range(len(ann_info))):
-                    annotation = self.load_anno_idx(idx, ann_info)
-                    annotations.append(annotation)
-
-                with open(outfile, 'w') as f:
-                    json.dump(annotations, f, indent=4, cls=NumpyEncoder)
+            for fn in os.listdir(self.img_prefix):
+                filename = os.path.join(self.img_prefix, fn)
+                info = {'filename': filename}
+                annotations.append(info)
 
             # We also generate the albumentation enhances valid images
             # below is a hard coded list....
