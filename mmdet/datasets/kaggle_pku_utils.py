@@ -41,6 +41,7 @@ def euler_angles_to_quaternions(angle):
 
     # yaw, pitch, roll => pitch, yaw, roll
     pitch, yaw, roll = angle[:, 0], angle[:, 1], angle[:, 2]
+    
     q = np.zeros((n, 4))
 
     cy = np.cos(yaw * 0.5)
@@ -51,9 +52,9 @@ def euler_angles_to_quaternions(angle):
     sp = np.sin(pitch * 0.5)
 
     q[:, 0] = cy * cr * cp + sy * sr * sp
-    q[:, 1] = sy * cr * cp - cy * sr * sp
+    q[:, 1] = cy * sr * cp - sy * cr * sp
     q[:, 2] = cy * cr * sp + sy * sr * cp
-    q[:, 3] = cy * sr * cp - sy * cr * sp
+    q[:, 3] = sy * cr * cp - cy * sr * sp
 
     if in_dim == 1:
         return q[0]
@@ -105,7 +106,7 @@ def quaternion_to_euler_angle(q):
     w, x, y, z = q
     t0 = +2.0 * (w * x + y * z)
     t1 = +1.0 - 2.0 * (x * x + y * y)
-    yaw = math.atan2(t0, t1)
+    roll = math.atan2(t0, t1)
 
     t2 = +2.0 * (w * y - z * x)
     t2 = +1.0 if t2 > +1.0 else t2
@@ -114,7 +115,7 @@ def quaternion_to_euler_angle(q):
 
     t3 = +2.0 * (w * z + x * y)
     t4 = +1.0 - 2.0 * (y * y + z * z)
-    roll = math.atan2(t3, t4)
+    yaw = math.atan2(t3, t4)
 
     # transform label RPY: yaw, pitch, roll => pitch, yaw, roll
     return pitch, yaw, roll
