@@ -132,7 +132,7 @@ class KagglePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis', is_kaggle=True):
 
         labels = []
         bboxes = []
@@ -142,6 +142,7 @@ class KagglePKUDataset(CustomDataset):
         translations = []
 
         img_name = self.img_prefix + train['ImageId'].iloc[idx] + '.jpg'
+
         if not os.path.isfile(img_name):
             assert "Image file does not exist!"
         else:
@@ -153,7 +154,11 @@ class KagglePKUDataset(CustomDataset):
 
             gt = self._str2coords(train['PredictionString'].iloc[idx])
             for gt_pred in gt:
-                eular_angle = np.array([gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']])
+                if is_kaggle:
+                    eular_angle = np.array([gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']])
+                else:
+                    eular_angle = np.array([gt_pred['pitch'], gt_pred['yaw'], gt_pred['roll']])
+
                 translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 quaternion = euler_angles_to_quaternions(eular_angle)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
@@ -173,7 +178,8 @@ class KagglePKUDataset(CustomDataset):
                 triangles = np.array(self.car_model_dict[car_name]['faces']) - 1
 
                 # project 3D points to 2d image plane
-                yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
+                # yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
+                yaw, pitch, roll = eular_angle
                 # I think the pitch and yaw should be exchanged
                 yaw, pitch, roll = -pitch, -yaw, -roll
                 Rt = np.eye(4)
