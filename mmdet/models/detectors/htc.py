@@ -154,7 +154,8 @@ class HybridTaskCascade(CascadeRCNN):
             pred_boxes = self.keypoint_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
             keypoint_pred = self.keypoint_head(pred_boxes, car_cls_rot_feat)
             pos_gt_assigned_keypoint = self.keypoint_head.get_target(sampling_results)
-
+            # valid_label = pos_gt_assigned_keypoint !=0
+            # if torch.sum(valid_label) !=0:
             loss_keypoint = self.keypoint_head.loss(keypoint_pred, pos_gt_assigned_keypoint)
 
         return loss_keypoint
@@ -287,12 +288,12 @@ class HybridTaskCascade(CascadeRCNN):
 
         # TODO: this is a dangerous hack: we assume only one image per batch
         device_id = car_cls_rot_feat.get_device()
-        pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
-        trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
-        trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
-        trans_pred_world = trans_pred_world.cpu().numpy()
+        pred_boxes = self.keypoint_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
+        keypoits_pred = self.keypoint_head(pred_boxes, car_cls_rot_feat)
+        keypoints_pred_world = self.keypoint_head.pred_to_world_coord(keypoits_pred)
+        keypoints_pred_world = keypoints_pred_world.cpu().numpy()
 
-        return trans_pred_world
+        return keypoints_pred_world
 
     def forward_dummy(self, img):
         outs = ()

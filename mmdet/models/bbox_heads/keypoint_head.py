@@ -60,12 +60,26 @@ class FCKeyPointHead(nn.Module):
         keypoint_pred = self.keypoint_pred(x_merge)
         return keypoint_pred
 
-    def get_target(self, sampling_results, rcnn_train_cfg=None):
+    def get_target(self, sampling_results):
 
         pos_gt_assigned_keypoints = [res.pos_gt_assigned_keypoints for res in sampling_results]
         pos_gt_assigned_keypoints = torch.cat(pos_gt_assigned_keypoints, 0)
 
         return pos_gt_assigned_keypoints
+
+    def pred_to_world_coord(self, keypoint_pred):
+
+        keypoint_pred[:, 0] *= self.t_x_std
+        keypoint_pred[:, 0] += self.t_x_mean
+
+        keypoint_pred[:, 1] *= self.t_y_std
+        keypoint_pred[:, 1] += self.t_y_mean
+
+        keypoint_pred[:, 2] *= self.t_z_std
+        keypoint_pred[:, 2] += self.t_z_mean
+
+        return keypoint_pred
+
     def bbox_transform_pytorch(self, rois, scale_factor, device_id):
         """Forward transform that maps proposal boxes to predicted ground-truth
         boxes using bounding-box regression deltas. See bbox_transform_inv for a
@@ -102,11 +116,25 @@ class FCKeyPointHead(nn.Module):
 
         losses = dict()
         losses['loss_keypoint'] = self.keypoint_distance(keypoint_pred, keypoint_target)
+        # valid_label = keypoint_target != 0
+        # if torch.sum(valid_label) != 0:
+        #     losses['loss_keypoint'] = self.keypoint_distance(keypoint_pred[valid_label], keypoint_target[valid_label])
+        # else:
+        #     losses['ls_keypoint_detach'] = self.keypoint_distance(keypoint_pred, keypoint_target).detach()
 
         return losses
 
     def keypoint_distance(self, keypoint_pred, keypoint_target):
         diff = keypoint_pred - keypoint_target
+        mask = keypoint_target !=0
+        diff = diff.mul(mask.float())
+        for i in range(mask.shape[0]):
+            if torch.sum(mask[i])==0:
+                diff[i].detach()
+                continue
+            for j in range(mask.shape[1]):
+                if torch.sum(mask[i][j])==0:
+                    diff[i][j].detach()
         keypoint_diff = torch.mean(torch.sqrt(torch.sum(diff**2, dim=1)))
         return keypoint_diff
 

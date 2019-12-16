@@ -14,6 +14,7 @@ from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points
 from demo.visualisation_utils import draw_result_kaggle_pku
 from glob import glob
+from datetime import datetime
 
 
 class NumpyEncoder(json.JSONEncoder):
@@ -59,8 +60,11 @@ class KagglePKUDataset(CustomDataset):
 
         annotations = []
         if not self.test_mode:
-            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + 'apollo_keypoints.json')
-            # outfile = '/data/Kaggle/cwx_data/apollo_trainkaggleapollo1130.json'
+            fix = datetime.now().strftime("%b%d-%H-%M-%S")
+            outfile = os.path.join(outdir, ann_file.split('/')[-1].split('.')[0] + '_kaggle_train_apollo_train_kp.json')
+            outfile = '/data/Kaggle/cwx_data/apollo_train_kp.json'
+            # outfile = '/data/Kaggle/cwx_data/apollo_train_kaggle_train_apollo_train_kp.json'
+            # outfile = '/data/Kaggle/cwx_data/valid_kaggle_kp_4001.json'
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
                 annotations = self.clean_corrupted_images(annotations)
@@ -69,22 +73,39 @@ class KagglePKUDataset(CustomDataset):
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
                 #we first use apollo only
-                # outfilekaggle = '/data/cyh/kaggle/train.json'
-                # annotations = json.load(open(outfilekaggle, 'r'))
+                # outfilekaggle = '/data/Kaggle/cwx_data/train_kaggle_kp.json'#kaggle
+                annotations = json.load(open('/data/Kaggle/cwx_data/apollo_train.json', 'r'))
                 # annotations = self.clean_corrupted_images(annotations)
                 # annotations = self.clean_outliers(annotations)
-                PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
-                # ImageId =[i.strip() for i in open(PATH + 'train-list.txt').readlines()]
-                #wo first use 200 for test
-                ImageId =[i.strip() for i in open(PATH + 'validation-list.txt').readlines()]
-                train = pd.read_csv(ann_file)
-                self.print_statistics(train)
-                for idx in tqdm(range(len(train))):
-                    filename = train['ImageId'].iloc[idx] +'.jpg'
-                    if filename not in ImageId:
-                        continue
-                    annotation = self.load_anno_idx(idx, train)
-                    annotations.append(annotation)
+
+                # PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
+                # # ImageId =[i.strip() for i in open(PATH + 'train-list.txt').readlines()]
+                # #wo first use 200 for test
+                # ImageId =[i.strip() for i in open(PATH + 'train-list.txt').readlines()]#validation.txt
+                # # ImageId =[i.strip() for i in open('/data/Kaggle/pku-autonomous-driving/train.txt').readlines()]
+                # train = pd.read_csv(ann_file)
+                # self.print_statistics(train)
+                # for idx in tqdm(range(len(train))):
+                #     filename = train['ImageId'].iloc[idx] +'.jpg'
+                #     if filename not in ImageId:
+                #         continue
+                #     annotation = self.load_anno_idx(idx, train)
+                #     annotations.append(annotation)
+                #
+                # with open('/data/Kaggle/cwx_data/apollo_train.json', 'w') as f:
+                #     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
+                #kaggle train
+                # ImageId =[i.strip() for i in open('/data/Kaggle/pku-autonomous-driving/' + 'train.txt').readlines()]#validation
+                # ann_file = '/data/Kaggle/pku-autonomous-driving/train.csv'
+                # train = pd.read_csv(ann_file)
+                # self.print_statistics(train)
+                # for idx in tqdm(range(len(train))):
+                #     filename = train['ImageId'].iloc[idx] +'.jpg'
+                #     if filename not in ImageId:
+                #         continue
+                #     annotation = self.load_anno_idx(idx, train)
+                #     annotations.append(annotation)
+
                 with open(outfile, 'w') as f:
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
         else:
@@ -109,7 +130,38 @@ class KagglePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_apollo_image_gt_vis',show_keypoints= True,with_keypoint=True):
+    def IOU(self,box,boxes):
+        """Compute IoU between detect box and gt boxes
+
+        Parameters:
+        ----------
+        box: numpy array , shape (4, ): x1, y1, x2, y2
+            predicted boxes
+        boxes: numpy array, shape (n, 4): x1, y1, x2, y2
+            input ground truth boxes
+
+        Returns:
+        -------
+        ovr: numpy.array, shape (n, )
+            IoU
+        """
+        box_area = (box[2] - box[0] + 1) * (box[3] - box[1] + 1)
+        area = (boxes[:, 2] - boxes[:, 0] + 1) * (boxes[:, 3] - boxes[:, 1] + 1)
+        xx1 = np.maximum(box[0], boxes[:, 0])
+        yy1 = np.maximum(box[1], boxes[:, 1])
+        xx2 = np.minimum(box[2], boxes[:, 2])
+        yy2 = np.minimum(box[3], boxes[:, 3])
+
+        # compute the width and height of the bounding box
+        w = np.maximum(0, xx2 - xx1 + 1)
+        h = np.maximum(0, yy2 - yy1 + 1)
+
+        # 交的面积
+        inter = w * h
+        ovr = inter / (box_area + area - inter)
+        return ovr
+
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/apollo_image_gt_vis',show_keypoints= True,with_keypoint=True):
 
         labels = []
         bboxes = []
@@ -120,7 +172,9 @@ class KagglePKUDataset(CustomDataset):
         #cwx:keypont define,we have 66 keypoint in apollo
         if with_keypoint:
             keypoints = []
-        img_name = self.img_prefix + train['ImageId'].iloc[idx] +'.jpg'
+        # img_name = self.img_prefix + train['ImageId'].iloc[idx] +'.jpg'
+        img_name = '/data/Kaggle/pku-autonomous-driving/train_images/'+ train['ImageId'].iloc[idx] +'.jpg'
+        # print("idx: {}--img_name : {}".format(idx,img_name))
         if not os.path.isfile(img_name):
             assert "Image file does not exist!"
         else:
@@ -221,37 +275,54 @@ class KagglePKUDataset(CustomDataset):
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
                 imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] +'.jpg'))
+            def takeSecond(ele):
+                return ele[1]
             if with_keypoint:
-                keypoints_draw = []
-                keypoints_draw_all = []
-                keypoints_all = []
+                select_list = []
                 if 'Camera' in img_name:
+                    keypoints_draw_all = []
+                    keypoints_all = []
                     pose_fodler = img_name.replace('images','keypoints').replace('.jpg','')
                     keypoint = np.array([[float(0), float(0)] for i in range(0, 66)])
-                    #if (len(glob(pose_fodler + '/*.txt'))==len(bboxes)):
-                    if True:
-                        for kp_path in glob(pose_fodler + '/*.txt'):
-                            kps = [x.rstrip().split('\t') for x in open(kp_path).readlines()]
-                            for idx in range(len(kps)):
-                                keypoint[int(kps[idx][0])] = [float(kps[idx][1]), float(kps[idx][2])]
-                                keypoints_draw.append([float(kps[idx][1]), float(kps[idx][2])])
-                            keypoints.append(keypoint)#ech file,car
-                            keypoints_draw_all.append(keypoints_draw)
-
-                    else:#no the same car nums,we ignore
-                        keypoints = [keypoint for i in range(0,len(bboxes))]
-                if show_keypoints:
-                    for kpfile in glob(pose_fodler + '/*.txt'):
-                        keypoints_all.append([x.rstrip().split('\t') for x in open(kpfile).readlines()])
-                    for keypoint in keypoints_all:
-                        for kp in keypoint:
-                            cv2.putText(image, str(int(kp[0])), (int(float(kp[1])), int(float(kp[2]))),
-                                        cv2.FONT_HERSHEY_TRIPLEX, 1, (0, 0, 255))
-                            cv2.circle(image, (int(float(kp[1])), int(float(kp[2]))), 5, (0, 255, 255), -1)
-                    kps = np.array(keypoints_draw_all, np.int32)
-                    x1, y1, x2, y2 = kps[:, 0].min(), kps[:, 1].min(), kps[:, 0].max(), kps[:, 1].max()
-                    cv2.rectangle(image, (x1, y1), (x2, y2), (0, 0, 255))
-                    cv2.imwrite(os.path.join(draw_dir, os.path.basename(img_name)), image)
+                    for kp_path in glob(pose_fodler + '/*.txt'):
+                        kps = [x.rstrip().split('\t') for x in open(kp_path).readlines()]
+                        keypoints_draw = []
+                        for idx in range(len(kps)):
+                            keypoint[int(kps[idx][0])] = [float(kps[idx][1]), float(kps[idx][2])]
+                            keypoints_draw.append([float(kps[idx][1]), float(kps[idx][2])])
+                        keypoints.append(keypoint)#ech file,car
+                        keypoints_draw_all.append(np.array(keypoints_draw))
+                    bboxes_kps = []
+                    for idex,car_kps in enumerate(keypoints_draw_all):
+                        x1, y1, x2, y2 = car_kps[:, 0].min(), car_kps[:, 1].min(), car_kps[:, 0].max(), car_kps[:, 1].max()
+                        bboxes_kps.append([x1, y1, x2, y2])
+                    bboxes_kps = np.array(bboxes_kps,np.int32)
+                    valied_index = []
+                    for idx,box in enumerate(bboxes_kps):
+                        iou_list = self.IOU(box,np.array(bboxes))
+                        index = iou_list.tolist().index(np.max(iou_list))
+                        valied_index.append([index,np.max(iou_list),idx])
+                    valied_index.sort(key=takeSecond,reverse=True)
+                    select_list = [i[2] for i in valied_index[0:len(bboxes)]]
+                    if show_keypoints:
+                        for kpfile in glob(pose_fodler + '/*.txt'):
+                            keypoints_all.append([x.rstrip().split('\t') for x in open(kpfile).readlines()])
+                        for keypoint in keypoints_all:
+                            for kp in keypoint:
+                                cv2.putText(image, str(int(kp[0])), (int(float(kp[1])), int(float(kp[2]))),
+                                            cv2.FONT_HERSHEY_TRIPLEX, 1, (0, 0, 255))
+                                cv2.circle(image, (int(float(kp[1])), int(float(kp[2]))), 5, (0, 255, 255), -1)
+                        for idx,car_kps in enumerate(np.array(keypoints_draw_all)[select_list]):
+                            x1, y1, x2, y2 = car_kps[:, 0].min(), car_kps[:, 1].min(), car_kps[:, 0].max(), car_kps[:, 1].max()
+                            cv2.rectangle(image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 0, 255))
+                            [x1, y1, x2, y2] = bboxes[valied_index[idx][0]]
+                            cv2.rectangle(image, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 255))
+                        cv2.imwrite(os.path.join(draw_dir, os.path.basename(img_name)), image)
+                else:
+                    keypoint = [[float(0), float(0)] for i in range(0, 66)]
+                    for i in range(0,len(bboxes)):
+                        keypoints.append(keypoint)
+                    select_list = np.arange(0,len(bboxes)).tolist()
             if len(bboxes):
                 bboxes = np.array(bboxes, dtype=np.float32)
                 labels = np.array(labels, dtype=np.int64)
@@ -260,7 +331,7 @@ class KagglePKUDataset(CustomDataset):
                 translations = np.array(translations, dtype=np.float32)
                 assert len(gt) == len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
                 if with_keypoint:
-                    keypoints = np.array(keypoints, dtype=np.float32)
+                    keypoints = np.array(keypoints, dtype=np.float32)[select_list]
                     assert len(gt) == len(keypoints)
                     annotation = {
                         'filename': img_name,
@@ -688,7 +759,7 @@ class KagglePKUDataset(CustomDataset):
             # x,y = ann_info['keypoints'][i]
             if self.bottom_half:
                 # kp = [x,y-self.bottom_half]
-                kps = [[kp[0], kp[1]-self.bottom_half] for kp in ann_info['keypoints'][i]]
+                kps = [[kp[0], kp[1]-self.bottom_half] if kp[1] > 0 else [kp[0],kp[1]] for kp in ann_info['keypoints'][i]]
             else:
                 # kp = [x,y]
                 kps = ann_info['keypoints'][i]
