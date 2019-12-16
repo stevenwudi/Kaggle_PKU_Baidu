@@ -51,9 +51,9 @@ def euler_angles_to_quaternions(angle):
     sp = np.sin(pitch * 0.5)
 
     q[:, 0] = cy * cr * cp + sy * sr * sp
-    q[:, 1] = cy * sr * cp - sy * cr * sp
+    q[:, 1] = sy * cr * cp - cy * sr * sp
     q[:, 2] = cy * cr * sp + sy * sr * cp
-    q[:, 3] = sy * cr * cp - cy * sr * sp
+    q[:, 3] = cy * sr * cp - sy * cr * sp
 
     if in_dim == 1:
         return q[0]
