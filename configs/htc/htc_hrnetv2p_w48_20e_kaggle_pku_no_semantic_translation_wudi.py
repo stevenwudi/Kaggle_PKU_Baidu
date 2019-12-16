@@ -242,14 +242,14 @@ img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375],
 # Add albumentation transform
 albu_train_transforms = [
     dict(type='RandomBrightnessContrast', brightness_limit=0.3, contrast_limit=0.3, p=0.2),
-    dict(type='RGBShift', r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.4),
-    dict(type='JpegCompression', quality_lower=20, quality_upper=95, p=0.2),
+    dict(type='RGBShift', r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.3),
+    dict(type='JpegCompression', quality_lower=20, quality_upper=95, p=0.1),
     dict(type='RandomBrightness', limit=0.3, p=0.2),
-    dict(type='GaussianBlur', blur_limit=20, p=0.2),
-    dict(type='GaussNoise', var_limit=(10, 80.), p=0.2),
-    dict(type='RandomContrast', limit=0.5, p=0.2),
-    dict(type='HueSaturationValue', hue_shift_limit=20, p=0.2),
-    dict(type='CLAHE', clip_limit=4.0, p=0.2),
+    dict(type='GaussianBlur', blur_limit=20, p=0.1),
+    dict(type='GaussNoise', var_limit=(10, 80.), p=0.1),
+    dict(type='RandomContrast', limit=0.5, p=0.1),
+    dict(type='HueSaturationValue', hue_shift_limit=20, p=0.1),
+    #dict(type='CLAHE', clip_limit=4.0, p=0.2),
 ]
 
 train_pipeline = [
@@ -263,22 +263,11 @@ train_pipeline = [
     dict(type='RandomFlip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
-    # dict(
-    #     type='Albu',
-    #     transforms=albu_train_transforms,
-    #     bbox_params=dict(
-    #         type='BboxParams',
-    #         format='pascal_voc',
-    #         label_fields=['gt_labels'],
-    #         min_visibility=0.0,
-    #         filter_lost_elements=True),
-    #     keymap={
-    #         'img': 'img',
-    #         'gt_masks': 'gt_masks',
-    #         'gt_bboxes': 'gt_bboxes'
-    #     },
-    #     update_pad_shape=False,
-    #     skip_img_without_anno=True),
+    dict(
+        type='Albu',
+        transforms=albu_train_transforms,
+        update_pad_shape=False,
+        skip_img_without_anno=True),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect',
          keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks',
@@ -363,8 +352,8 @@ evaluation = dict(
     interval=1,
 )
 # optimizer
-#optimizer = dict(type='Adam', lr=0.0001)
-optimizer = dict(type='Adam', lr=0)
+optimizer = dict(type='Adam', lr=0.0001)
+
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
