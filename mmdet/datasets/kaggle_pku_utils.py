@@ -60,6 +60,38 @@ def euler_angles_to_quaternions(angle):
     return q
 
 
+def euler_angles_to_quaternions_apollo(angle):
+    """Convert euler angels to quaternions representation.
+    Input:
+        angle: n x 3 matrix, each row is [roll, pitch, yaw]
+    Output:
+        q: n x 4 matrix, each row is corresponding quaternion.
+    """
+
+    in_dim = np.ndim(angle)
+    if in_dim == 1:
+        angle = angle[None, :]
+
+    n = angle.shape[0]
+    roll, pitch, yaw = angle[:, 0], angle[:, 1], angle[:, 2]
+    q = np.zeros((n, 4))
+
+    cy = np.cos(yaw * 0.5)
+    sy = np.sin(yaw * 0.5)
+    cr = np.cos(roll * 0.5)
+    sr = np.sin(roll * 0.5)
+    cp = np.cos(pitch * 0.5)
+    sp = np.sin(pitch * 0.5)
+
+    q[:, 0] = cy * cr * cp + sy * sr * sp
+    q[:, 1] = cy * sr * cp - sy * cr * sp
+    q[:, 2] = cy * cr * sp + sy * sr * cp
+    q[:, 3] = sy * cr * cp - cy * sr * sp
+    if in_dim == 1:
+        return q[0]
+    return q
+
+
 def quaternion_upper_hemispher(q):
     """
     The quaternion q and −q represent the same rotation be-
@@ -105,7 +137,7 @@ def quaternion_to_euler_angle(q):
     w, x, y, z = q
     t0 = +2.0 * (w * x + y * z)
     t1 = +1.0 - 2.0 * (x * x + y * y)
-    yaw = math.atan2(t0, t1)
+    roll = math.atan2(t0, t1)
 
     t2 = +2.0 * (w * y - z * x)
     t2 = +1.0 if t2 > +1.0 else t2
@@ -114,11 +146,35 @@ def quaternion_to_euler_angle(q):
 
     t3 = +2.0 * (w * z + x * y)
     t4 = +1.0 - 2.0 * (y * y + z * z)
-    roll = math.atan2(t3, t4)
+    yaw = math.atan2(t3, t4)
 
     # transform label RPY: yaw, pitch, roll => pitch, yaw, roll
     return pitch, yaw, roll
 
+
+def quaternion_to_euler_angle_apollo(q):
+
+    """Convert quaternion to euler angel.
+    Input:
+        q: 1 * 4 vector,
+    Output:
+        angle: 1 x 3 vector, each row is [roll, pitch, yaw]
+    """
+    w, x, y, z = q
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    return roll, pitch, yaw
 
 def intrinsic_vec_to_mat(intrinsic, shape=None):
     """Convert a 4 dim intrinsic vector to a 3x3 intrinsic
@@ -155,6 +211,20 @@ def euler_to_Rot(yaw, pitch, roll):
                   [sin(roll), cos(roll), 0],
                   [0, 0, 1]])
     return np.dot(Y, np.dot(P, R))
+
+
+def euler_to_Rot_apollo(yaw, pitch, roll):
+    Y = np.array([[cos(yaw), 0, sin(yaw)],
+                  [0, 1, 0],
+                  [-sin(yaw), 0, cos(yaw)]])
+    P = np.array([[1, 0, 0],
+                  [0, cos(pitch), -sin(pitch)],
+                  [0, sin(pitch), cos(pitch)]])
+    R = np.array([[cos(roll), -sin(roll), 0],
+                  [sin(roll), cos(roll), 0],
+                  [0, 0, 1]])
+
+    return np.dot(np.dot(R, Y), P)
 
 
 def euler_angles_to_rotation_matrix(angle, is_dir=False):

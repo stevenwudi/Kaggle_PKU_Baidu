@@ -11,7 +11,8 @@ from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
-    quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points
+    quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points, \
+    euler_to_Rot_apollo
 from demo.visualisation_utils import draw_result_kaggle_pku
 
 from albumentations.augmentations import transforms
@@ -63,6 +64,8 @@ class KagglePKUDataset(CustomDataset):
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
+                if True:  # plot annotation for examination
+                    self.plot_and_examine(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
                 outfilekaggle = '/data/cyh/kaggle/train.json'
@@ -81,10 +84,12 @@ class KagglePKUDataset(CustomDataset):
                     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
             annotations = self.clean_corrupted_images(annotations)
             annotations = self.clean_outliers(annotations)
+
             # CWX mess it up?
             for ann in annotations:
                 ann['height'] = 2710
             self.print_statistics_annotations(annotations)
+            self.plot_and_examin(annotations)
 
         else:
             for fn in os.listdir(self.img_prefix):
@@ -132,7 +137,7 @@ class KagglePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis'):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
 
         labels = []
         bboxes = []
@@ -208,8 +213,8 @@ class KagglePKUDataset(CustomDataset):
                         coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
                                          dtype=np.int32)
                         # This will draw the mask for segmenation
-                        cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
-                        # cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+                        #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                        cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
 
                     mask_all += mask_seg
                     # imwrite(mask_seg, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis','mask_demo.jpg'))
@@ -265,6 +270,105 @@ class KagglePKUDataset(CustomDataset):
                     'rles': rles
                 }
                 return annotation
+
+    def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
+
+        #for ann in tqdm(annotations):
+        #for ann in tqdm(annotations[5000: 5003]):
+        for ann in tqdm(annotations[0: 3]):
+
+            img_name = ann['filename']
+            image = imread(img_name)
+            mask_all = np.zeros(image.shape)
+            merged_image = image.copy()
+            alpha = 0.9  # transparency
+
+            bboxes = ann['bboxes']
+            labels = ann['labels']
+            eular_angles = ann['eular_angles']
+            quaternion_semispheres = ann['quaternion_semispheres']
+            translations = ann['translations']
+            assert len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
+
+            for gt_car_idx in range(len(ann['quaternion_semispheres'])):
+
+                eular_angle = np.array(eular_angles[gt_car_idx])
+
+                if 'Camera' in img_name:  # this is an apolloscape dataset
+                    eular_angle_kaggle = np.array([eular_angle[1], eular_angle[0], eular_angle[2]])
+                elif 'ID' in img_name:
+                    eular_angle_kaggle = eular_angle
+                else:
+                    print("Unidentified class")
+
+                quaternion = euler_angles_to_quaternions(eular_angle_kaggle)
+                quaternion_semisphere = quaternion_upper_hemispher(quaternion)
+                ea_make = quaternion_to_euler_angle(quaternion_semisphere)
+
+                json_q = quaternion_semispheres[gt_car_idx]
+                ea_json = quaternion_to_euler_angle(json_q)
+                ea_json = np.array(ea_json)
+
+                # print('GT eular angle: ', eular_angle)
+                # print('Generate eular angle:', ea_make)
+                # print('Json generated eular angle', ea_json)
+                # print('Generate q:', quaternion_semisphere)
+                # print('Json q:', json_q)
+                # print("diff is: %f" % np.sum(np.abs(ea_json-ea_make)))
+                if np.sum(np.abs(eular_angle_kaggle-ea_make)) > 0.01:
+                    print('Wrong!!!!!!!!!!!!!')
+
+                # rendering the car according to:
+                # https://www.kaggle.com/ebouteillon/augmented-reality
+                # car_id2name is from:
+                # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
+                car_name = car_id2name[labels[gt_car_idx]].name
+                vertices = np.array(self.car_model_dict[car_name]['vertices'])
+                vertices[:, 1] = -vertices[:, 1]
+                triangles = np.array(self.car_model_dict[car_name]['faces']) - 1
+                translation = np.array(translations[gt_car_idx])
+
+                Rt = np.eye(4)
+                Rt[:3, 3] = translation
+                # project 3D points to 2d image plane
+                # Apollo below is correct
+                if 'Camera' in img_name:
+                    roll, pitch, yaw = eular_angle
+                    Rt[:3, :3] = euler_to_Rot_apollo(pitch, roll, yaw)
+                # Kaggle below is correct
+                else:
+                    yaw, pitch, roll = eular_angle
+                    yaw, pitch, roll = -pitch, -yaw, -roll
+                    Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+
+                Rt = Rt[:3, :]
+                P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+                P[:, :-1] = vertices
+                P = P.T
+
+                img_cor_points = np.dot(self.camera_matrix, np.dot(Rt, P))
+                img_cor_points = img_cor_points.T
+                img_cor_points[:, 0] /= img_cor_points[:, 2]
+                img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+                # project 3D points to 2d image plane
+                mask_seg = np.zeros(image.shape, dtype=np.uint8)
+                for t in triangles:
+                    coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                                     dtype=np.int32)
+                    # This will draw the mask for segmenation
+                    #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                    cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+
+                mask_all += mask_seg
+
+            mask_all = mask_all * 255 / mask_all.max()
+            cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
+            im_write_file = os.path.join(draw_dir, img_name.split('/')[-1])
+            print("Writing image to: %s" % os.path.join(draw_dir, img_name.split('/')[-1]))
+            imwrite(merged_image, im_write_file)
+
+        return True
 
     def visualise_pred(self, outputs, args):
         car_cls_coco = 2
