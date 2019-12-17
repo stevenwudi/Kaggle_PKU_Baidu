@@ -57,6 +57,67 @@ class KagglePKUDataset(CustomDataset):
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
 
+
+        # def slice(a):
+        #     return [a[1], a[0], a[2]]
+
+        self.annotations = json.load(open("/data/cyh/kaggle/apollo_kaggle_combined_6725.json", 'r'))
+        
+        for idx in tqdm(range(int(len(self.annotations)/100))):
+            ann = self.annotations[idx*100]
+
+            img_name = ann['filename']
+            if not os.path.isfile(img_name):
+                assert "Image file does not exist!"
+            else:
+                image = imread(img_name)
+                
+                car_cls_score_pred = ann['labels'], 
+                quaternion_pred = ann['quaternion_semispheres']
+                trans_pred_world = ann['translations']
+
+                x_list = []
+                for x in quaternion_pred:
+                    x = quaternion_to_euler_angle(x)
+                    x = [x[1], x[0], x[2]]
+                    x_list.append(x)
+                # euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+                euler_angle = np.array(x_list)
+
+                
+                car_labels = np.argmax(car_cls_score_pred, axis=1)
+                kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
+                car_names = [car_id2name[x].name for x in kaggle_car_labels]
+
+                # assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
+                       # == len(trans_pred_world) == len(euler_angle) == len(car_names)
+                # now we start to plot the image from kaggle
+                coords = np.hstack((euler_angle, trans_pred_world))
+                img_kaggle = self.visualise_kaggle(image, coords)
+                # img_mesh = self.visualise_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,
+                                               # trans_pred_world)
+                imwrite(img_kaggle, os.path.join('./data/' + img_name.split('/')[-1]))
+                # imwrite(img_mesh, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
+        exit()
+        
+        # ann_file = "/data/Kaggle/pku-autonomous-driving/train.csv"
+        # self.img_prefix = "/data/Kaggle/pku-autonomous-driving/train_images/"
+        # train = pd.read_csv(ann_file)
+        # for idx in tqdm(range(len(train))):
+        #     annotation = self.load_anno_idx(idx, train, is_kaggle=True)
+        # exit()
+
+        # ann_file = "/data/Kaggle/ApolloScape_3D_car/train/apollo_train.csv"
+        # self.img_prefix = "/data/Kaggle/ApolloScape_3D_car/train/images/"
+        # train = pd.read_csv(ann_file)
+        # for idx in tqdm(range(len(train))):
+        #     annotation = self.load_anno_idx(idx, train, is_kaggle=False)
+
+        # exit()
+
+
+
+
         annotations = []
         if not self.test_mode:
             outfile = ann_file
@@ -132,7 +193,7 @@ class KagglePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/cwx_data/train_iamge_gt_vis', is_kaggle=True):
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/cyh/kaggle/train_iamge_gt_vis', is_kaggle=True):
 
         labels = []
         bboxes = []
@@ -163,6 +224,8 @@ class KagglePKUDataset(CustomDataset):
                 quaternion = euler_angles_to_quaternions(eular_angle)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
 
+                # eular_angle = quaternion_to_euler_angle(quaternion_semisphere)
+
                 labels.append(gt_pred['id'])
                 eular_angles.append(eular_angle)
                 quaternion_semispheres.append(quaternion_semisphere)
@@ -181,7 +244,10 @@ class KagglePKUDataset(CustomDataset):
                 # yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
                 yaw, pitch, roll = eular_angle
                 # I think the pitch and yaw should be exchanged
-                yaw, pitch, roll = -pitch, -yaw, -roll
+                if is_kaggle:
+                    yaw, pitch, roll = -pitch, -yaw, -roll
+                else:
+                    pitch, yaw, roll = -pitch, -yaw, -roll
                 Rt = np.eye(4)
                 t = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 Rt[:3, 3] = t
