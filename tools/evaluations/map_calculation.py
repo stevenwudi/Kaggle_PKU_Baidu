@@ -39,7 +39,7 @@ def map_main(validation_prediction):
             ap = 0
         ap_list.append(ap)
     map = np.mean(ap_list)
-    print('map:', map)
+    print('%s, mAP:%f' % (validation_prediction.split('/')[-1],map))
 
 
 if __name__ == '__main__':

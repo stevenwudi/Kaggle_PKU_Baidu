@@ -168,9 +168,8 @@ def parse_args():
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint',
-                        default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth',
-                        help='checkpoint file')
+    #parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Dec14-08-44-20/epoch_77.pth', help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',

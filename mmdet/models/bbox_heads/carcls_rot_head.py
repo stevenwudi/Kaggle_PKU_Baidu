@@ -90,7 +90,10 @@ class ConvFCCarClsRotHead(BBoxHead):
 
         # Di Wu add build loss here overriding bbox_head
         self.loss_car_cls = build_loss(loss_car_cls)
-        self.loss_quaternion = build_loss(loss_quaternion)
+        if loss_quaternion == 'L1':
+            self.loss_quaternion = nn.L1Loss()
+        else:
+            self.loss_quaternion = build_loss(loss_quaternion)
 
     def _add_conv_fc_branch(self,
                             num_branch_convs,

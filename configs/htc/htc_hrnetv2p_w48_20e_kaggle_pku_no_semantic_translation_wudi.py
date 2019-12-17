@@ -128,8 +128,8 @@ model = dict(
         reg_class_agnostic=True,
         # target_means=[0., 0., 0., 0.],
         # target_stds=[0.1, 0.1, 0.2, 0.2],
-        loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
-        loss_quaternion=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+        loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+        #loss_quaternion=dict(type='L1Loss', beta=1.0, loss_weight=1.0)),
 
     translation_head=dict(
         type='SharedTranslationHead',
@@ -218,7 +218,7 @@ train_cfg = dict(
     ],
     stage_loss_weights=[1, 0.5, 0.25],
     car_cls_weight=1.0,
-    rot_weight=100.,
+    rot_weight=10.,
     translation_weight=1.0,
 )
 test_cfg = dict(
@@ -241,14 +241,26 @@ dataset_type = 'KagglePKUDataset'
 img_norm_cfg = dict(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 # Add albumentation transform
 albu_train_transforms = [
-    dict(type='RandomBrightnessContrast', brightness_limit=0.3, contrast_limit=0.3, p=0.2),
-    dict(type='RGBShift', r_shift_limit=30, g_shift_limit=30, b_shift_limit=30, p=0.3),
-    dict(type='JpegCompression', quality_lower=20, quality_upper=95, p=0.1),
-    dict(type='RandomBrightness', limit=0.3, p=0.2),
+    dict(type='RandomBrightnessContrast', brightness_limit=0.2, contrast_limit=0.5, p=0.2),
     dict(type='GaussianBlur', blur_limit=20, p=0.1),
     dict(type='GaussNoise', var_limit=(10, 80.), p=0.1),
-    dict(type='RandomContrast', limit=0.5, p=0.1),
-    dict(type='HueSaturationValue', hue_shift_limit=20, p=0.1),
+    dict(
+        type='OneOf',
+        transforms=[
+            dict(
+                type='RGBShift',
+                r_shift_limit=30,
+                g_shift_limit=30,
+                b_shift_limit=30,
+                p=0.2),
+            dict(
+                type='HueSaturationValue',
+                hue_shift_limit=20,
+                sat_shift_limit=20,
+                val_shift_limit=20,
+                p=0.1)
+        ],
+        p=0.1),
     #dict(type='CLAHE', clip_limit=4.0, p=0.2),
 ]
 
@@ -290,22 +302,6 @@ test_pipeline = [
             dict(type='RandomFlip', flip_ratio=0),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
-            # dict(
-            #     type='Albu',
-            #     transforms=albu_train_transforms,
-            #     bbox_params=dict(
-            #         type='BboxParams',
-            #         format='pascal_voc',
-            #         label_fields=['gt_labels'],
-            #         min_visibility=0.0,
-            #         filter_lost_elements=True),
-            #     keymap={
-            #         'img': 'img',
-            #         'gt_masks': 'gt_masks',
-            #         'gt_bboxes': 'gt_bboxes'
-            #     },
-            #     update_pad_shape=False,
-            #     skip_img_without_anno=True),
             dict(type='ImageToTensor', keys=['img']),
             dict(type='Collect', keys=['img']),
         ])
@@ -319,32 +315,31 @@ data = dict(
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        # ann_file=data_root + 'train.json',   This will only have around 3000 images
-        ann_file=data_root + 'apollo_kaggle_combined_6725.json',  #
+        ann_file='/data/cyh/kaggle/apollo_kaggle_combined_6725.json',
+        #ann_file=data_root + 'apollo_kaggle_combined_6725_wudi.json',  #
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
-        img_prefix=data_root + 'validation_images/',
+        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images/',
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
+        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightness',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
 
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
 
 evaluation = dict(
@@ -361,7 +356,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[10, 30])
+    step=[10, 90])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -372,14 +367,15 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 50
-dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
+total_epochs = 150
+dist_params = dict(backend='nccl')
+#dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8002")
+
 #dist_params = dict(backend='nccl')
 
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
 # load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-load_from = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth'
-#load_from = '/data/Kaggle/wudi_data/Dec11-12-19-56/epoch_41.pth'
-resume_from = None
+#load_from = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth'
+resume_from = '/data/Kaggle/wudi_data/Dec14-08-44-20/epoch_77.pth'
 workflow = [('train', 1)]
