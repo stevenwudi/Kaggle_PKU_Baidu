@@ -12,7 +12,7 @@ from .registry import DATASETS
 from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points, \
-    euler_to_Rot_apollo
+    euler_to_Rot_apollo, euler_to_Rot_YPR, rotation_matrix_to_euler_angles
 from demo.visualisation_utils import draw_result_kaggle_pku
 
 from albumentations.augmentations import transforms
@@ -89,7 +89,7 @@ class KagglePKUDataset(CustomDataset):
             for ann in annotations:
                 ann['height'] = 2710
             self.print_statistics_annotations(annotations)
-            self.plot_and_examin(annotations)
+            self.plot_and_examine(annotations)
 
         else:
             for fn in os.listdir(self.img_prefix):
@@ -274,8 +274,8 @@ class KagglePKUDataset(CustomDataset):
     def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
 
         #for ann in tqdm(annotations):
-        #for ann in tqdm(annotations[5000: 5003]):
-        for ann in tqdm(annotations[0: 3]):
+        #for ann in tqdm(annotations[5000: 5050]):
+        for ann in tqdm(annotations[0: 50]):
 
             img_name = ann['filename']
             image = imread(img_name)
@@ -294,14 +294,14 @@ class KagglePKUDataset(CustomDataset):
 
                 eular_angle = np.array(eular_angles[gt_car_idx])
 
-                if 'Camera' in img_name:  # this is an apolloscape dataset
-                    eular_angle_kaggle = np.array([eular_angle[1], eular_angle[0], eular_angle[2]])
-                elif 'ID' in img_name:
-                    eular_angle_kaggle = eular_angle
-                else:
-                    print("Unidentified class")
+                # if 'Camera' in img_name:  # this is an apolloscape dataset
+                #     eular_angle_kaggle = np.array([eular_angle[1], eular_angle[0], eular_angle[2]])
+                # elif 'ID' in img_name:
+                #     eular_angle_kaggle = eular_angle
+                # else:
+                #     print("Unidentified class")
 
-                quaternion = euler_angles_to_quaternions(eular_angle_kaggle)
+                quaternion = euler_angles_to_quaternions(eular_angle)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
                 ea_make = quaternion_to_euler_angle(quaternion_semisphere)
 
@@ -315,7 +315,7 @@ class KagglePKUDataset(CustomDataset):
                 # print('Generate q:', quaternion_semisphere)
                 # print('Json q:', json_q)
                 # print("diff is: %f" % np.sum(np.abs(ea_json-ea_make)))
-                if np.sum(np.abs(eular_angle_kaggle-ea_make)) > 0.01:
+                if np.sum(np.abs(eular_angle-ea_make)) > 0.01:
                     print('Wrong!!!!!!!!!!!!!')
 
                 # rendering the car according to:
@@ -332,15 +332,20 @@ class KagglePKUDataset(CustomDataset):
                 Rt[:3, 3] = translation
                 # project 3D points to 2d image plane
                 # Apollo below is correct
+                # https://en.wikipedia.org/wiki/Euler_angles
+                #Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
                 if 'Camera' in img_name:
-                    roll, pitch, yaw = eular_angle
-                    Rt[:3, :3] = euler_to_Rot_apollo(pitch, roll, yaw)
+                    Y, P, R = euler_to_Rot_YPR(eular_angle[0], eular_angle[1], eular_angle[2])
+                    rot_mat = np.dot(np.dot(R, P), Y)
+
                 # Kaggle below is correct
                 else:
-                    yaw, pitch, roll = eular_angle
-                    yaw, pitch, roll = -pitch, -yaw, -roll
-                    Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+                    Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
+                    rot_mat = np.dot(np.dot(R, P), Y)
 
+                #rot_mat = np.dot(np.dot(R, P), Y)
+                # check eular from rot mat
+                Rt[:3, :3] = rot_mat
                 Rt = Rt[:3, :]
                 P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
                 P[:, :-1] = vertices
@@ -350,6 +355,9 @@ class KagglePKUDataset(CustomDataset):
                 img_cor_points = img_cor_points.T
                 img_cor_points[:, 0] /= img_cor_points[:, 2]
                 img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+                x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), img_cor_points[:, 0].max(), img_cor_points[:, 1].max()
+                bboxes.append([x1, y1, x2, y2])
 
                 # project 3D points to 2d image plane
                 mask_seg = np.zeros(image.shape, dtype=np.uint8)
