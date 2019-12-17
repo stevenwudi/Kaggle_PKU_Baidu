@@ -7,6 +7,7 @@ import cv2
 from mmcv.image import imread, imwrite
 from pycocotools import mask as maskUtils
 
+from multiprocessing import Pool
 from math import acos, pi
 from scipy.spatial.transform import Rotation as R
 from .custom import CustomDataset
@@ -58,58 +59,6 @@ class KagglePKUDataset(CustomDataset):
 
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
-
-
-        # def slice(a):
-        #     return [a[1], a[0], a[2]]
-
-        # self.annotations = json.load(open("/data/cyh/kaggle/apollo_kaggle_combined_6725.json", 'r'))
-        
-        # for idx in tqdm(range(int(len(self.annotations)/100))):
-        #     ann = self.annotations[idx*100]
-
-        #     img_name = ann['filename']
-        #     if not os.path.isfile(img_name):
-        #         assert "Image file does not exist!"
-        #     else:
-        #         image = imread(img_name)
-                
-        #         car_cls_score_pred = ann['labels'], 
-        #         quaternion_pred = ann['quaternion_semispheres']
-        #         trans_pred_world = ann['translations']
-
-        #         euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
-
-                
-        #         car_labels = np.argmax(car_cls_score_pred, axis=1)
-        #         kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
-        #         car_names = [car_id2name[x].name for x in kaggle_car_labels]
-
-        #         # assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
-        #                # == len(trans_pred_world) == len(euler_angle) == len(car_names)
-        #         # now we start to plot the image from kaggle
-        #         coords = np.hstack((euler_angle, trans_pred_world))
-        #         img_kaggle = self.visualise_kaggle(image, coords)
-        #         # img_mesh = self.visualise_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,
-        #                                        # trans_pred_world)
-        #         imwrite(img_kaggle, os.path.join('./data/' + img_name.split('/')[-1]))
-        #         # imwrite(img_mesh, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
-        # exit()
-        
-        # ann_file = "/data/Kaggle/pku-autonomous-driving/train.csv"
-        # self.img_prefix = "/data/Kaggle/pku-autonomous-driving/train_images/"
-        # train = pd.read_csv(ann_file)
-        # for idx in tqdm(range(100)):
-        #     annotation = self.load_anno_idx(idx, train)
-        # exit()
-
-        ann_file = "/data/Kaggle/ApolloScape_3D_car/train/apollo2kaggle_train.csv"
-        self.img_prefix = "/data/Kaggle/ApolloScape_3D_car/train/images/"
-        train = pd.read_csv(ann_file)
-        for idx in tqdm(range(len(train))):
-            annotation = self.load_anno_idx(idx, train)
-
-        exit()
 
         annotations = []
         if not self.test_mode:
@@ -186,24 +135,6 @@ class KagglePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def RotationDistance(self, p, g):
-        true = [g[1], g[0], g[2]]
-        pred = [p[1], p[0], p[2]]
-        q1 = R.from_euler('xyz', true)
-        q2 = R.from_euler('xyz', pred)
-        diff = R.inv(q2) * q1
-        W = np.clip(diff.as_quat()[-1], -1., 1.)
-
-        # in the official metrics code:
-        # https://www.kaggle.com/c/pku-autonomous-driving/overview/evaluation
-        #   return Object3D.RadianToDegree( Math.Acos(diff.W) )
-        # this code treat θ and θ+2π differntly.
-        # So this should be fixed as follows.
-        W = (acos(W) * 360) / pi
-        if W > 180:
-            W = 360 - W
-        return W
-
     def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/cyh/kaggle/train_iamge_gt_vis'):
 
         labels = []
@@ -214,7 +145,6 @@ class KagglePKUDataset(CustomDataset):
         translations = []
 
         img_name = self.img_prefix + train['ImageId'].iloc[idx] + '.jpg'
-
         if not os.path.isfile(img_name):
             assert "Image file does not exist!"
         else:
@@ -226,11 +156,9 @@ class KagglePKUDataset(CustomDataset):
 
             gt = self._str2coords(train['PredictionString'].iloc[idx])
             for gt_pred in gt:
-                
-                translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
-
                 labels.append(gt_pred['id'])
                 
+                translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 translations.append(translation)
 
                 car_name = car_id2name[gt_pred['id']].name
@@ -248,10 +176,10 @@ class KagglePKUDataset(CustomDataset):
                 eular_angles.append(eular_angle)
                 quaternion_semispheres.append(quaternion_semisphere)
 
-                new_eular_angle = quaternion_to_euler_angle(quaternion_semisphere)
-                distance = self.RotationDistance(new_eular_angle, eular_angle)
-                if distance > 0.001:
-                    print(new_eular_angle, eular_angle)
+                # new_eular_angle = quaternion_to_euler_angle(quaternion_semisphere)
+                # distance = self.RotationDistance(new_eular_angle, eular_angle)
+                # if distance > 0.001:
+                #     print(new_eular_angle, eular_angle)
 
                 Rt = np.eye(4)
                 t = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
@@ -315,15 +243,10 @@ class KagglePKUDataset(CustomDataset):
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
 
-                cv_merged_image = cv2.cvtColor(np.asarray(merged_image),cv2.COLOR_RGB2BGR)
                 for box in bboxes:
-                    cv2.rectangle(cv_merged_image.astype(np.uint8), (box[0], box[1]), (box[2], box[3]), (255, 0, 0,), thickness=5)
-
-                merged_image = Image.fromarray(cv2.cvtColor(cv_merged_image, cv2.COLOR_BGR2RGB))
-
+                    cv2.rectangle(merged_image, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 0, 255), thickness=5)
 
                 imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))    
-
 
             if len(bboxes):
                 bboxes = np.array(bboxes, dtype=np.float32)
