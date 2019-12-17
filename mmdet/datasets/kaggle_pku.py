@@ -7,9 +7,6 @@ import cv2
 from mmcv.image import imread, imwrite
 from pycocotools import mask as maskUtils
 
-from multiprocessing import Pool
-from math import acos, pi
-from scipy.spatial.transform import Rotation as R
 from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
