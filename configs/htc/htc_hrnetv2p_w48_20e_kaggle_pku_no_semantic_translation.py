@@ -287,18 +287,18 @@ data = dict(
         ann_file=data_root + 'train.csv',
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
-    val=list(
+    val=list([
             dict(
                 type=dataset_type,
                 data_root=data_root,
                 ann_file=data_root + 'validation.csv',
-                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images/'
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images/',
                 pipeline=test_pipeline),
             dict(
                 type=dataset_type,
                 data_root=data_root,
                 ann_file=data_root + 'validation.csv',
-                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast/'
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast/',
                 pipeline=test_pipeline),
             dict(
                 type=dataset_type,
@@ -310,7 +310,7 @@ data = dict(
                 type=dataset_type,
                 data_root=data_root,
                 ann_file=data_root + 'validation.csv',
-                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression/'
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression/',
                 pipeline=test_pipeline),
             dict(
                 type=dataset_type,
@@ -342,7 +342,7 @@ data = dict(
                 ann_file=data_root + 'validation.csv',
                 img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE/',
                 pipeline=test_pipeline),
-        )
+        ]),
     test=dict(
         type=dataset_type,
         data_root=data_root,
