@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch import nn
 
 from mmdet.core import (bbox2result, bbox2roi, bbox_mapping, build_assigner,
                         build_sampler, merge_aug_bboxes, merge_aug_masks,
@@ -43,6 +44,17 @@ class HybridTaskCascade(CascadeRCNN):
         self.with_car_cls_rot = with_car_cls_rot
         self.with_translation = with_translation
 
+        # Bayesian learning of the weight
+        if self.train_cfg.bayesian_weight_learning:
+            self.fc_car_cls_weight = nn.Linear(in_features=1, out_features=1, bias=False)
+            self.fc_rot_weight = nn.Linear(in_features=1, out_features=1, bias=False)
+            self.fc_translation_weight = nn.Linear(in_features=1, out_features=1, bias=False)
+            # initialise the weight here
+            # https://discuss.pytorch.org/t/initialize-nn-linear-with-specific-weights/29005/2
+            with torch.no_grad():
+                self.fc_car_cls_weight.weight.copy_(torch.tensor(self.train_cfg.car_cls_weight))
+                self.fc_rot_weight.weight.copy_(torch.tensor(self.train_cfg.rot_weight))
+                self.fc_translation_weight.weight.copy_(torch.tensor(self.train_cfg.translation_weight))
 
     @property
     def with_semantic(self):
@@ -486,8 +498,27 @@ class HybridTaskCascade(CascadeRCNN):
             del losses[key]
 
         # if we use bayesian weight learning scheme as in:
+        # Geometric loss functions for camera pose regression with deep learning
+        # s = log (sigma) **2
         if self.train_cfg.bayesian_weight_learning:
-            raise NotImplementedError
+
+            for key in losses.keys():
+                if 'car_cls_ce_loss' in key:
+                    losses[key] = self.fc_car_cls_weight(losses[key].expand(1)).squeeze()
+                elif 'loss_quaternion' in key:
+                    losses[key] = self.fc_rot_weight(losses[key].expand(1)).squeeze()
+                elif 'loss_translation' in key:
+                    losses[key] = self.fc_translation_weight(losses[key].expand(1)).squeeze()
+
+            losses['weight/car_cls_weight_sigma'] = - torch.log(self.fc_car_cls_weight.weight)
+            losses['weight/rot_weight_sigma'] = - torch.log(self.fc_rot_weight.weight)
+            losses['weight/translation_weight_sigma'] = - torch.log(self.fc_translation_weight.weight)
+
+            # We just show the weight here, hence detach them from the computational graph
+            losses['weight/car_cls_weight'] = self.fc_car_cls_weight.weight.detach()
+            losses['weight/rot_weight'] = self.fc_rot_weight.weight.detach()
+            losses['weight/translation_weight'] = self.fc_translation_weight.weight.detach()
+
         else:
             for key in losses.keys():
                 if 'car_cls_ce_loss' in key:
