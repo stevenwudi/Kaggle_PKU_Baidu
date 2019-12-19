@@ -89,7 +89,8 @@ class KagglePKUDataset(CustomDataset):
             for ann in annotations:
                 ann['height'] = 2710
             self.print_statistics_annotations(annotations)
-            self.plot_and_examine(annotations)
+            if False:
+                self.plot_and_examine(annotations)
 
         else:
             for fn in os.listdir(self.img_prefix):
@@ -210,8 +211,8 @@ class KagglePKUDataset(CustomDataset):
                         coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
                                          dtype=np.int32)
                         # This will draw the mask for segmenation
-                        #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
-                        cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+                        cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                        cv2.polylines(mask_seg_mesh, np.int32([coord]), 1, (0, 255, 0))
 
                     mask_all += mask_seg_mesh
 

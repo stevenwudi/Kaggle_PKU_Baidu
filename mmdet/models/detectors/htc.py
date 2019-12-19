@@ -118,13 +118,8 @@ class HybridTaskCascade(CascadeRCNN):
 
         car_cls_score_target, quaternion_target = car_cls_rot_head.get_target(sampling_results, carlabels, quaternion_semispheres, rcnn_train_cfg)
 
-        # we need to reweight the loss here:
-        car_cls_weight = self.train_cfg.car_cls_weight
-        rot_weight = self.train_cfg.rot_weight
-
         loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
-                                                 car_cls_score_target, quaternion_target,
-                                                 car_cls_weight, rot_weight)
+                                                 car_cls_score_target, quaternion_target)
         return loss_car_cls_rot, car_cls_rot_feat
 
     def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta):
@@ -471,6 +466,36 @@ class HybridTaskCascade(CascadeRCNN):
             loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat, img_meta)
             for name, value in loss_translation.items():
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
+
+        # we change the dictionary key so that they plot in one row
+        htc_keys = ['loss_rpn_cls', 'loss_rpn_bbox', 's0.loss_cls', 's0.acc', 's0.loss_bbox', 's0.loss_mask',
+                    's1.loss_cls', 's1.acc', 's1.loss_bbox', 's1.loss_mask', 's2.loss_cls',  's2.acc', 's2.loss_bbox',
+                    's2.loss_mask']
+
+        kaggle_keys = ['s0.car_cls_ce_loss', 's0.car_cls_acc', 's0.loss_quaternion', 's0.rotation_distance',
+                       's1.car_cls_ce_loss', 's1.car_cls_acc', 's1.loss_quaternion', 's1.rotation_distance',
+                       's2.car_cls_ce_loss', 's2.car_cls_acc', 's2.loss_quaternion', 's2.rotation_distance',
+                       's2.loss_translation', 's2.translation_distance', 's2.translation_distance_relative']
+        for key in htc_keys:
+            new_key = 'htc/' + key
+            losses[new_key] = losses[key]
+            del losses[key]
+        for key in kaggle_keys:
+            new_key = 'kaggle/' + key
+            losses[new_key] = losses[key]
+            del losses[key]
+
+        # if we use bayesian weight learning scheme as in:
+        if self.train_cfg.bayesian_weight_learning:
+            raise NotImplementedError
+        else:
+            for key in losses.keys():
+                if 'car_cls_ce_loss' in key:
+                    losses[key] *= self.train_cfg.car_cls_weight
+                elif 'loss_quaternion' in key:
+                    losses[key] *= self.train_cfg.rot_weight
+                elif 'loss_translation' in key:
+                    losses[key] *= self.train_cfg.translation_weight
 
         return losses
 

@@ -102,7 +102,7 @@ def check_match(idx, train_df, valid_df):
 
             # set the result
             if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
-                # if min_tr_dist < thre_tr_dist:
+            #if min_tr_dist < thre_tr_dist:
                 if not keep_gt:
                     train_dict[img_id].pop(min_idx)
                 result_flg.append(1)
@@ -112,3 +112,17 @@ def check_match(idx, train_df, valid_df):
             #scores.append(1.0)
 
     return result_flg, scores
+
+def RotationDistance_q(q1, q2):
+    diff = R.inv(q2) * q1
+    W = np.clip(diff.as_quat()[-1], -1., 1.)
+
+    # in the official metrics code:
+    # https://www.kaggle.com/c/pku-autonomous-driving/overview/evaluation
+    #   return Object3D.RadianToDegree( Math.Acos(diff.W) )
+    # this code treat θ and θ+2π differntly.
+    # So this should be fixed as follows.
+    W = (acos(W) * 360) / pi
+    if W > 180:
+        W = 360 - W
+    return W

@@ -134,6 +134,8 @@ def write_submission(outputs, args, img_prefix,
                 idx = idx_conf
 
             euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+            # This is a new modification because in CYH's new json file;
+            euler_angle[:, 0],  euler_angle[:, 1], euler_angle[:, 2] = -euler_angle[:, 1], -euler_angle[:, 0], -euler_angle[:, 2]
             translation = output[2]['trans_pred_world']
             coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
             coords_str = coords2str(coords)
