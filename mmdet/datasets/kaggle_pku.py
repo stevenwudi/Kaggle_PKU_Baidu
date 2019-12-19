@@ -89,7 +89,7 @@ class KagglePKUDataset(CustomDataset):
             for ann in annotations:
                 ann['height'] = 2710
             self.print_statistics_annotations(annotations)
-            self.plot_and_examine(annotations)
+            #self.plot_and_examine(annotations)
 
         else:
             for fn in os.listdir(self.img_prefix):

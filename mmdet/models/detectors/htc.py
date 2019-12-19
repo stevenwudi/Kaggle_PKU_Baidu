@@ -472,6 +472,24 @@ class HybridTaskCascade(CascadeRCNN):
             for name, value in loss_translation.items():
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
+        # we change the dictionary key so that they plot in one row
+        htc_keys = ['loss_rpn_cls', 'loss_rpn_bbox', 's0.loss_cls', 's0.acc', 's0.loss_bbox', 's0.loss_mask',
+                    's1.loss_cls', 's1.acc', 's1.loss_bbox', 's1.loss_mask', 's2.loss_cls',  's2.acc', 's2.loss_bbox',
+                    's2.loss_mask']
+
+        kaggle_keys = ['s0.car_cls_ce_loss', 's0.car_cls_acc', 's0.loss_quaternion', 's0.rotation_distance',
+                       's1.car_cls_ce_loss', 's1.car_cls_acc', 's1.loss_quaternion', 's1.rotation_distance',
+                       's2.car_cls_ce_loss', 's2.car_cls_acc', 's2.loss_quaternion', 's2.rotation_distance',
+                       's2.loss_translation', 's2.translation_distance', 's2.translation_distance_relative']
+        for key in htc_keys:
+            new_key = 'htc/' + key
+            losses[new_key] = losses[key]
+            del losses[key]
+        for key in kaggle_keys:
+            new_key = 'kaggle/' + key
+            losses[new_key] = losses[key]
+            del losses[key]
+
         return losses
 
     def simple_test(self, img, img_meta, proposals=None, rescale=False):
