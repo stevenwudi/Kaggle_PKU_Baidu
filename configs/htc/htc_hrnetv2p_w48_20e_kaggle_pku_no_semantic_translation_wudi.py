@@ -316,6 +316,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file='/data/cyh/kaggle/kaggle_apollo_combine_6692.json',
+
         #ann_file=data_root + 'apollo_kaggle_combined_6725_wudi.json',  #
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
@@ -356,7 +357,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[20, 70])
+    step=[30, 70])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -377,4 +378,5 @@ load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_
 #load_from = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth'
 #resume_from = '/data/Kaggle/wudi_data/Dec14-08-44-20/epoch_77.pth'
 resume_from = None
+
 workflow = [('train', 1)]
