@@ -217,8 +217,10 @@ train_cfg = dict(
             debug=False)
     ],
     stage_loss_weights=[1, 0.5, 0.25],
+
+    bayesian_weight_learning=True,
     car_cls_weight=1.0,
-    rot_weight=100.,
+    rot_weight=10.,
     translation_weight=1.0,
 )
 test_cfg = dict(

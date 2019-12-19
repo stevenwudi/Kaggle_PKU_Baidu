@@ -55,6 +55,9 @@ im = cv2.imread(os.path.join(apollo_data_root + 'images', im_name + '.jpg'))
 im_combined = im.copy()
 size = im.shape
 
+# GT file
+with open(os.path.join(apollo_data_root + 'car_poses', im_name+'.json')) as json_file:
+    gt_RT = json.load(json_file)
 
 ke_dir = os.path.join(apollo_data_root + 'keypoints')
 PnP_pred = []
@@ -80,15 +83,31 @@ for kpfile in sorted(os.listdir(os.path.join(ke_dir, im_name))):
             cv2.circle(im, (int(float(kp[1])), int(float(kp[2]))), 5, (0, 255, 0), -1)
 
     else:
+        tvec = np.array([gt_RT[0]['pose'][3:]])
+
+        yaw, pitch, roll = gt_RT[0]['pose'][:3]
+        yaw, pitch, roll = -pitch + np.pi, -yaw, -roll
+        q2 = R.from_euler('xyz', np.array([yaw, pitch, roll]))
+        rvec = np.array([q2.as_rotvec()])
         (success, rotation_vector, translation_vector) = cv2.solvePnP(model_points,
                                                                       image_points,
                                                                       camera_matrix,
                                                                       dist_coeffs,
+                                                                      useExtrinsicGuess=False,
                                                                       flags=cv2.SOLVEPNP_ITERATIVE)
 
         print("Rotation Vector:\n {0}".format(rotation_vector))
         print("Translation Vector:\n {0}".format(translation_vector))
-
+        (success, rotation_vector, translation_vector) = cv2.solvePnP(model_points,
+                                                                      image_points,
+                                                                      camera_matrix,
+                                                                      dist_coeffs,
+                                                                      rvec=rvect,
+                                                                      tvec=tvec,
+                                                                      useExtrinsicGuess=True,
+                                                                      flags=cv2.SOLVEPNP_ITERATIVE)
+        print("Rotation Vector:\n {0}".format(rotation_vector))
+        print("Translation Vector:\n {0}".format(translation_vector))
         # Write to prediction
         # rotation vector is not eular angle!!!
         r = R.from_rotvec(rotation_vector[:, 0])
@@ -120,8 +139,7 @@ for kpfile in sorted(os.listdir(os.path.join(ke_dir, im_name))):
 imwrite(im, '/data/Kaggle/wudi_data/'+im_name+'_PnP.jpg')
 
 ### Now we calculate the mAP
-with open(os.path.join(apollo_data_root + 'car_poses', im_name+'.json')) as json_file:
-    gt_RT = json.load(json_file)
+
 
 # p = {}
 # g = {}
