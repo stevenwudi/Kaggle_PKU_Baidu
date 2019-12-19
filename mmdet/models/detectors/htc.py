@@ -510,9 +510,9 @@ class HybridTaskCascade(CascadeRCNN):
                 elif 'loss_translation' in key:
                     losses[key] = self.fc_translation_weight(losses[key].expand(1)).squeeze()
 
-            losses['weight/car_cls_weight_sigma'] = - torch.log(self.fc_car_cls_weight.weight)
-            losses['weight/rot_weight_sigma'] = - torch.log(self.fc_rot_weight.weight)
-            losses['weight/translation_weight_sigma'] = - torch.log(self.fc_translation_weight.weight)
+            losses['weight/car_cls_weight_sigma_loss'] = - torch.log(self.fc_car_cls_weight.weight)
+            losses['weight/rot_weight_sigma_loss'] = - torch.log(self.fc_rot_weight.weight)
+            losses['weight/translation_weight_sigma_loss'] = - torch.log(self.fc_translation_weight.weight)
 
             # We just show the weight here, hence detach them from the computational graph
             losses['weight/car_cls_weight'] = self.fc_car_cls_weight.weight.detach()
