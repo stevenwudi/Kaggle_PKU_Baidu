@@ -126,10 +126,8 @@ model = dict(
         roi_feat_size=14,
         num_classes=34,  # There are total 34 car classes
         reg_class_agnostic=True,
-        # target_means=[0., 0., 0., 0.],
-        # target_stds=[0.1, 0.1, 0.2, 0.2],
-        loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
-        #loss_quaternion=dict(type='L1Loss', beta=1.0, loss_weight=1.0)),
+        loss_car_cls=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
+        loss_quaternion=dict(type='L1', beta=1.0, loss_weight=1.0)),
 
     translation_head=dict(
         type='SharedTranslationHead',
