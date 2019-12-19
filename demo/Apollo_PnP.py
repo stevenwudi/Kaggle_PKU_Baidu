@@ -1,4 +1,10 @@
+"""
+For the use of scipy.spatial.transform, plz refer to
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.html
+
+"""
 #!/usr/bin/env python
+
 import os
 import cv2
 import numpy as np
@@ -8,7 +14,8 @@ import json
 # mAP calculation import
 from math import acos, pi
 from scipy.spatial.transform import Rotation as R
-from tools.evaluations.map_calculation import TranslationDistance, RotationDistance, thres_tr_list, thres_ro_list
+
+from mmdet.utils.map_calculation import TranslationDistance, RotationDistance, RotationDistance_q
 from sklearn.metrics import average_precision_score
 
 from mmdet.datasets.kaggle_pku_utils import euler_to_Rot
@@ -83,13 +90,14 @@ for kpfile in sorted(os.listdir(os.path.join(ke_dir, im_name))):
         print("Translation Vector:\n {0}".format(translation_vector))
 
         # Write to prediction
-        yaw, pitch, roll = rotation_vector
-        yaw, pitch, roll = -pitch, -yaw, -roll
-        yaw = np.pi - yaw
-        eular_angle = np.array([yaw[0], pitch[0], roll[0]])
+        # rotation vector is not eular angle!!!
+        r = R.from_rotvec(rotation_vector[:, 0])
+        yaw, pitch, roll = r.as_euler('xyz')
+        # because the y axis is pointing opposite direction between kaggle and apolloscape
+        eular_angle = np.array([yaw, pitch, roll])
         # Note the the y-axis for OpenCV is pointing down, whereas for ApolloScape, the y-axis is pointing up
         # https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html#solvepnp
-        #eular_angle[0] = np.pi - eular_angle[0]
+
         translation = - np.array(translation_vector.squeeze())
         PnP_pred.append({'pose': np.concatenate((eular_angle, translation))})
         # Project a 3D point (0, 0, 1000.0) onto the image plane.
@@ -97,11 +105,12 @@ for kpfile in sorted(os.listdir(os.path.join(ke_dir, im_name))):
         (projected_point2D, jacobian) = cv2.projectPoints(model_points, rotation_vector, translation_vector,
                                                           camera_matrix, dist_coeffs)
 
+        # Prediction is drawn in red
         for i, kp_i in enumerate(projected_point2D):
             cv2.putText(im, str(int(kp[i][0])), (int(float(kp_i[0][0])), int(float(kp_i[0][1]))), cv2.FONT_HERSHEY_TRIPLEX,
                         1, (0, 0, 255))
             cv2.circle(im, (int(float(kp_i[0][0])), int(float(kp_i[0][1]))), 5, (0, 0, 255), -1)
-        # We only draw GT
+        # Ground truth is drawn in green
         for kp in kp:
             cv2.putText(im, str(int(kp[0])), (int(float(kp[1])), int(float(kp[2]))), cv2.FONT_HERSHEY_TRIPLEX, 1,
                         (0, 255, 0))
@@ -118,21 +127,29 @@ with open(os.path.join(apollo_data_root + 'car_poses', im_name+'.json')) as json
 # g = {}
 # p['x'], p['y'], p['z'] = translation
 # g['x'], g['y'], g['z'] = gt_RT[0]['pose'][3:]
-# p['pitch'], p['yaw'], p['roll'] = eular_angle
-# g['pitch'], g['yaw'], g['roll'] = gt_RT[0]['pose'][:3]
 # translation_diff = TranslationDistance(p, g)
-# rotation_diff = RotationDistance(p, g)
+#
+# q1 = R.from_rotvec(rotation_vector[:, 0])
+# yaw, pitch, roll = gt_RT[0]['pose'][:3]
+# yaw, pitch, roll = -pitch + np.pi, -yaw, -roll
+# q2 = R.from_euler('xyz', np.array([yaw, pitch, roll]))
+# rotation_diff = RotationDistance_q(q1, q2)
 # print("Translation distance: %.4f, Rotation distance: %.4f" % (translation_diff, rotation_diff))
 
 for pcar in PnP_pred:
     pcar['x'], pcar['y'], pcar['z'] = pcar['pose'][3:]
-    pcar['yaw'], pcar['pitch'], pcar['roll'] = pcar['pose'][:3]
+    yaw, pitch, roll = pcar['pose'][:3]
+    yaw, pitch, roll = yaw - np.pi, pitch, roll
+    pcar['yaw'], pcar['pitch'], pcar['roll'] = yaw, pitch, roll
 
 
 im_combined = visual_PnP(im_combined, PnP_pred, camera_matrix, vertices, triangles)
 imwrite(im_combined, '/data/Kaggle/wudi_data/'+im_name+'_combined_PnP.jpg')
 
 ap_list = []
+
+thres_tr_list = [0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
+thres_ro_list = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5]
 
 
 for idx in range(10):
@@ -159,8 +176,8 @@ for idx in range(10):
                 min_idx = idx
 
         # set the result
-        #if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
-        if min_tr_dist < thre_tr_dist:
+        if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
+        #if min_tr_dist < thre_tr_dist:
             if not keep_gt:
                 gt_RT.pop(min_idx)
             result_flg.append(1)

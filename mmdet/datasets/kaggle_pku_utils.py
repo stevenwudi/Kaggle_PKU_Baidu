@@ -41,6 +41,7 @@ def euler_angles_to_quaternions(angle):
 
     # yaw, pitch, roll => pitch, yaw, roll
     pitch, yaw, roll = angle[:, 0], angle[:, 1], angle[:, 2]
+    
     q = np.zeros((n, 4))
 
     cy = np.cos(yaw * 0.5)

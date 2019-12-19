@@ -158,20 +158,11 @@ class KagglePKUDataset(CustomDataset):
 
             gt = self._str2coords(train['PredictionString'].iloc[idx])
             for gt_pred in gt:
-                eular_angle = np.array([gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']])
-                translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
-                quaternion = euler_angles_to_quaternions(eular_angle)
-                quaternion_semisphere = quaternion_upper_hemispher(quaternion)
-
                 labels.append(gt_pred['id'])
-                eular_angles.append(eular_angle)
-                quaternion_semispheres.append(quaternion_semisphere)
+                
+                translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 translations.append(translation)
-                # rendering the car according to:
-                # https://www.kaggle.com/ebouteillon/augmented-reality
 
-                # car_id2name is from:
-                # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
                 car_name = car_id2name[gt_pred['id']].name
                 vertices = np.array(self.car_model_dict[car_name]['vertices'])
                 vertices[:, 1] = -vertices[:, 1]
@@ -179,8 +170,19 @@ class KagglePKUDataset(CustomDataset):
 
                 # project 3D points to 2d image plane
                 yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
-                # I think the pitch and yaw should be exchanged
                 yaw, pitch, roll = -pitch, -yaw, -roll
+
+                eular_angle = np.array([yaw, pitch, roll])
+                quaternion = euler_angles_to_quaternions(eular_angle)
+                quaternion_semisphere = quaternion_upper_hemispher(quaternion)
+                eular_angles.append(eular_angle)
+                quaternion_semispheres.append(quaternion_semisphere)
+
+                # new_eular_angle = quaternion_to_euler_angle(quaternion_semisphere)
+                # distance = self.RotationDistance(new_eular_angle, eular_angle)
+                # if distance > 0.001:
+                #     print(new_eular_angle, eular_angle)
+
                 Rt = np.eye(4)
                 t = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 Rt[:3, 3] = t
@@ -196,30 +198,23 @@ class KagglePKUDataset(CustomDataset):
                 img_cor_points[:, 1] /= img_cor_points[:, 2]
 
                 # project 3D points to 2d image plane
-                rot_mat = euler_angles_to_rotation_matrix(eular_angle)
-                rvect, _ = cv2.Rodrigues(rot_mat)
-                imgpts, jac = cv2.projectPoints(np.array(self.car_model_dict[car_name]['vertices']), rvect,
-                                                translation, self.camera_matrix,
-                                                distCoeffs=None)
-
-                imgpts = np.int32(imgpts).reshape(-1, 2)
-                x1, y1, x2, y2 = imgpts[:, 0].min(), imgpts[:, 1].min(), imgpts[:, 0].max(), imgpts[:, 1].max()
+                x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), img_cor_points[:, 0].max(), img_cor_points[:, 1].max()
                 bboxes.append([x1, y1, x2, y2])
 
+                # project 3D points to 2d image plane
                 if draw:
                     # project 3D points to 2d image plane
                     mask_seg = np.zeros(image.shape, dtype=np.uint8)
+                    mask_seg_mesh = np.zeros(image.shape, dtype=np.uint8)
                     for t in triangles:
                         coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
                                          dtype=np.int32)
                         # This will draw the mask for segmenation
-                        #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
-                        cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+                        cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                        cv2.polylines(mask_seg_mesh, np.int32([coord]), 1, (0, 255, 0))
 
-                    mask_all += mask_seg
-                    # imwrite(mask_seg, os.path.join('/data/Kaggle/wudi_data/train_iamge_gt_vis','mask_demo.jpg'))
+                    mask_all += mask_seg_mesh
 
-                    # Find mask
                     ground_truth_binary_mask = np.zeros(mask_seg.shape, dtype=np.uint8)
                     ground_truth_binary_mask[mask_seg == 255] = 1
                     if self.bottom_half > 0:  # this indicate w
@@ -243,11 +238,16 @@ class KagglePKUDataset(CustomDataset):
 
                     rles.append(encoded_ground_truth)
                     # bm = maskUtils.decode(encoded_ground_truth)
+
             if draw:
                 # if False:
                 mask_all = mask_all * 255 / mask_all.max()
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
-                imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))
+
+                for box in bboxes:
+                    cv2.rectangle(merged_image, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 0, 255), thickness=5)
+
+                imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))    
 
             if len(bboxes):
                 bboxes = np.array(bboxes, dtype=np.float32)
