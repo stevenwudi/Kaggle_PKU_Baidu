@@ -64,8 +64,6 @@ class KagglePKUDataset(CustomDataset):
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
-                if True:  # plot annotation for examination
-                    self.plot_and_examine(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
                 outfilekaggle = '/data/cyh/kaggle/train.json'
@@ -89,7 +87,8 @@ class KagglePKUDataset(CustomDataset):
             for ann in annotations:
                 ann['height'] = 2710
             self.print_statistics_annotations(annotations)
-            #self.plot_and_examine(annotations)
+            if False:
+                self.plot_and_examine(annotations)
 
         else:
             for fn in os.listdir(self.img_prefix):

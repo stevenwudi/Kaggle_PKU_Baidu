@@ -215,6 +215,8 @@ train_cfg = dict(
             debug=False)
     ],
     stage_loss_weights=[1, 0.5, 0.25],
+
+    bayesian_weight_learning=True,
     car_cls_weight=1.0,
     rot_weight=10.,
     translation_weight=1.0,
@@ -354,7 +356,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[10, 90])
+    step=[20, 70])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -365,15 +367,14 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 150
+total_epochs = 100
 dist_params = dict(backend='nccl')
 #dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8002")
 
-#dist_params = dict(backend='nccl')
-
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
-# load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 #load_from = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth'
-resume_from = '/data/Kaggle/wudi_data/Dec14-08-44-20/epoch_77.pth'
+#resume_from = '/data/Kaggle/wudi_data/Dec14-08-44-20/epoch_77.pth'
+resume_from = None
 workflow = [('train', 1)]

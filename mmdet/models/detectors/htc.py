@@ -118,13 +118,8 @@ class HybridTaskCascade(CascadeRCNN):
 
         car_cls_score_target, quaternion_target = car_cls_rot_head.get_target(sampling_results, carlabels, quaternion_semispheres, rcnn_train_cfg)
 
-        # we need to reweight the loss here:
-        car_cls_weight = self.train_cfg.car_cls_weight
-        rot_weight = self.train_cfg.rot_weight
-
         loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
-                                                 car_cls_score_target, quaternion_target,
-                                                 car_cls_weight, rot_weight)
+                                                 car_cls_score_target, quaternion_target)
         return loss_car_cls_rot, car_cls_rot_feat
 
     def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta):
@@ -489,6 +484,18 @@ class HybridTaskCascade(CascadeRCNN):
             new_key = 'kaggle/' + key
             losses[new_key] = losses[key]
             del losses[key]
+
+        # if we use bayesian weight learning scheme as in:
+        if self.train_cfg.bayesian_weight_learning:
+            raise NotImplementedError
+        else:
+            for key in losses.keys():
+                if 'car_cls_ce_loss' in key:
+                    losses[key] *= self.train_cfg.car_cls_weight
+                elif 'loss_quaternion' in key:
+                    losses[key] *= self.train_cfg.rot_weight
+                elif 'loss_translation' in key:
+                    losses[key] *= self.train_cfg.translation_weight
 
         return losses
 
