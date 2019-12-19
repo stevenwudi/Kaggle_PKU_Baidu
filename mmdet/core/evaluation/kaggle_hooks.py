@@ -29,6 +29,10 @@ class KaggleEvalHook(DistEvalHook):
         self.ann_file = dataset.ann_file
         self.conf_thresh = conf_thresh
 
+        img_prefix = dataset.img_prefix[:-1] if dataset.img_prefix[-1] == "/" else dataset.img_prefix
+        self.dataset_name = os.path.basename(img_prefix)
+        print(self.dataset_name)
+
         super(KaggleEvalHook, self).__init__(dataset, interval)
 
     def evaluate(self, runner, results):
@@ -76,7 +80,8 @@ class KaggleEvalHook(DistEvalHook):
                 ap = 0
             ap_list.append(ap)
         mean_ap = np.mean(ap_list)
-        print('Valid 400 images mAP is: %.4f' % mean_ap)
-        runner.log_buffer.output['valuation_mAP'] = mean_ap
+        print('{} Valid 400 images mAP is: {}'.format(self.dataset_name, mean_ap))
+        key = 'mAP/{}'.format(self.dataset_name)
+        runner.log_buffer.output[key] = mean_ap
         runner.log_buffer.ready = True
 
