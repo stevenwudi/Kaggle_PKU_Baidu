@@ -48,7 +48,7 @@ class KaggleEvalHook(DistEvalHook):
             ImageId = ".".join(file_name.split(".")[:-1])
 
             euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
-            euler_angle[:, 0],  euler_angle[:, 1], euler_angle[:, 2] = -euler_angle[:, 1], -euler_angle[:, 0], -euler_angle[:, 2]
+            # euler_angle[:, 0],  euler_angle[:, 1], euler_angle[:, 2] = -euler_angle[:, 1], -euler_angle[:, 0], -euler_angle[:, 2]
             translation = output[2]['trans_pred_world']
             coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
             coords_str = coords2str(coords)
