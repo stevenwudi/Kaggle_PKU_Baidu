@@ -181,6 +181,8 @@ class RandomFlip(object):
     """
 
     def __init__(self, flip_ratio=None):
+        self.delta_x = 1692 - 1686.2379
+        self.fx = 2304.5479
         self.flip_ratio = flip_ratio
         if flip_ratio is not None:
             assert flip_ratio >= 0 and flip_ratio <= 1
@@ -217,6 +219,7 @@ class RandomFlip(object):
 
             # flip eular angles and quaterion_semispheres
             for idx in range(len(results['ann_info'].get('eular_angles', []))):
+                ### the eular angles sequence should correspond to yaw, pitch, roll, otherwise it may mixup below
                 results['ann_info']['eular_angles'][idx][1] = -results['ann_info']['eular_angles'][idx][1] ## pitch inverse
                 results['ann_info']['eular_angles'][idx][2] = -results['ann_info']['eular_angles'][idx][2] ## roll inverse
                 eular_angle_flip = np.array(results['ann_info']['eular_angles'][idx])
@@ -228,7 +231,10 @@ class RandomFlip(object):
 
             # flip transation
             for idx in range(len(results['ann_info'].get('translations', []))):
-                results['ann_info']['translations'][idx][0] = -results['ann_info']['translations'][idx][0] ## x inverse
+                x_camera = results['ann_info']['translations'][idx][0]
+                Z = results['ann_info']['translations'][idx][2]
+                x_camera_flip = 2 * self.delta_x * Z / self.fx - x_camera ## due to the offset between cx and width//2
+                results['ann_info']['translations'][idx][0] = x_camera_flip  ## x inverse
 
         return results
 
