@@ -7,9 +7,6 @@ import cv2
 from mmcv.image import imread, imwrite
 from pycocotools import mask as maskUtils
 
-from multiprocessing import Pool
-from scipy.spatial.transform import Rotation as R
-from math import acos, pi
 from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
@@ -67,8 +64,8 @@ class KagglePKUDataset(CustomDataset):
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
-                if True:  # plot annotation for examination
-                    self.plot_and_examine(annotations)
+                # if True:  # plot annotation for examination
+                #     self.plot_and_examine(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
                 outfilekaggle = '/data/cyh/kaggle/train.json'
