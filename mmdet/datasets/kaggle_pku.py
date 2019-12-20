@@ -66,10 +66,15 @@ class KaggkePKUDataset(CustomDataset):
                 annotations = self.clean_outliers(annotations)
                 self.print_statistics_annotations(annotations)
             else:
-
+                ## we add train.txt and validation.txt, 3862 and 400 respectively
+                PATH = '/data/Kaggle/pku-autonomous-driving/'
+                ImageId =[i.strip() for i in open(PATH + 'train.txt').readlines()]
                 train = pd.read_csv(ann_file)
                 self.print_statistics(train)
                 for idx in tqdm(range(len(train))):
+                    filename = train['ImageId'].iloc[idx] +'.jpg'
+                    if filename not in ImageId:
+                        continue
                     annotation = self.load_anno_idx(idx, train)
                     annotations.append(annotation)
                 with open(outfile, 'w') as f:
