@@ -64,8 +64,8 @@ class KagglePKUDataset(CustomDataset):
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
-                if True:  # plot annotation for examination
-                    self.plot_and_examine(annotations)
+                # if True:  # plot annotation for examination
+                #     self.plot_and_examine(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
                 outfilekaggle = '/data/cyh/kaggle/train.json'
@@ -85,6 +85,8 @@ class KagglePKUDataset(CustomDataset):
             annotations = self.clean_corrupted_images(annotations)
             annotations = self.clean_outliers(annotations)
 
+            # annotations = annotations[:5]
+
             # CWX mess it up?
             for ann in annotations:
                 ann['height'] = 2710
@@ -98,6 +100,7 @@ class KagglePKUDataset(CustomDataset):
                 info = {'filename': filename}
                 annotations.append(info)
 
+            # annotations = annotations[:5]
             # We also generate the albumentation enhances valid images
             # below is a hard coded list....
             if False:
@@ -106,6 +109,9 @@ class KagglePKUDataset(CustomDataset):
         self.annotations = annotations
 
         return annotations
+
+    def load(self, t):
+        return self.load_anno_idx(*t)
 
     def generate_albu_valid(self, annotations):
 
@@ -138,7 +144,25 @@ class KagglePKUDataset(CustomDataset):
 
         return car_model_dict
 
-    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
+    def RotationDistance(self, p, g):
+        true = [g[1], g[0], g[2]]
+        pred = [p[1], p[0], p[2]]
+        q1 = R.from_euler('xyz', true)
+        q2 = R.from_euler('xyz', pred)
+        diff = R.inv(q2) * q1
+        W = np.clip(diff.as_quat()[-1], -1., 1.)
+
+        # in the official metrics code:
+        # https://www.kaggle.com/c/pku-autonomous-driving/overview/evaluation
+        #   return Object3D.RadianToDegree( Math.Acos(diff.W) )
+        # this code treat θ and θ+2π differntly.
+        # So this should be fixed as follows.
+        W = (acos(W) * 360) / pi
+        if W > 180:
+            W = 360 - W
+        return W
+
+    def load_anno_idx(self, idx, train, draw=True, draw_dir='/data/cyh/kaggle/train_image_gt_vis'):
 
         labels = []
         bboxes = []
@@ -159,11 +183,27 @@ class KagglePKUDataset(CustomDataset):
 
             gt = self._str2coords(train['PredictionString'].iloc[idx])
             for gt_pred in gt:
-                labels.append(gt_pred['id'])
-                
-                translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
-                translations.append(translation)
+                eular_angle = np.array([gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']])
 
+                translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
+                quaternion = euler_angles_to_quaternions(eular_angle)
+                quaternion_semisphere = quaternion_upper_hemispher(quaternion)
+
+                new_eular_angle = quaternion_to_euler_angle(quaternion_semisphere)
+                distance = self.RotationDistance(new_eular_angle, eular_angle)
+                # distance = np.sum(np.abs(new_eular_angle - eular_angle))
+                if distance > 0.001:
+                    print("Wrong !!!", img_name)
+
+                labels.append(gt_pred['id'])
+                eular_angles.append(eular_angle)
+                quaternion_semispheres.append(quaternion_semisphere)
+                translations.append(translation)
+                # rendering the car according to:
+                # https://www.kaggle.com/ebouteillon/augmented-reality
+
+                # car_id2name is from:
+                # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
                 car_name = car_id2name[gt_pred['id']].name
                 vertices = np.array(self.car_model_dict[car_name]['vertices'])
                 vertices[:, 1] = -vertices[:, 1]
@@ -171,19 +211,8 @@ class KagglePKUDataset(CustomDataset):
 
                 # project 3D points to 2d image plane
                 yaw, pitch, roll = gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']
+                # I think the pitch and yaw should be exchanged
                 yaw, pitch, roll = -pitch, -yaw, -roll
-
-                eular_angle = np.array([yaw, pitch, roll])
-                quaternion = euler_angles_to_quaternions(eular_angle)
-                quaternion_semisphere = quaternion_upper_hemispher(quaternion)
-                eular_angles.append(eular_angle)
-                quaternion_semispheres.append(quaternion_semisphere)
-
-                # new_eular_angle = quaternion_to_euler_angle(quaternion_semisphere)
-                # distance = self.RotationDistance(new_eular_angle, eular_angle)
-                # if distance > 0.001:
-                #     print(new_eular_angle, eular_angle)
-
                 Rt = np.eye(4)
                 t = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 Rt[:3, 3] = t
@@ -316,7 +345,7 @@ class KagglePKUDataset(CustomDataset):
                 # print('Generate q:', quaternion_semisphere)
                 # print('Json q:', json_q)
                 # print("diff is: %f" % np.sum(np.abs(ea_json-ea_make)))
-                if np.sum(np.abs(eular_angle-ea_make)) > 0.01:
+                if self.RotationDistance(ea_make, ea_json) > 0.01:
                     print('Wrong!!!!!!!!!!!!!')
 
                 # rendering the car according to:
