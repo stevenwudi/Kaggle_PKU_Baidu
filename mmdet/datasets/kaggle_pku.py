@@ -16,7 +16,8 @@ from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
 from demo.visualisation_utils import draw_result_kaggle_pku
 
 from albumentations.augmentations import transforms
-
+from math import acos, pi
+from scipy.spatial.transform import Rotation as R
 
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types """
@@ -64,6 +65,8 @@ class KagglePKUDataset(CustomDataset):
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
+                if False:
+                    self.eular_angle_classification(annotations)
                 if True:  # plot annotation for examination
                     self.plot_and_examine(annotations)
             else:
@@ -272,10 +275,8 @@ class KagglePKUDataset(CustomDataset):
                 }
                 return annotation
 
-    def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
-
-        #for ann in tqdm(annotations):
-        #for ann in tqdm(annotations[5000: 5050]):
+    def eular_angle_classification(self, annotations):
+        # we firstly convert back from the CYH saved json euler angle file to the original form
         for ann in tqdm(annotations[0: 50]):
 
             img_name = ann['filename']
@@ -316,9 +317,124 @@ class KagglePKUDataset(CustomDataset):
                 # print('Generate q:', quaternion_semisphere)
                 # print('Json q:', json_q)
                 # print("diff is: %f" % np.sum(np.abs(ea_json-ea_make)))
-                if np.sum(np.abs(eular_angle-ea_make)) > 0.01:
+                if np.sum(np.abs(eular_angle - ea_make)) > 0.01:
                     print('Wrong!!!!!!!!!!!!!')
 
+                # rendering the car according to:
+                # https://www.kaggle.com/ebouteillon/augmented-reality
+                # car_id2name is from:
+                # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
+                car_name = car_id2name[labels[gt_car_idx]].name
+                vertices = np.array(self.car_model_dict[car_name]['vertices'])
+                vertices[:, 1] = -vertices[:, 1]
+                triangles = np.array(self.car_model_dict[car_name]['faces']) - 1
+                translation = np.array(translations[gt_car_idx])
+
+                Rt = np.eye(4)
+                Rt[:3, 3] = translation
+                # project 3D points to 2d image plane
+                # Apollo below is correct
+                # https://en.wikipedia.org/wiki/Euler_angles
+                # Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
+                if 'Camera' in img_name:
+                    Y, P, R = euler_to_Rot_YPR(eular_angle[0], eular_angle[1], eular_angle[2])
+                    rot_mat = np.dot(np.dot(R, P), Y)
+
+                # Kaggle below is correct
+                else:
+                    Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
+                    rot_mat = np.dot(np.dot(R, P), Y)
+
+                # rot_mat = np.dot(np.dot(R, P), Y)
+                # check eular from rot mat
+                Rt[:3, :3] = rot_mat
+                Rt = Rt[:3, :]
+                P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+                P[:, :-1] = vertices
+                P = P.T
+
+                img_cor_points = np.dot(self.camera_matrix, np.dot(Rt, P))
+                img_cor_points = img_cor_points.T
+                img_cor_points[:, 0] /= img_cor_points[:, 2]
+                img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+                x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), img_cor_points[:,
+                                                                                         0].max(), img_cor_points[:,
+                                                                                                   1].max()
+                bboxes.append([x1, y1, x2, y2])
+
+                # project 3D points to 2d image plane
+                mask_seg = np.zeros(image.shape, dtype=np.uint8)
+                for t in triangles:
+                    coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                                     dtype=np.int32)
+                    # This will draw the mask for segmenation
+                    # cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                    cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
+
+                mask_all += mask_seg
+
+            mask_all = mask_all * 255 / mask_all.max()
+            cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
+            im_write_file = os.path.join(draw_dir, img_name.split('/')[-1])
+            print("Writing image to: %s" % os.path.join(draw_dir, img_name.split('/')[-1]))
+            imwrite(merged_image, im_write_file)
+
+
+
+
+    def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
+
+        #for ann in tqdm(annotations):
+        #for ann in tqdm(annotations[5000: 5050]):
+        for ann in tqdm(annotations[0: 50]):
+
+            img_name = ann['filename']
+            image = imread(img_name)
+            mask_all = np.zeros(image.shape)
+            merged_image = image.copy()
+            alpha = 0.9  # transparency
+
+            bboxes = ann['bboxes']
+            labels = ann['labels']
+            eular_angles = ann['eular_angles']
+            quaternion_semispheres = ann['quaternion_semispheres']
+            translations = ann['translations']
+            assert len(bboxes) == len(labels) == len(eular_angles) == len(quaternion_semispheres) == len(translations)
+
+            for gt_car_idx in range(len(ann['quaternion_semispheres'])):
+
+                eular_angle = np.array(eular_angles[gt_car_idx])
+
+                # if 'Camera' in img_name:  # this is an apolloscape dataset
+                #     eular_angle_kaggle = np.array([eular_angle[1], eular_angle[0], eular_angle[2]])
+                # elif 'ID' in img_name:
+                #     eular_angle_kaggle = eular_angle
+                # else:
+                #     print("Unidentified class")
+
+                quaternion = euler_angles_to_quaternions(eular_angle)
+                quaternion_semisphere = quaternion_upper_hemispher(quaternion)
+                ea_make = quaternion_to_euler_angle(quaternion_semisphere)
+
+                json_q = quaternion_semispheres[gt_car_idx]
+                ea_json = quaternion_to_euler_angle(json_q)
+                ea_json = np.array(ea_json)
+
+                q1 = R.from_euler('xyz', eular_angle)
+                q2 = R.from_euler('xyz', q)
+
+                # print('GT eular angle: ', eular_angle)
+                # print('Generate eular angle:', ea_make)
+                # print('Json generated eular angle', ea_json)
+                # print('Generate q:', quaternion_semisphere)
+                # print('Json q:', json_q)
+                # print("diff is: %f" % np.sum(np.abs(ea_json-ea_make)))
+                if np.sum(np.abs(eular_angle-ea_make)) > 0.01:
+                    print('Wrong!!!!!!!!!!!!!')
+                distance = self.RotationDistance(ea_make, eular_angle)
+                if distance > 0.001:
+                    print(ea_make, eular_angle)
                 # rendering the car according to:
                 # https://www.kaggle.com/ebouteillon/augmented-reality
                 # car_id2name is from:
@@ -795,3 +911,21 @@ class KagglePKUDataset(CustomDataset):
             translations=translations)
 
         return ann
+
+    def RotationDistance(self, p, q):
+
+        q1 = R.from_euler('xyz', p)
+        q2 = R.from_euler('xyz', q)
+        diff = R.inv(q2) * q1
+        W = np.clip(diff.as_quat()[-1], -1., 1.)
+
+        # in the official metrics code:
+        # https://www.kaggle.com/c/pku-autonomous-driving/overview/evaluation
+        #   return Object3D.RadianToDegree( Math.Acos(diff.W) )
+        # this code treat θ and θ+2π differntly.
+        # So this should be fixed as follows.
+        W = (acos(W) * 360) / pi
+        if W > 180:
+            W = 360 - W
+        return W
+

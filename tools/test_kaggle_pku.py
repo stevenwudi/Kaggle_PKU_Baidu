@@ -250,7 +250,7 @@ def main():
     submission = write_submission(outputs, args, dataset.img_prefix,
                                   conf_thresh=0.1, filter_mask=False)
     # Visualise the prediction, this will take 5 sec..
-    #dataset.visualise_pred(outputs, args)
+    dataset.visualise_pred(outputs, args)
 
     # evaluate mAP
     map_main(submission)
