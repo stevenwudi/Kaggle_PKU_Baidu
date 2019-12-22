@@ -196,7 +196,11 @@ def _dist_train(model, dataset, cfg, validate=False):
             runner.register_hook(
                 CocoDistEvalRecallHook(val_dataset_cfg, **eval_cfg))
         else:
-            runner.register_hook(KaggleEvalHook(val_dataset_cfg, **eval_cfg))
+            if isinstance(val_dataset_cfg, dict):
+                runner.register_hook(KaggleEvalHook(val_dataset_cfg, **eval_cfg))
+            elif isinstance(val_dataset_cfg, list):
+                for vdc in val_dataset_cfg:
+                    runner.register_hook(KaggleEvalHook(vdc, **eval_cfg))
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)
@@ -240,7 +244,11 @@ def _non_dist_train(model, dataset, cfg, validate=False):
         if isinstance(model.module, RPN):
             runner.register_hook(CocoDistEvalRecallHook(val_dataset_cfg, **eval_cfg))
         else:
-            runner.register_hook(KaggleEvalHook(val_dataset_cfg, **eval_cfg))
+            if isinstance(val_dataset_cfg, dict):
+                runner.register_hook(KaggleEvalHook(val_dataset_cfg, **eval_cfg))
+            elif isinstance(val_dataset_cfg, list):
+                for vdc in val_dataset_cfg:
+                    runner.register_hook(KaggleEvalHook(vdc, **eval_cfg))
 
     if cfg.resume_from:
         runner.resume(cfg.resume_from)

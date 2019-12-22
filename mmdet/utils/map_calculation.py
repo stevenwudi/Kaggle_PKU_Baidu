@@ -27,12 +27,14 @@ def expand_df(df, PredictionStringCols):
         })
     return df
 
+
 def coords2str(coords):
     s = []
     for c in coords:
         for l in c:
             s.append('%.5f' % l)
     return ' '.join(s)
+
 
 def str2coords(s, names):
     coords = []
@@ -109,9 +111,10 @@ def check_match(idx, train_df, valid_df):
             else:
                 result_flg.append(0)
             scores.append(pcar['carid_or_score'])
-            #scores.append(1.0)
+            # scores.append(1.0)
 
     return result_flg, scores
+
 
 def RotationDistance_q(q1, q2):
     diff = R.inv(q2) * q1

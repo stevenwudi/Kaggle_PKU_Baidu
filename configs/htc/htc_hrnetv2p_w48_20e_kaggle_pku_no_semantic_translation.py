@@ -139,6 +139,8 @@ model = dict(
         fc_out_channels=100,
         num_translation_reg=3,
         loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+
+    bayesian_weight_learning=False,
 )
 
 # model training and testing settings
@@ -287,12 +289,50 @@ data = dict(
         ann_file=data_root + 'train.csv',
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
-    val=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'validation.csv',
-        img_prefix=data_root + 'validation_images/',
-        pipeline=test_pipeline),
+    val=list([
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue/',
+                pipeline=test_pipeline),
+        ]),
     test=dict(
         type=dataset_type,
         data_root=data_root,
