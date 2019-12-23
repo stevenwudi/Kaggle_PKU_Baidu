@@ -121,6 +121,10 @@ def write_submission(outputs, args, img_prefix,
 
     CAR_IDX = 2  # this is the coco car class
     for idx_img, output in tqdm(enumerate(outputs)):
+
+        file_name = os.path.basename(output[2]["file_name"])
+        ImageId = ".".join(file_name.split(".")[:-1])
+
         # Wudi change the conf to car prediction
         if len(output[0][CAR_IDX]):
             conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
@@ -140,8 +144,6 @@ def write_submission(outputs, args, img_prefix,
             coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
             coords_str = coords2str(coords)
 
-            file_name = os.path.basename(output[2]["file_name"])
-            ImageId = ".".join(file_name.split(".")[:-1])
             predictions[ImageId] = coords_str
         else:
             predictions[ImageId] = ""
@@ -245,6 +247,11 @@ def main():
 
     else:
         outputs = mmcv.load(args.out)
+
+    if distributed:
+        rank, _ = get_dist_info()
+        if rank != 0:
+            return
 
     # write submission here
     submission = write_submission(outputs, args, dataset.img_prefix,
