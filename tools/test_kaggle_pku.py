@@ -110,12 +110,15 @@ def collect_results(result_part, size, tmpdir=None):
 
 def write_submission(outputs, args, img_prefix,
                      conf_thresh=0.9,
-                     filter_mask=False):
+                     filter_mask=False,
+                     horizontal_flip=False):
     submission = args.out.replace('.pkl', '')
     submission += '_' + img_prefix.split('/')[-1]
     submission += '_conf_' + str(conf_thresh)
     if filter_mask:
         submission += '_filter_mask.csv'
+    elif horizontal_flip:
+        submission += '_horizontal_flip'
     submission += '.csv'
     predictions = {}
 
@@ -181,6 +184,7 @@ def parse_args():
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument('--horizontal_flip', action='store_true', default=False)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -195,8 +199,13 @@ def main():
 
     cfg = mmcv.Config.fromfile(args.config)
     # Wudi change the args.out directly related to the model checkpoint file data
-    args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
-                            args.checkpoint.split('/')[-2] + '.pkl')
+    if args.horizontal_flip:
+        args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
+                                args.checkpoint.split('/')[-2] + '_horizontal_flip.pkl')
+        print('horizontal_flip activated')
+    else:
+        args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
+                                args.checkpoint.split('/')[-2] + '.pkl')        
 
     # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -248,7 +257,7 @@ def main():
 
     # write submission here
     submission = write_submission(outputs, args, dataset.img_prefix,
-                                  conf_thresh=0.1, filter_mask=False)
+                                  conf_thresh=0.1, filter_mask=False,horizontal_flip=horizontal_flip)
     # Visualise the prediction, this will take 5 sec..
     #dataset.visualise_pred(outputs, args)
 

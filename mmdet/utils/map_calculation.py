@@ -77,7 +77,7 @@ thres_tr_list = [0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
 thres_ro_list = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5]
 
 
-def check_match(idx, train_df, valid_df):
+def check_match(idx, train_df, valid_df,flip_mode=False):
     keep_gt = False
     thre_tr_dist = thres_tr_list[idx]
     thre_ro_dist = thres_ro_list[idx]
@@ -85,6 +85,18 @@ def check_match(idx, train_df, valid_df):
                   zip(train_df['ImageId'], train_df['PredictionString'])}
     valid_dict = {imgID: str2coords(s, names=['pitch', 'yaw', 'roll', 'x', 'y', 'z', 'carid_or_score']) for imgID, s in
                   zip(valid_df['ImageId'], valid_df['PredictionString'])}
+
+    if flip_mode:
+        print('flip mode activated')
+        for imgID in train_dict.keys():
+            for item in range(len(train_dict[imgId])):
+                pitch = -train_dict[imgID][item]['pitch']
+                roll = -train_dict[imgID][item]['roll']
+                x = 2*delta_x*train_dict[imgID][item]['z']/fx - train_dict[imgID][item]['x']
+                train_dict[imgID][item]['pitch'] = pitch
+                train_dict[imgID][item]['roll'] = roll
+                train_dict[imgID][item]['x'] = x
+
     result_flg = []  # 1 for TP, 0 for FP
     scores = []
     MAX_VAL = 10 ** 10
