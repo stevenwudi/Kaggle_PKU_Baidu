@@ -242,10 +242,9 @@ if __name__ == '__main__':
     car_model_dir = 'E:\DATASET\pku-autonomous-driving\car_models_json'
     valid_pred_file = r'E:\DATASET\pku-autonomous-driving\cwx_data\validation_all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1.pkl'
     train_img_dir = r'E:\DATASET\pku-autonomous-driving\train_images'
-    valid_pred = pkl.load(open(valid_pred_file, "rb"))
-
     train_df = pd.read_csv(r'E:\DATASET\pku-autonomous-driving/train.csv')
 
+    valid_pred = pkl.load(open(valid_pred_file, "rb"))
     start_vis_index = 0
 
     open_3d_vis(valid_pred=valid_pred[start_vis_index:],

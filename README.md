@@ -1,4 +1,3 @@
-
 # Kaggle_PKU_Baidu
 
 Kaggle_PKU_Baidu
@@ -8,6 +7,9 @@ Kaggle_PKU_Baidu
 
 Using [Open3d]()http://www.open3d.org/) to visualise the predicted 
 validation images.
+
+![Open3d vis](./demo/open3d1.PNG)
+![RGB](./demo/open3d2.PNG)
 
 ### install open3d
 `pip install open3d`
