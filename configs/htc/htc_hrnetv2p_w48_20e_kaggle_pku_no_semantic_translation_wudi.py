@@ -220,8 +220,8 @@ train_cfg = dict(
     stage_loss_weights=[1, 0.5, 0.25],
 
     car_cls_weight=1.0,
-    rot_weight=10.,
-    translation_weight=1.0,
+    rot_weight=9.,
+    translation_weight=2.2,
 )
 test_cfg = dict(
     rpn=dict(

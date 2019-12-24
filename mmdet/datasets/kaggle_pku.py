@@ -19,6 +19,7 @@ from albumentations.augmentations import transforms
 from math import acos, pi
 from scipy.spatial.transform import Rotation as R
 
+
 class NumpyEncoder(json.JSONEncoder):
     """ Special json encoder for numpy types """
 
@@ -231,7 +232,9 @@ class KagglePKUDataset(CustomDataset):
                 img_cor_points[:, 1] /= img_cor_points[:, 2]
 
                 # project 3D points to 2d image plane
-                x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), img_cor_points[:, 0].max(), img_cor_points[:, 1].max()
+                x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), img_cor_points[:,
+                                                                                         0].max(), img_cor_points[:,
+                                                                                                   1].max()
                 bboxes.append([x1, y1, x2, y2])
 
                 # project 3D points to 2d image plane
@@ -278,9 +281,10 @@ class KagglePKUDataset(CustomDataset):
                 cv2.addWeighted(image.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image)
 
                 for box in bboxes:
-                    cv2.rectangle(merged_image, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 0, 255), thickness=5)
+                    cv2.rectangle(merged_image, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 0, 255),
+                                  thickness=5)
 
-                imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))    
+                imwrite(merged_image, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '.jpg'))
 
             if len(bboxes):
                 bboxes = np.array(bboxes, dtype=np.float32)
@@ -406,13 +410,11 @@ class KagglePKUDataset(CustomDataset):
 
         return True
 
-
-
     def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
 
-        #for ann in tqdm(annotations):
+        # for ann in tqdm(annotations):
         for ann in tqdm(annotations[5000: 5010]):
-        #for ann in tqdm(annotations[0: 50]):
+            # for ann in tqdm(annotations[0: 50]):
 
             img_name = ann['filename']
             image = imread(img_name)
@@ -473,7 +475,7 @@ class KagglePKUDataset(CustomDataset):
                 # project 3D points to 2d image plane
                 # Apollo below is correct
                 # https://en.wikipedia.org/wiki/Euler_angles
-                #Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
+                # Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
                 rot_mat = euler_to_Rot(eular_angle[0], eular_angle[1], eular_angle[2]).T
                 # check eular from rot mat
                 Rt[:3, :3] = rot_mat
@@ -487,7 +489,9 @@ class KagglePKUDataset(CustomDataset):
                 img_cor_points[:, 0] /= img_cor_points[:, 2]
                 img_cor_points[:, 1] /= img_cor_points[:, 2]
 
-                x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), img_cor_points[:, 0].max(), img_cor_points[:, 1].max()
+                x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), img_cor_points[:,
+                                                                                         0].max(), img_cor_points[:,
+                                                                                                   1].max()
                 bboxes.append([x1, y1, x2, y2])
 
                 # project 3D points to 2d image plane
@@ -496,7 +500,7 @@ class KagglePKUDataset(CustomDataset):
                     coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
                                      dtype=np.int32)
                     # This will draw the mask for segmenation
-                    #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+                    # cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
                     cv2.polylines(mask_seg, np.int32([coord]), 1, (0, 255, 0))
 
                 mask_all += mask_seg
@@ -925,5 +929,3 @@ class KagglePKUDataset(CustomDataset):
             translations=translations)
 
         return ann
-
-
