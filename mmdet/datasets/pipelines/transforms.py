@@ -220,21 +220,23 @@ class RandomFlip(object):
             # flip eular angles and quaterion_semispheres
             for idx in range(len(results['ann_info'].get('eular_angles', []))):
                 ### the eular angles sequence should correspond to yaw, pitch, roll, otherwise it may mixup below
-                results['ann_info']['eular_angles'][idx][1] = -results['ann_info']['eular_angles'][idx][1] ## pitch inverse
-                results['ann_info']['eular_angles'][idx][2] = -results['ann_info']['eular_angles'][idx][2] ## roll inverse
-                eular_angle_flip = np.array(results['ann_info']['eular_angles'][idx])
+                yaw_inverse = results['ann_info']['eular_angles'][idx][0] ## yaw inverse(no inverse)
+                pitch_inverse = -results['ann_info']['eular_angles'][idx][1] ## pitch inverse
+                roll_inverse = -results['ann_info']['eular_angles'][idx][2] ## roll inverse
+
+                eular_angle_flip = np.array([yaw_inverse,pitch_inverse,roll_inverse])
              
                 quaternion = euler_angles_to_quaternions(eular_angle_flip)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
                 quaternion_semisphere = np.array(quaternion_semisphere, dtype=np.float32)
-                results['ann_info']['quaternion_semispheres'][idx] = quaternion_semisphere
+                results['quaternion_semispheres'][idx] = quaternion_semisphere
 
             # flip transation
             for idx in range(len(results['ann_info'].get('translations', []))):
                 x_camera = results['ann_info']['translations'][idx][0]
                 Z = results['ann_info']['translations'][idx][2]
                 x_camera_flip = 2 * self.delta_x * Z / self.fx - x_camera ## due to the offset between cx and width//2
-                results['ann_info']['translations'][idx][0] = x_camera_flip  ## x inverse
+                results['translations'][idx][0] = x_camera_flip  ## x inverse
 
         return results
 
