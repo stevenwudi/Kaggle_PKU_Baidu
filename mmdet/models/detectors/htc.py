@@ -45,7 +45,7 @@ class HybridTaskCascade(CascadeRCNN):
         self.with_translation = with_translation
 
         # Bayesian learning of the weight
-        if self.train_cfg.bayesian_weight_learning:
+        if self.bayesian_weight_learning:
             self.fc_car_cls_weight = nn.Linear(in_features=1, out_features=1, bias=False)
             self.fc_rot_weight = nn.Linear(in_features=1, out_features=1, bias=False)
             self.fc_translation_weight = nn.Linear(in_features=1, out_features=1, bias=False)
@@ -500,7 +500,7 @@ class HybridTaskCascade(CascadeRCNN):
         # if we use bayesian weight learning scheme as in:
         # Geometric loss functions for camera pose regression with deep learning
         # s = log (sigma) **2
-        if self.train_cfg.bayesian_weight_learning:
+        if self.bayesian_weight_learning:
 
             for key in losses.keys():
                 if 'car_cls_ce_loss' in key:

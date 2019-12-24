@@ -139,6 +139,8 @@ model = dict(
         fc_out_channels=100,
         num_translation_reg=3,
         loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+
+    bayesian_weight_learning=False,
 )
 
 # model training and testing settings

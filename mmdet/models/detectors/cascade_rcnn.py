@@ -28,6 +28,7 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
                  translation_head=None,
                  car_cls_rot_roi_extractor=None,
                  car_cls_rot_head=None,
+                 bayesian_weight_learning=False,
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None):
@@ -108,6 +109,7 @@ class CascadeRCNN(BaseDetector, RPNTestMixin):
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
+        self.bayesian_weight_learning = bayesian_weight_learning
 
         self.init_weights(pretrained=pretrained)
 
