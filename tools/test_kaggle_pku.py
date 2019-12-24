@@ -110,12 +110,15 @@ def collect_results(result_part, size, tmpdir=None):
 
 def write_submission(outputs, args, img_prefix,
                      conf_thresh=0.9,
-                     filter_mask=False):
+                     filter_mask=False,
+                     horizontal_flip=False):
     submission = args.out.replace('.pkl', '')
     submission += '_' + img_prefix.split('/')[-1]
     submission += '_conf_' + str(conf_thresh)
     if filter_mask:
         submission += '_filter_mask.csv'
+    elif horizontal_flip:
+        submission += '_horizontal_flip'
     submission += '.csv'
     predictions = {}
 
@@ -123,6 +126,7 @@ def write_submission(outputs, args, img_prefix,
     for idx_img, output in tqdm(enumerate(outputs)):
         file_name = os.path.basename(output[2]["file_name"])
         ImageId = ".".join(file_name.split(".")[:-1])
+
         # Wudi change the conf to car prediction
         if len(output[0][CAR_IDX]):
             conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
@@ -170,8 +174,10 @@ def parse_args():
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    #parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth', help='checkpoint file')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1/epoch_96.pth', help='checkpoint file')
+    # parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint',
+                        default='/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1/epoch_96.pth',
+                        help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
@@ -181,6 +187,7 @@ def parse_args():
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument('--horizontal_flip', action='store_true', default=False)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -195,10 +202,17 @@ def main():
 
     cfg = mmcv.Config.fromfile(args.config)
     # Wudi change the args.out directly related to the model checkpoint file data
-    args.out = os.path.join(cfg.work_dir, 'work_dirs', cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
-                            args.checkpoint.split('/')[-2] + '.pkl')
+    if args.horizontal_flip:
+        args.out = os.path.join(cfg.work_dir, 'work_dirs',
+                                cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
+                                args.checkpoint.split('/')[-2] + '_horizontal_flip.pkl')
+        print('horizontal_flip activated')
+    else:
+        args.out = os.path.join(cfg.work_dir, 'work_dirs',
+                                cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
+                                args.checkpoint.split('/')[-2] + '.pkl')
 
-    # set cudnn_benchmark
+        # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
@@ -246,8 +260,15 @@ def main():
     else:
         outputs = mmcv.load(args.out)
 
+    if distributed:
+        rank, _ = get_dist_info()
+        if rank != 0:
+            return
+
     # write submission here
-    submission = write_submission(outputs, args, dataset.img_prefix, conf_thresh=0.1, filter_mask=False)
+    submission = write_submission(outputs, args, dataset.img_prefix,
+                                  conf_thresh=0.1, filter_mask=False, horizontal_flip=horizontal_flip)
+
     # Visualise the prediction, this will take 5 sec..
     dataset.visualise_pred(outputs, args)
 
