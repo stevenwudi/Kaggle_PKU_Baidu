@@ -117,10 +117,16 @@ def get_open3d_mesh(euler_angle, trans_pred_world, car_model,
     mesh_car.compute_vertex_normals()
     # This is a match, RGB-->  The greener, the more positive
     if difficulty_idx >= 0:
-        print("Matched difficutl level: %d" % difficulty_idx)
-        red_color = (10 - difficulty_idx) / 10
-        green_color = (difficulty_idx + 1) / 10
-        mesh_car.paint_uniform_color([red_color, green_color, 0])
+        if difficulty_idx <=9:
+            print("Matched difficutl level: %d" % difficulty_idx)
+            red_color = (10 - difficulty_idx) / 10
+            green_color = (difficulty_idx + 1) / 10
+            mesh_car.paint_uniform_color([red_color, green_color, 0])
+        elif difficulty_idx<=19:
+            print("Matched difficutl level: %d" % (difficulty_idx-10))
+            blue_color = (20 - difficulty_idx) / 10
+            green_color = (difficulty_idx-10 + 1) / 10
+            mesh_car.paint_uniform_color([0, green_color, blue_color])
     elif difficulty_idx == -1:
         # Pure red is a FP
         print("False Positive " + str(T))
@@ -162,12 +168,12 @@ def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_
     for pred_idx in range(len(valid_pred[start_vis_index:])):
         pred = valid_pred[pred_idx + start_vis_index]
         img_name = pred[2]['file_name'].split('/')[-1][:-4]
-        print('Visualising: %s' % (str(pred_idx + start_vis_index) + "__" +img_name))
+        print('Visualising: %s' % (str(pred_idx + start_vis_index) + "__" + img_name))
         img = cv2.imread(os.path.join(train_img_dir, img_name + '.jpg'))
         # plt.figure()
         plt.ion()
         plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        plt.title(str(pred_idx + start_vis_index) + "__" +img_name)
+        plt.title(str(pred_idx + start_vis_index) + "__" + img_name)
         plt.draw()
         plt.show()
         # cv2.namedWindow(img_name, cv2.WND_PROP_FULLSCREEN)
@@ -239,6 +245,14 @@ def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_
         # We draw the RGB image here
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train a detector')
+    parser.add_argument('--idx', default=100, type=int, help='starting index for viewing')
+    args = parser.parse_args()
+
+    return args
+
+
 if __name__ == '__main__':
     car_model_dir = 'E:\DATASET\pku-autonomous-driving\car_models_json'
     valid_pred_file = r'E:\DATASET\pku-autonomous-driving\cwx_data\validation_all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1.pkl'
@@ -246,7 +260,8 @@ if __name__ == '__main__':
     train_df = pd.read_csv(r'E:\DATASET\pku-autonomous-driving/train.csv')
 
     valid_pred = pkl.load(open(valid_pred_file, "rb"))
-    start_vis_index =50
+    args = parse_args()
+    start_vis_index = args.idx
 
     open_3d_vis(start_vis_index=start_vis_index,
                 valid_pred=valid_pred,
