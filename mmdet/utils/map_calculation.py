@@ -92,7 +92,7 @@ def check_match(idx, train_df, valid_df,flip_mode=False):
     if flip_mode:
         print('flip mode activated')
         for imgID in train_dict.keys():
-            for item in range(len(train_dict[imgId])):
+            for item in range(len(train_dict[imgID])):
                 pitch = -train_dict[imgID][item]['pitch']
                 roll = -train_dict[imgID][item]['roll']
                 x = 2*delta_x*train_dict[imgID][item]['z']/fx - train_dict[imgID][item]['x']

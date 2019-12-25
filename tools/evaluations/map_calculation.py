@@ -8,11 +8,12 @@ import os
 
 from mmdet.utils import check_match, expand_df
 
+
 def match(t):
     return check_match(*t)
 
 
-def map_main(validation_prediction):
+def map_main(validation_prediction, flip_model):
     global train_df
     global valid_df
     valid_df = pd.read_csv(validation_prediction)
@@ -30,7 +31,7 @@ def map_main(validation_prediction):
     n_gt = len(expanded_train_df)
     ap_list = []
     p = Pool(processes=max_workers)
-    for result_flg, scores in p.imap(match, [(i, train_df, valid_df) for i in range(10)]):
+    for result_flg, scores in p.imap(match, [(i, train_df, valid_df, flip_model) for i in range(10)]):
         if np.sum(result_flg) > 0:
             n_tp = np.sum(result_flg)
             recall = n_tp / n_gt
@@ -39,7 +40,7 @@ def map_main(validation_prediction):
             ap = 0
         ap_list.append(ap)
     map = np.mean(ap_list)
-    print('%s, mAP:%f' % (validation_prediction.split('/')[-1],map))
+    print('%s, mAP:%f' % (validation_prediction.split('/')[-1], map))
 
 
 if __name__ == '__main__':

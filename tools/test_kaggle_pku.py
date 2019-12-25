@@ -19,7 +19,7 @@ from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
 
-from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_images
+from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_using_RT
 from tqdm import tqdm
 from tools.evaluations.map_calculation import map_main
 
@@ -108,13 +108,16 @@ def collect_results(result_part, size, tmpdir=None):
         return ordered_results
 
 
-def write_submission(outputs, args, img_prefix,
+def write_submission(outputs, args, dataset,
                      conf_thresh=0.9,
                      filter_mask=False,
                      horizontal_flip=False):
+    img_prefix = dataset.img_prefix
+
     submission = args.out.replace('.pkl', '')
     submission += '_' + img_prefix.split('/')[-1]
     submission += '_conf_' + str(conf_thresh)
+
     if filter_mask:
         submission += '_filter_mask.csv'
     elif horizontal_flip:
@@ -133,7 +136,9 @@ def write_submission(outputs, args, img_prefix,
             idx_conf = conf > conf_thresh
             if filter_mask:
                 # this filtering step will takes 2 second per iterations
-                idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                #idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
+
                 # the final id should require both
                 idx = idx_conf * idx_keep_mask
             else:
@@ -176,7 +181,7 @@ def parse_args():
                         help='train config file path')
     # parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth', help='checkpoint file')
     parser.add_argument('--checkpoint',
-                        default='/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1/epoch_96.pth',
+                        default='/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1/epoch_100.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -187,7 +192,7 @@ def parse_args():
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
-    parser.add_argument('--horizontal_flip', action='store_true', default=False)
+    parser.add_argument('--horizontal_flip',  default=False, action='store_true')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -266,15 +271,15 @@ def main():
             return
 
     # write submission here
-    submission = write_submission(outputs, args, dataset.img_prefix,
-                                  conf_thresh=0.1, filter_mask=False, horizontal_flip=horizontal_flip)
+    submission = write_submission(outputs, args, dataset,
+                                  conf_thresh=0.1, filter_mask=True, horizontal_flip=args.horizontal_flip)
 
     # Visualise the prediction, this will take 5 sec..
-    dataset.visualise_pred(outputs, args)
+    #dataset.visualise_pred(outputs, args)
 
     # evaluate mAP
     print("Start to eval mAP")
-    map_main(submission)
+    map_main(submission, flip_model=args.horizontal_flip)
 
 
 if __name__ == '__main__':
