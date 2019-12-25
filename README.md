@@ -37,7 +37,9 @@ How to use it: open the `demo/open3d_view.json` copy it (`Ctrl+C`) and paste it 
 ### Color denoatation
 
 - ![#ff0000](https://placehold.it/15/ff0000/000000?text=+) `A False Positive (Wrong prediction)`
-- ![#00ff00](https://placehold.it/15/00ff00/000000?text=+) `A True positive: if it's a bit red, then it's less accuracte`
+- ![#00ff00](https://placehold.it/15/00ff00/000000?text=+) `A True positive: if it's a bit red, then it's less accuracte because of translation mismatch`
+- ![#0000ff](https://placehold.it/15/0000ff/000000?text=+) `A True positive: if it's a bit blue, then it's less accuracte because of the rotation mismatach`
+
 - ![#f0f0f0](https://placehold.it/15/f0f0f0/000000?text=+) `A False Negative (Missing detection)`
 
 ### Mouse view control

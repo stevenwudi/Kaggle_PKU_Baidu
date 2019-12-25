@@ -296,13 +296,13 @@ test_pipeline = [
         type='MultiScaleFlipAug',
         img_scale=(1664, 576),  # (576, 1600, 3)
         # img_scale=(3384, 1230),
-        flip=False,
+        flip=False,  # test pipelines doest not need this
         transforms=[
             # dict(type='Resize', keep_ratio=True),
             dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
             # dict(type='Resize', img_scale=(3384, 1230), keep_ratio=True),
             # dict(type='RandomFlip', flip_ratio=0.5),
-            dict(type='RandomFlip', flip_ratio=0),
+            dict(type='RandomFlip', flip_ratio=0.),   # We always want to have this flip_ratio=1.0 for test
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
             dict(type='ImageToTensor', keys=['img']),
@@ -333,7 +333,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
@@ -343,7 +343,7 @@ data = dict(
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
 
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
+        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
 
 evaluation = dict(
