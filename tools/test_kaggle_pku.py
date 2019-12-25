@@ -19,9 +19,10 @@ from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
 
-from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_using_RT
+from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_using_RT, filter_output
 from tqdm import tqdm
 from tools.evaluations.map_calculation import map_main
+from multiprocessing import Pool
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -109,7 +110,7 @@ def collect_results(result_part, size, tmpdir=None):
 
 
 def write_submission(outputs, args, dataset,
-                     conf_thresh=0.9,
+                     conf_thresh=0.1,
                      filter_mask=False,
                      horizontal_flip=False):
     img_prefix = dataset.img_prefix
@@ -154,6 +155,50 @@ def write_submission(outputs, args, dataset,
             predictions[ImageId] = coords_str
         else:
             predictions[ImageId] = ""
+
+    pred_dict = {'ImageId': [], 'PredictionString': []}
+    for k, v in predictions.items():
+        pred_dict['ImageId'].append(k)
+        pred_dict['PredictionString'].append(v)
+
+    df = pd.DataFrame(data=pred_dict)
+    print("Writing submission csv file to: %s" % submission)
+    df.to_csv(submission, index=False)
+    return submission
+
+
+def filter_output_pool(t):
+    return filter_output(*t)
+
+
+def write_submission_pool(outputs, args, dataset,
+                     conf_thresh=0.1,
+                     horizontal_flip=False,
+                     max_workers=20):
+    """
+    For accelerating filter image
+    :param outputs:
+    :param args:
+    :param dataset:
+    :param conf_thresh:
+    :param horizontal_flip:
+    :param max_workers:
+    :return:
+    """
+    img_prefix = dataset.img_prefix
+
+    submission = args.out.replace('.pkl', '')
+    submission += '_' + img_prefix.split('/')[-1]
+    submission += '_conf_' + str(conf_thresh)
+    submission += '_filter_mask.csv'
+    if horizontal_flip:
+        submission += '_horizontal_flip'
+    submission += '.csv'
+    predictions = {}
+
+    p = Pool(processes=max_workers)
+    for coords_str, ImageId in p.imap(filter_output_pool, [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
+        predictions[ImageId] = coords_str
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
     for k, v in predictions.items():
@@ -271,8 +316,8 @@ def main():
             return
 
     # write submission here
-    submission = write_submission(outputs, args, dataset,
-                                  conf_thresh=0.1, filter_mask=True, horizontal_flip=args.horizontal_flip)
+    #submission = write_submission(outputs, args, dataset, filter_mask=True, horizontal_flip=args.horizontal_flip)
+    submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.1, horizontal_flip=args.horizontal_flip)
 
     # Visualise the prediction, this will take 5 sec..
     #dataset.visualise_pred(outputs, args)

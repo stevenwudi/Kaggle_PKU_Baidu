@@ -11,7 +11,7 @@ import matplotlib.pylab as pylab
 from math import sin, cos
 import os
 from pycocotools import mask as maskUtils
-
+from mmcv import imwrite
 
 def mesh_point_to_bbox(img):
     rows = np.any(img, axis=1)
@@ -579,7 +579,7 @@ def filter_igore_masked_using_RT(
         six_dof,
         img_prefix,
         dataset,
-        iou_threshold=0.5):
+        iou_threshold=0.9):
     """
     We filter out the ignore mask according to IoU
     :param mask_list:
@@ -613,7 +613,7 @@ def filter_igore_masked_using_RT(
     kaggle_car_labels = [dataset.unique_car_mode[x] for x in car_labels]
     car_names = [dataset.car_id2name[x].name for x in kaggle_car_labels]
 
-    for i, six_dof_idx in enumerate(six_dof):
+    for i in range(len(car_cls_score_pred)):
 
         # We start to render the mask according to R,T
         # now we draw mesh
@@ -658,8 +658,50 @@ def filter_igore_masked_using_RT(
         iou_car = area_interception / area_car
         if iou_car < iou_threshold:
             idx_keep_mask[i] = True
+        # else:
+        #     # iou car, we save it
+        #     img_output_dir = '/data/Kaggle/wudi_data/work_dirs/filter_image_mask_demo'
+        #     im_name = os.path.join(img_output_dir, img_name + '_%d.jpg'%i)
+        #     im_combined = mask_im*0.5 + mask_seg/255*0.5
+        #     imwrite(im_combined*255, im_name)
 
     return idx_keep_mask
+
+
+def coords2str(coords):
+    s = []
+    for c in coords:
+        for l in c:
+            s.append('%.5f' % l)
+    return ' '.join(s)
+
+
+def filter_output(output_idx, outputs, conf_thresh, img_prefix, dataset):
+    output = outputs[output_idx]
+    file_name = os.path.basename(output[2]["file_name"])
+    ImageId = ".".join(file_name.split(".")[:-1])
+    CAR_IDX = 2  # this is the coco car class
+
+    # Wudi change the conf to car prediction
+    if len(output[0][CAR_IDX]):
+        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+        idx_conf = conf > conf_thresh
+
+        # this filtering step will takes 2 second per iterations
+        # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+        idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
+        # the final id should require both
+        idx = idx_conf * idx_keep_mask
+
+        euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+        # This is a new modification because in CYH's new json file;
+        translation = output[2]['trans_pred_world']
+        coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
+        coords_str = coords2str(coords)
+    else:
+        coords_str = ""
+
+    return coords_str, ImageId
 
 
 if __name__ == '__main__':

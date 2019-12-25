@@ -333,7 +333,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
@@ -343,7 +343,7 @@ data = dict(
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
         # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
 
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
+        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
 
 evaluation = dict(
