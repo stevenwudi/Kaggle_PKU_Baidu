@@ -71,7 +71,8 @@ class Model(nn.Module):
         mask_full_size[1480:, :] = mask
         # we set the loss threhold to stop perturbation
         self.mask_full_size = mask_full_size
-        self.loss_thresh = difference_ratio * self.mask_full_size.sum()
+        self.mask_sum = self.mask_full_size.sum()
+        self.loss_thresh = difference_ratio * self.mask_sum
         if False:
             from mmcv import imwrite
             imwrite(mask_full_size*255, '/home/wudi/code/Kaggle_PKU_Baidu/neural_renderer/examples/data/mask_full_size.png')
@@ -135,8 +136,8 @@ def main():
         if valid_pred[i][2]['file_name'].split('/')[-1] == img_show:
             img_idx = i
             break
-    car_idx = 0
-    output_gif = args.filename_output + img_show[:-4] + '_' + str(car_idx) + '.jpg'
+    car_idx = 1
+    output_gif = args.filename_output + img_show[:-4] + '_' + str(car_idx) + '.gif'
 
     model = Model(valid_pred, img_idx, car_idx)
     model.cuda()
