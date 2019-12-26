@@ -247,7 +247,7 @@ def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('--idx', default=100, type=int, help='starting index for viewing')
+    parser.add_argument('--idx', default=155, type=int, help='starting index for viewing')
     args = parser.parse_args()
 
     return args
