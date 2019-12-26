@@ -70,9 +70,11 @@ class Model(nn.Module):
         mask_full_size = np.zeros((2710, 3384))
         mask_full_size[1480:, :] = mask
         # we set the loss threhold to stop perturbation
-        self.mask_sum = mask.sum()
-        self.loss_thresh = difference_ratio * self.mask_sum
-
+        self.mask_full_size = mask_full_size
+        self.loss_thresh = difference_ratio * self.mask_full_size.sum()
+        if False:
+            from mmcv import imwrite
+            imwrite(mask_full_size*255, '/home/wudi/code/Kaggle_PKU_Baidu/neural_renderer/examples/data/mask_full_size.png')
         image_ref = torch.from_numpy(mask_full_size.astype(np.float32))
         self.register_buffer('image_ref', image_ref)
 
@@ -94,6 +96,11 @@ class Model(nn.Module):
 
     def forward(self):
         image = self.renderer(self.vertices, self.faces, mode='silhouettes')
+        if False:
+            from mmcv import imwrite
+            image_first = image.detach().cpu().numpy()[0]
+            image_overlap = self.mask_full_size + image_first
+            imwrite(image_overlap*255/2, '/home/wudi/code/Kaggle_PKU_Baidu/neural_renderer/examples/data/image_overlap.png')
         loss = torch.sum((image - self.image_ref[None, :, :]) ** 2)
         return loss
 
@@ -113,7 +120,7 @@ def main():
     parser.add_argument('-io', '--valid_pred_file', type=str, default=os.path.join(
         '/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1_valid_ep99.pkl'))
     parser.add_argument('-ir', '--filename_ref', type=str, default=os.path.join(data_dir, 'example4_ref.png'))
-    parser.add_argument('-or', '--filename_output', type=str, default=os.path.join(data_dir, 'example4_result_kaggle.gif'))
+    parser.add_argument('-or', '--filename_output', type=str, default=os.path.join(data_dir, 'example4_result_kaggle_'))
     parser.add_argument('-mr', '--make_reference_image', type=int, default=0)
     parser.add_argument('-g', '--gpu', type=int, default=0)
     args = parser.parse_args()
@@ -129,6 +136,7 @@ def main():
             img_idx = i
             break
     car_idx = 0
+    output_gif = args.filename_output + img_show[:-4] + '_' + str(car_idx) + '.jpg'
 
     model = Model(valid_pred, img_idx, car_idx)
     model.cuda()
@@ -136,7 +144,7 @@ def main():
     draw_flag = True
     # optimizer = chainer.optimizers.Adam(alpha=0.1)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    loop = tqdm.tqdm(range(1000))
+    loop = tqdm.tqdm(range(100))
     for i in loop:
         optimizer.zero_grad()
         loss = model()
@@ -164,7 +172,7 @@ def main():
         if loss.item() < model.loss_thresh:
             break
     if draw_flag:
-        make_gif(args.filename_output)
+        make_gif(output_gif)
 
 
 if __name__ == '__main__':

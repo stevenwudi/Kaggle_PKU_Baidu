@@ -5,7 +5,7 @@ Kaggle_PKU_Baidu
 
 ##  Visualisation using Open3D
 
-Using [Open3d]()http://www.open3d.org/) to visualise the predicted 
+Using [Open3d](http://www.open3d.org/) to visualise the predicted 
 validation images.
 
 RGB             |  Open3d vis
@@ -62,3 +62,7 @@ How to use it: open the `demo/open3d_view.json` copy it (`Ctrl+C`) and paste it 
       D            : Take a depth capture.
       O            : Take a capture of current rendering settings.
     """
+
+##  Neural Mesh Renderer
+
+The read me file can be accessed at: [NMR](README_Neural_Mesh_Renderer.md)
