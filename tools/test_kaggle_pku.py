@@ -317,10 +317,12 @@ def main():
 
     # write submission here
     #submission = write_submission(outputs, args, dataset, filter_mask=True, horizontal_flip=args.horizontal_flip)
+    print("Writing submission using the filter by mesh, this will take 2 sec per image")
+    print("You can also kill the program the uncomment the first line with filter_mask=False")
     submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.1, horizontal_flip=args.horizontal_flip)
 
     # Visualise the prediction, this will take 5 sec..
-    #dataset.visualise_pred(outputs, args)
+    dataset.visualise_pred(outputs, args)
 
     # evaluate mAP
     print("Start to eval mAP")
