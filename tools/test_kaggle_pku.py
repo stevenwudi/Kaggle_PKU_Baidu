@@ -146,14 +146,19 @@ def write_submission(outputs, args, dataset,
                 idx = idx_conf * idx_keep_mask
             else:
                 idx = idx_conf
-            if 'euler_angle' in output[2].keys():
-                euler_angle = output[2]['euler_angle']
+            #if 'eular_angle' in output[2].keys():
+            if False:
+                eular_angle = output[2]['eular_angle']
+                #
+                translation = output[2]['trans_pred_world'][:eular_angle.shape[0]]
+                coords = np.hstack((eular_angle[idx], translation[idx], conf[idx, None]))
             else:
-                euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
-            # This is a new modification because in CYH's new json file;
-            # euler_angle[:, 0],  euler_angle[:, 1], euler_angle[:, 2] = -euler_angle[:, 1], -euler_angle[:, 0], -euler_angle[:, 2]
-            translation = output[2]['trans_pred_world']
-            coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
+                eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+                # This is a new modification because in CYH's new json file;
+                # euler_angle[:, 0],  euler_angle[:, 1], euler_angle[:, 2] = -euler_angle[:, 1], -euler_angle[:, 0], -euler_angle[:, 2]
+                translation = output[2]['trans_pred_world']
+                coords = np.hstack((eular_angle[idx], translation[idx], conf[idx, None]))
+
             coords_str = coords2str(coords)
 
             predictions[ImageId] = coords_str
@@ -321,16 +326,15 @@ def main():
 
     outputs = [outputs[206]]
 
-    # outputs = mmcv.load('/data/Kaggle/wudi_data/tmp_output/output_0000.pkl')
-    # outputs = [outputs]
     # args.out = '/data/Kaggle/wudi_data/work_dirs/206.pkl'
     #
     # we use Neural Mesh Renderer to further finetune the result
     outputs = finetune_RT(outputs, dataset, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
 
+    outputs_new = mmcv.load('/data/Kaggle/wudi_data/tmp_output/output_0000_new.pkl')
     args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
     # write submission here
-    submission = write_submission(outputs, args, dataset, filter_mask=False, horizontal_flip=args.horizontal_flip)
+    submission = write_submission(outputs_new, args, dataset, filter_mask=False, horizontal_flip=args.horizontal_flip)
     print("Writing submission using the filter by mesh, this will take 2 sec per image")
     print("You can also kill the program the uncomment the first line with filter_mask=False")
     # submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.1, horizontal_flip=args.horizontal_flip)

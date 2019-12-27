@@ -228,13 +228,19 @@ def finetune_RT(outputs,
                     outputs_update[img_idx][2]['eular_angle'].append(R_update)
                 outputs_update[img_idx][2]['trans_pred_world'][car_idx] = T_update
 
-        outputs_update[img_idx][0] = bboxes[idx_conf]
-        outputs_update[img_idx][1] = segms[idx_conf]
+            # We still need  to update so the car_idx does not break
+            if 'eular_angle' in outputs_update[img_idx][2]:
+                outputs_update[img_idx][2]['eular_angle'].append([0,0,0])
+            else:
+                outputs_update[img_idx][2]['eular_angle'] = []
+                outputs_update[img_idx][2]['eular_angle'].append([0,0,0])
+        # outputs_update[img_idx][0][CAR_IDX] = bboxes[CAR_IDX][idx_conf]
+        # outputs_update[img_idx][1][CAR_IDX] = [segms[CAR_IDX][x] for x in idx_conf if x]
         outputs_update[img_idx][2]['eular_angle'] = np.array(outputs_update[img_idx][2]['eular_angle'])
-
+        # We just al
+        outputs_update[img_idx][2]['trans_pred_world'] = outputs_update[img_idx][2]['trans_pred_world']
         # We will save a picke file here because every image takes time and it could break
         # one image will typically takes 5 (epoch/it) * 50 (epochs) * 20 (num_cars) = 5000 second
-        tmp_save_dir = '/data/Kaggle/wudi_data/tmp_output/'
 
         if not os.path.exists(tmp_save_dir):
             os.mkdir(tmp_save_dir)
