@@ -69,7 +69,7 @@ class Model(nn.Module):
         mask = maskUtils.decode(segms_car)
         mask_full_size = np.zeros((2710, 3384))
         mask_full_size[1480:, :] = mask
-        # we set the loss threhold to stop perturbation
+        # we set the loss threshold to stop perturbation
         self.mask_full_size = mask_full_size
         self.mask_sum = self.mask_full_size.sum()
         self.loss_thresh = difference_ratio * self.mask_sum
