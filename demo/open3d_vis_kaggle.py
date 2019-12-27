@@ -200,20 +200,22 @@ def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_
         # We also save road surface
         xmin, xmax, ymin, ymax, zmin, zmax = np.inf, -np.inf, np.inf, -np.inf, np.inf, -np.inf
         for car_idx in range(trans_pred_world.shape[0]):
-            car_model = car_models[car_names[car_idx]]
-            # Now we check whether this car belongs to a TP:
-            difficulty_idx, matched_id = check_match_single_car(euler_angle[car_idx], trans_pred_world[car_idx],
-                                                                train_dict[img_name])
-            if not keep_gt and matched_id != -1:
-                train_dict[img_name].pop(matched_id)
-            # now we draw mesh
-            mesh_car, xmin, xmax, ymin, ymax, zmin, zmax = get_open3d_mesh(euler_angle[car_idx],
-                                                                           trans_pred_world[car_idx],
-                                                                           car_model,
-                                                                           xmin, xmax, ymin, ymax, zmin, zmax,
-                                                                           difficulty_idx)
+            if bboxes[car_cls_coco][car_idx, -1] > 0.1:
 
-            vis.add_geometry(mesh_car)
+                car_model = car_models[car_names[car_idx]]
+                # Now we check whether this car belongs to a TP:
+                difficulty_idx, matched_id = check_match_single_car(euler_angle[car_idx], trans_pred_world[car_idx],
+                                                                    train_dict[img_name])
+                if not keep_gt and matched_id != -1:
+                    train_dict[img_name].pop(matched_id)
+                # now we draw mesh
+                mesh_car, xmin, xmax, ymin, ymax, zmin, zmax = get_open3d_mesh(euler_angle[car_idx],
+                                                                               trans_pred_world[car_idx],
+                                                                               car_model,
+                                                                               xmin, xmax, ymin, ymax, zmin, zmax,
+                                                                               difficulty_idx)
+
+                vis.add_geometry(mesh_car)
 
         for missing_car_idx in train_dict[img_name]:
             euler_angle = np.array([missing_car_idx['pitch'], missing_car_idx['yaw'], missing_car_idx['roll']])
@@ -247,7 +249,7 @@ def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('--idx', default=155, type=int, help='starting index for viewing')
+    parser.add_argument('--idx', default=250, type=int, help='starting index for viewing')
     args = parser.parse_args()
 
     return args
