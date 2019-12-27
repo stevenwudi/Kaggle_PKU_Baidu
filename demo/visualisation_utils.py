@@ -255,7 +255,9 @@ def imdraw_det_bboxes(img,
         scores = bboxes[:, -1]
         inds = scores > score_thr
         bboxes = bboxes[inds, :]
-
+        trans_pred_world = trans_pred_world[inds, :]
+        euler_angle = euler_angle[inds, :]
+    assert len(bboxes) == len(trans_pred_world) == len(euler_angle)
     bbox_color = color_val(bbox_color)
     text_color = color_val(text_color)
 

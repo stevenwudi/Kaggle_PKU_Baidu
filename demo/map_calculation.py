@@ -143,10 +143,13 @@ def check_match_single_car(R, T, train_dict):
                 min_idx = idx
 
         # set the result
-        if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
-            # if min_tr_dist < thre_tr_dist:
-            matched_id = min_idx
-            difficulty_idx = thres_idx
+        if min_tr_dist < thre_tr_dist:
+            if min_ro_dist < thre_ro_dist:
+                # if min_tr_dist < thre_tr_dist:
+                matched_id = min_idx
+                difficulty_idx = thres_idx
+            else:
+                difficulty_idx = thres_idx+10  # Rot makes it more difficult
         else:
             break
 

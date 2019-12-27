@@ -11,7 +11,7 @@ import matplotlib.pylab as pylab
 from math import sin, cos
 import os
 from pycocotools import mask as maskUtils
-
+from mmcv import imwrite
 
 def mesh_point_to_bbox(img):
     rows = np.any(img, axis=1)
@@ -41,7 +41,7 @@ def euler_angles_to_quaternions(angle):
 
     # yaw, pitch, roll => pitch, yaw, roll
     pitch, yaw, roll = angle[:, 0], angle[:, 1], angle[:, 2]
-    
+
     q = np.zeros((n, 4))
 
     cy = np.cos(yaw * 0.5)
@@ -154,7 +154,6 @@ def quaternion_to_euler_angle(q):
 
 
 def quaternion_to_euler_angle_apollo(q):
-
     """Convert quaternion to euler angel.
     Input:
         q: 1 * 4 vector,
@@ -176,6 +175,7 @@ def quaternion_to_euler_angle_apollo(q):
     yaw = math.atan2(t3, t4)
 
     return roll, pitch, yaw
+
 
 def intrinsic_vec_to_mat(intrinsic, shape=None):
     """Convert a 4 dim intrinsic vector to a 3x3 intrinsic
@@ -572,6 +572,136 @@ def filter_igore_masked_images(
             idx_keep_mask[i] = True
 
     return idx_keep_mask
+
+
+def filter_igore_masked_using_RT(
+        img_name,
+        six_dof,
+        img_prefix,
+        dataset,
+        iou_threshold=0.9):
+    """
+    We filter out the ignore mask according to IoU
+    :param mask_list:
+    :param img_prefix:
+    :return:
+    """
+
+    # a hard coded path for extractin ignore test mask region
+    if 'valid' in img_prefix:
+        mask_dir = img_prefix.replace('validation_images', 'train_masks')
+    else:
+        mask_dir = img_prefix.replace('test_images', 'test_masks')
+
+    mask_file = os.path.join(mask_dir, img_name + '.jpg')
+    if os.path.isfile(mask_file):
+        mask_im = cv2.imread(mask_file)
+        mask_im = np.mean(mask_im, axis=2)
+        mask_im[mask_im > 0] = 1
+    else:
+        # there is no ignore mask
+        return [True] * six_dof['quaternion_pred'].shape[0]
+
+    idx_keep_mask = [False] * six_dof['quaternion_pred'].shape[0]
+
+    # output is a tuple of three elements
+    car_cls_score_pred = six_dof['car_cls_score_pred']
+    quaternion_pred = six_dof['quaternion_pred']
+    trans_pred_world = six_dof['trans_pred_world']
+    euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+    car_labels = np.argmax(car_cls_score_pred, axis=1)
+    kaggle_car_labels = [dataset.unique_car_mode[x] for x in car_labels]
+    car_names = [dataset.car_id2name[x].name for x in kaggle_car_labels]
+
+    for i in range(len(car_cls_score_pred)):
+
+        # We start to render the mask according to R,T
+        # now we draw mesh
+        # car_id2name is from:
+        # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
+        car_name = car_names[i]
+        vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
+        vertices[:, 1] = -vertices[:, 1]
+        triangles = np.array(dataset.car_model_dict[car_name]['faces']) - 1
+
+        # project 3D points to 2d image plane
+        yaw, pitch, roll = euler_angle[i]
+        # I think the pitch and yaw should be exchanged
+        yaw, pitch, roll = -pitch, -yaw, -roll
+        Rt = np.eye(4)
+        t = np.array(trans_pred_world[i])
+        Rt[:3, 3] = t
+        Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+        Rt = Rt[:3, :]
+        P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+        P[:, :-1] = vertices
+        P = P.T
+
+        img_cor_points = np.dot(dataset.camera_matrix, np.dot(Rt, P))
+        img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        # project 3D points to 2d image plane
+        mask_seg = np.zeros(dataset.image_shape, dtype=np.uint8)
+        for t in triangles:
+            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                             dtype=np.int32)
+            # This will draw the mask for segmenation
+            cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+            # cv2.polylines(mask_seg_mesh, np.int32([coord]), 1, (0, 255, 0))
+
+        # now we calculate the IoU:
+        area_car = mask_seg.sum()
+        interception = mask_seg * mask_im
+        area_interception = interception.sum()
+        iou_car = area_interception / area_car
+        if iou_car < iou_threshold:
+            idx_keep_mask[i] = True
+        # else:
+        #     # iou car, we save it
+        #     img_output_dir = '/data/Kaggle/wudi_data/work_dirs/filter_image_mask_demo'
+        #     im_name = os.path.join(img_output_dir, img_name + '_%d.jpg'%i)
+        #     im_combined = mask_im*0.5 + mask_seg/255*0.5
+        #     imwrite(im_combined*255, im_name)
+
+    return idx_keep_mask
+
+
+def coords2str(coords):
+    s = []
+    for c in coords:
+        for l in c:
+            s.append('%.5f' % l)
+    return ' '.join(s)
+
+
+def filter_output(output_idx, outputs, conf_thresh, img_prefix, dataset):
+    output = outputs[output_idx]
+    file_name = os.path.basename(output[2]["file_name"])
+    ImageId = ".".join(file_name.split(".")[:-1])
+    CAR_IDX = 2  # this is the coco car class
+
+    # Wudi change the conf to car prediction
+    if len(output[0][CAR_IDX]):
+        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+        idx_conf = conf > conf_thresh
+
+        # this filtering step will takes 2 second per iterations
+        # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+        idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
+        # the final id should require both
+        idx = idx_conf * idx_keep_mask
+
+        euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+        # This is a new modification because in CYH's new json file;
+        translation = output[2]['trans_pred_world']
+        coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
+        coords_str = coords2str(coords)
+    else:
+        coords_str = ""
+
+    return coords_str, ImageId
 
 
 if __name__ == '__main__':

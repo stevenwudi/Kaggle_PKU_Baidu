@@ -9,7 +9,7 @@ from numpy import random
 
 from mmdet.core.evaluation.bbox_overlaps import bbox_overlaps
 from ..registry import PIPELINES
-from ..kaggle_pku_utils import  euler_angles_to_quaternions, quaternion_upper_hemispher
+from ..kaggle_pku_utils import euler_angles_to_quaternions, quaternion_upper_hemispher
 
 
 @PIPELINES.register_module
@@ -199,15 +199,9 @@ class RandomFlip(object):
         return flipped
 
     def __call__(self, results):
-        if 'flip' in results:
-            ## test mode activated
-            print('test mode')
-            flip = True if np.random.rand() < self.flip_ratio else False
-            results['flip'] = flip
-
-        if 'flip' not in results:
-            flip = True if np.random.rand() < self.flip_ratio else False
-            results['flip'] = flip
+        # Flip need to be the the results keys.
+        flip = True if np.random.rand() < self.flip_ratio else False
+        results['flip'] = flip
         if results['flip']:
             # flip image
             results['img'] = mmcv.imflip(results['img'])
@@ -219,26 +213,25 @@ class RandomFlip(object):
             for key in results.get('mask_fields', []):
                 results[key] = [mask[:, ::-1] for mask in results[key]]
 
-
             # flip eular angles and quaterion_semispheres
-            for idx in range(len(results['ann_info'].get('eular_angles', []))):
+            for idx in range(len(results.get('ann_info', {}).get('eular_angles', []))):
                 ### the eular angles sequence should correspond to yaw, pitch, roll, otherwise it may mixup below
-                yaw_inverse = results['ann_info']['eular_angles'][idx][0] ## yaw inverse(no inverse)
-                pitch_inverse = -results['ann_info']['eular_angles'][idx][1] ## pitch inverse
-                roll_inverse = -results['ann_info']['eular_angles'][idx][2] ## roll inverse
+                yaw_inverse = results['ann_info']['eular_angles'][idx][0]  ## yaw inverse(no inverse)
+                pitch_inverse = -results['ann_info']['eular_angles'][idx][1]  ## pitch inverse
+                roll_inverse = -results['ann_info']['eular_angles'][idx][2]  ## roll inverse
 
-                eular_angle_flip = np.array([yaw_inverse,pitch_inverse,roll_inverse])
-             
+                eular_angle_flip = np.array([yaw_inverse, pitch_inverse, roll_inverse])
+
                 quaternion = euler_angles_to_quaternions(eular_angle_flip)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
                 quaternion_semisphere = np.array(quaternion_semisphere, dtype=np.float32)
                 results['quaternion_semispheres'][idx] = quaternion_semisphere
 
             # flip transation
-            for idx in range(len(results['ann_info'].get('translations', []))):
+            for idx in range(len(results.get('ann_info', {}).get('translations', []))):
                 x_camera = results['ann_info']['translations'][idx][0]
                 Z = results['ann_info']['translations'][idx][2]
-                x_camera_flip = 2 * self.delta_x * Z / self.fx - x_camera ## due to the offset between cx and width//2
+                x_camera_flip = 2 * self.delta_x * Z / self.fx - x_camera  ## due to the offset between cx and width//2
                 results['translations'][idx][0] = x_camera_flip  ## x inverse
 
         return results
@@ -403,7 +396,7 @@ class RandomCrop(object):
         if 'gt_bboxes' in results:
             gt_bboxes = results['gt_bboxes']
             valid_inds = (gt_bboxes[:, 2] > gt_bboxes[:, 0]) & (
-                gt_bboxes[:, 3] > gt_bboxes[:, 1])
+                    gt_bboxes[:, 3] > gt_bboxes[:, 1])
             # if no gt bbox remains after cropping, just skip this image
             if not np.any(valid_inds):
                 return None
@@ -416,7 +409,7 @@ class RandomCrop(object):
                 valid_gt_masks = []
                 for i in np.where(valid_inds)[0]:
                     gt_mask = results['gt_masks'][i][crop_y1:crop_y2, crop_x1:
-                                                     crop_x2]
+                                                                      crop_x2]
                     valid_gt_masks.append(gt_mask)
                 results['gt_masks'] = valid_gt_masks
 
@@ -555,8 +548,8 @@ class PhotoMetricDistortion(object):
         repr_str = self.__class__.__name__
         repr_str += ('(brightness_delta={}, contrast_range={}, '
                      'saturation_range={}, hue_delta={})').format(
-                         self.brightness_delta, self.contrast_range,
-                         self.saturation_range, self.hue_delta)
+            self.brightness_delta, self.contrast_range,
+            self.saturation_range, self.hue_delta)
         return repr_str
 
 
@@ -628,8 +621,8 @@ class Expand(object):
         repr_str = self.__class__.__name__
         repr_str += '(mean={}, to_rgb={}, ratio_range={}, ' \
                     'seg_ignore_label={})'.format(
-                        self.mean, self.to_rgb, self.ratio_range,
-                        self.seg_ignore_label)
+            self.mean, self.to_rgb, self.ratio_range,
+            self.seg_ignore_label)
         return repr_str
 
 
@@ -710,7 +703,7 @@ class MinIoURandomCrop(object):
                 # not tested
                 if 'gt_semantic_seg' in results:
                     results['gt_semantic_seg'] = results['gt_semantic_seg'][
-                        patch[1]:patch[3], patch[0]:patch[2]]
+                                                 patch[1]:patch[3], patch[0]:patch[2]]
                 return results
 
     def __repr__(self):

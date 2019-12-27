@@ -59,7 +59,7 @@ class KagglePKUDataset(CustomDataset):
 
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
-
+        self.car_id2name = car_id2name
         annotations = []
         if not self.test_mode:
             outfile = ann_file
@@ -413,8 +413,8 @@ class KagglePKUDataset(CustomDataset):
     def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
 
         # for ann in tqdm(annotations):
-        for ann in tqdm(annotations[5000: 5010]):
-            # for ann in tqdm(annotations[0: 50]):
+        #for ann in tqdm(annotations[5000: 5010]):
+        for ann in tqdm(annotations):
 
             img_name = ann['filename']
             image = imread(img_name)
