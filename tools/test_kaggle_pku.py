@@ -24,6 +24,8 @@ from tqdm import tqdm
 from tools.evaluations.map_calculation import map_main
 from multiprocessing import Pool
 
+from finetune_RT_NMR import finetune_RT
+
 
 def single_gpu_test(model, data_loader, show=False):
     model.eval()
@@ -144,8 +146,10 @@ def write_submission(outputs, args, dataset,
                 idx = idx_conf * idx_keep_mask
             else:
                 idx = idx_conf
-
-            euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+            if 'euler_angle' in output[2].keys():
+                euler_angle = output[2]['euler_angle']
+            else:
+                euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
             # This is a new modification because in CYH's new json file;
             # euler_angle[:, 0],  euler_angle[:, 1], euler_angle[:, 2] = -euler_angle[:, 1], -euler_angle[:, 0], -euler_angle[:, 2]
             translation = output[2]['trans_pred_world']
@@ -278,27 +282,27 @@ def main():
     # build the dataloader
     # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
-    data_loader = build_dataloader(
-        dataset,
-        imgs_per_gpu=1,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=distributed,
-        shuffle=False)
-
-    # build the model and load checkpoint
-    model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
-    fp16_cfg = cfg.get('fp16', None)
-    if fp16_cfg is not None:
-        wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    # old versions did not save class info in checkpoints, this walkaround is
-    # for backward compatibility
-    if 'CLASSES' in checkpoint['meta']:
-        model.CLASSES = checkpoint['meta']['CLASSES']
-    else:
-        model.CLASSES = dataset.CLASSES
-
     if not os.path.exists(args.out):
+        data_loader = build_dataloader(
+            dataset,
+            imgs_per_gpu=1,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False)
+
+        # build the model and load checkpoint
+        model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
+        fp16_cfg = cfg.get('fp16', None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
+        checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+        # old versions did not save class info in checkpoints, this walkaround is
+        # for backward compatibility
+        if 'CLASSES' in checkpoint['meta']:
+            model.CLASSES = checkpoint['meta']['CLASSES']
+        else:
+            model.CLASSES = dataset.CLASSES
+
         if not distributed:
             model = MMDataParallel(model, device_ids=[0])
             outputs = single_gpu_test(model, data_loader, args.show)
@@ -315,14 +319,24 @@ def main():
         if rank != 0:
             return
 
+    outputs = [outputs[206]]
+
+    # outputs = mmcv.load('/data/Kaggle/wudi_data/tmp_output/output_0000.pkl')
+    # outputs = [outputs]
+    # args.out = '/data/Kaggle/wudi_data/work_dirs/206.pkl'
+    #
+    # we use Neural Mesh Renderer to further finetune the result
+    outputs = finetune_RT(outputs, dataset, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
+
+    args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
     # write submission here
-    #submission = write_submission(outputs, args, dataset, filter_mask=True, horizontal_flip=args.horizontal_flip)
+    submission = write_submission(outputs, args, dataset, filter_mask=False, horizontal_flip=args.horizontal_flip)
     print("Writing submission using the filter by mesh, this will take 2 sec per image")
     print("You can also kill the program the uncomment the first line with filter_mask=False")
-    submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.1, horizontal_flip=args.horizontal_flip)
+    # submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.1, horizontal_flip=args.horizontal_flip)
 
     # Visualise the prediction, this will take 5 sec..
-    dataset.visualise_pred(outputs, args)
+    #dataset.visualise_pred(outputs, args)
 
     # evaluate mAP
     print("Start to eval mAP")
