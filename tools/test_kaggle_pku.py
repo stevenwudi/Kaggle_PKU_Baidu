@@ -319,6 +319,7 @@ def main():
             return
     idx = 4
     bs = 80
+    print("output star idx: %d" % (int(idx*bs)))
     outputs = outputs[idx*bs: (idx+1)*bs]
 
     # we use Neural Mesh Renderer to further finetune the result

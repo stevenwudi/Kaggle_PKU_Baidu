@@ -135,8 +135,8 @@ def get_updated_RT(vertices,
     model.cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    #loop = tqdm.tqdm(range(num_epochs))
-    #for i in loop:
+    # loop = tqdm.tqdm(range(num_epochs))
+    # for i in loop:
     for i in range(num_epochs):
         optimizer.zero_grad()
         loss = model()
@@ -153,7 +153,8 @@ def get_updated_RT(vertices,
             original_translation = model.translation_original
             changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=True)
             print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f'
-                  % (np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
+                  % (
+                  np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
             if not fix_rot:
                 updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
                 updated_euler_angle = rotation_matrix_to_euler_angles(updated_rot_matrix, check=False)
@@ -162,7 +163,8 @@ def get_updated_RT(vertices,
                 changed_rot = RotationDistance(original_euler_angle, updated_euler_angle)
 
                 print('Origin eular angle: %s - > updated eular angle: %s. Changed distance: %4.f'
-                      % (np.array2string(np.array(original_euler_angle)), np.array2string(updated_euler_angle), changed_rot))
+                      % (np.array2string(np.array(original_euler_angle)), np.array2string(updated_euler_angle),
+                         changed_rot))
 
         if loss.item() < -model.loss_thresh:
             break
@@ -181,7 +183,7 @@ def finetune_RT(outputs,
                 iou_threshold=0.8,
                 num_epochs=50,
                 draw_flag=True,
-                lr=0.1,# lr=0.05,
+                lr=0.1,  # lr=0.05,
                 conf_thresh=0.1,
                 tmp_save_dir='/data/Kaggle/wudi_data/tmp_output/',
                 fix_rot=False):
@@ -231,23 +233,24 @@ def finetune_RT(outputs,
                 T = trans_pred_world[car_idx]
 
                 if draw_flag:
-                    output_gif = tmp_save_dir + '/'+output[2]['file_name'].split('/')[-1][:-4] + '_' + str(car_idx) + '.gif'
+                    output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(
+                        car_idx) + '.gif'
                 else:
                     output_gif = None
                 T_update, updated_rot_matrix = get_updated_RT(vertices,
-                                                    faces,
-                                                    Rotation_Matrix,
-                                                    T,
-                                                    [yaw, pitch, roll],
-                                                    mask_full_size,
-                                                    dataset.camera_matrix,
-                                                    image_size=(3384, 2710),
-                                                    iou_threshold=iou_threshold,
-                                                    num_epochs=num_epochs,
-                                                    draw_flag=draw_flag,
-                                                    output_gif=output_gif,
-                                                    lr=lr,
-                                                    fix_rot=fix_rot)
+                                                              faces,
+                                                              Rotation_Matrix,
+                                                              T,
+                                                              [yaw, pitch, roll],
+                                                              mask_full_size,
+                                                              dataset.camera_matrix,
+                                                              image_size=(3384, 2710),
+                                                              iou_threshold=iou_threshold,
+                                                              num_epochs=num_epochs,
+                                                              draw_flag=draw_flag,
+                                                              output_gif=output_gif,
+                                                              lr=lr,
+                                                              fix_rot=fix_rot)
                 if fix_rot:
                     R_update = ea  # we don't change the euler angle here
                 else:
@@ -271,6 +274,6 @@ def finetune_RT(outputs,
 
         if not os.path.exists(tmp_save_dir):
             os.mkdir(tmp_save_dir)
-        output_name = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] +'pkl'
+        output_name = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.pkl'
         mmcv.dump(outputs_update[img_idx], output_name)
     return outputs_update
