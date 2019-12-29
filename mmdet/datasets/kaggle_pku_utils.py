@@ -120,7 +120,7 @@ def quaternion_upper_hemispher(q):
                 q = -q
             if c == 0:
                 print(q)
-                q[3] = 0
+                q[3] = 1
 
     return q
 

@@ -9,12 +9,23 @@ import numpy as np
 from skimage.io import imsave
 import tqdm
 import pycocotools.mask as maskUtils
-
+from scipy.spatial.transform import Rotation as R
 import neural_renderer as nr
 
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, euler_to_Rot, rotation_matrix_to_euler_angles
 
 from mmdet.datasets.car_models import car_id2name
+from mmdet.utils import RotationDistance, TranslationDistance
+import imageio
+import glob
+
+
+def make_gif(filename):
+    with imageio.get_writer(filename, mode='I') as writer:
+        for filename in sorted(glob.glob('/tmp/_tmp_*.png')):
+            writer.append_data(imageio.imread(filename))
+            os.remove(filename)
+    writer.close()
 
 
 class Model(nn.Module):
@@ -23,7 +34,7 @@ class Model(nn.Module):
                  faces,
                  Rotation_Matrix,
                  T,
-                 eular_angle,
+                 euler_angle,
                  mask_full_size,
                  camera_matrix,
                  image_size,
@@ -37,7 +48,8 @@ class Model(nn.Module):
         self.register_buffer('vertices', vertices[None, :, :])
         self.register_buffer('faces', faces[None, :, :])
         self.translation_original = T
-        self.euler_original = eular_angle
+        self.euler_original = euler_angle
+        self.fix_rot = fix_rot
         # create textures
         texture_size = 1
         textures = torch.ones(1, self.faces.shape[1], texture_size, texture_size, texture_size, 3, dtype=torch.float32)
@@ -96,31 +108,36 @@ def get_updated_RT(vertices,
                    faces,
                    Rotation_Matrix,
                    T,
-                   eular_angle,
+                   euler_angle,
                    mask_full_size,
                    camera_matrix,
                    image_size,
                    iou_threshold,
-                   num_epochs=100,
+                   num_epochs=50,
                    draw_flag=False,
-                   lr=0.05):
+                   output_gif=None,
+                   lr=0.05,
+                   fix_rot=False):
     model = Model(vertices,
                   faces,
                   Rotation_Matrix,
                   T,
-                  eular_angle,
+                  euler_angle,
                   mask_full_size,
                   camera_matrix,
                   image_size=image_size,
-                  iou_threshold=iou_threshold)
-    if False:
+                  iou_threshold=iou_threshold,
+                  fix_rot=fix_rot)
+    if draw_flag:
         for name, param in model.named_parameters():
             if param.requires_grad:
                 print(name, param.data)
     model.cuda()
+
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    loop = tqdm.tqdm(range(num_epochs))
-    for i in loop:
+    #loop = tqdm.tqdm(range(num_epochs))
+    #for i in loop:
+    for i in range(num_epochs):
         optimizer.zero_grad()
         loss = model()
         loss.backward()
@@ -128,42 +145,46 @@ def get_updated_RT(vertices,
         if draw_flag:  # We don't save the images
             images = model.renderer(model.vertices, model.faces, torch.tanh(model.textures))
             image = images.detach().cpu().numpy()[0].transpose(1, 2, 0)
+            image[:, :, 1] += model.image_ref.detach().cpu().numpy()
             imsave('/tmp/_tmp_%04d.png' % i, image)
-        loop.set_description('Optimizing (loss %.4f)' % (loss.data))
-        ### we print some updates
-        if True:
+            ### we print some updates
+            print('Optimizing (loss %.4f)' % (loss.data))
             updated_translation = model.renderer.t.detach().cpu().numpy()[0]
             original_translation = model.translation_original
+            changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=True)
+            print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f'
+                  % (np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
+            if not fix_rot:
+                updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+                updated_euler_angle = rotation_matrix_to_euler_angles(updated_rot_matrix, check=False)
+                original_euler_angle = rotation_matrix_to_euler_angles(Rotation_Matrix, check=False)
 
-            updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
-            updated_euler_angle = rotation_matrix_to_euler_angles(updated_rot_matrix, check=False)
-            original_euler_angle = model.euler_original
-            print('Origin translation - > updated tranlsation')
-            print(original_translation)
-            print(updated_translation)
-            print('Origin eular angle - > updated eular angle')
-            print(original_euler_angle)
-            print(updated_euler_angle)
+                changed_rot = RotationDistance(original_euler_angle, updated_euler_angle)
+
+                print('Origin eular angle: %s - > updated eular angle: %s. Changed distance: %4.f'
+                      % (np.array2string(np.array(original_euler_angle)), np.array2string(updated_euler_angle), changed_rot))
+
         if loss.item() < -model.loss_thresh:
             break
 
     updated_translation = model.renderer.t.detach().cpu().numpy()[0]
     updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
-
-    ea = rotation_matrix_to_euler_angles(updated_rot_matrix, check=False)
-    ea[0], ea[1], ea[2] = -ea[1], -ea[0], -ea[2]
-    return updated_translation, ea
+    if draw_flag:
+        make_gif(output_gif)
+    # ea = rotation_matrix_to_euler_angles(updated_rot_matrix, check=False)
+    # ea[0], ea[1], ea[2] = -ea[1], -ea[0], -ea[2]
+    return updated_translation, updated_rot_matrix
 
 
 def finetune_RT(outputs,
                 dataset,
-                iou_threshold=0.9,
+                iou_threshold=0.8,
                 num_epochs=50,
-                draw_flag=False,
-                # lr=0.05,
-                lr=0.1,
+                draw_flag=True,
+                lr=0.1,# lr=0.05,
                 conf_thresh=0.1,
-                tmp_save_dir='/data/Kaggle/wudi_data/tmp_output'):
+                tmp_save_dir='/data/Kaggle/wudi_data/tmp_output/',
+                fix_rot=False):
     """
 
     :param outputs:
@@ -173,7 +194,7 @@ def finetune_RT(outputs,
     """
     CAR_IDX = 2
     outputs_update = outputs.copy()
-    for img_idx in range(len(outputs)):
+    for img_idx in tqdm.tqdm(range(len(outputs))):
         output = outputs[img_idx]
         bboxes, segms, six_dof = output[0], output[1], output[2]
         car_cls_score_pred = six_dof['car_cls_score_pred']
@@ -182,7 +203,7 @@ def finetune_RT(outputs,
         car_labels = np.argmax(car_cls_score_pred, axis=1)
         kaggle_car_labels = [dataset.unique_car_mode[x] for x in car_labels]
         car_names = [car_id2name[x].name for x in kaggle_car_labels]
-        euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+        euler_angles = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
 
         conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
         idx_conf = conf > conf_thresh
@@ -203,13 +224,17 @@ def finetune_RT(outputs,
                 vertices[:, 1] = -vertices[:, 1]
                 faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
                 # Get prediction of Rotation Matrix and  Translation
-                ea = euler_angle[car_idx]
+                ea = euler_angles[car_idx]
                 yaw, pitch, roll = ea[0], ea[1], ea[2]
                 yaw, pitch, roll = -pitch, -yaw, -roll
                 Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
                 T = trans_pred_world[car_idx]
 
-                T_update, R_update = get_updated_RT(vertices,
+                if draw_flag:
+                    output_gif = tmp_save_dir + '/'+output[2]['file_name'].split('/')[-1][:-4] + '_' + str(car_idx) + '.gif'
+                else:
+                    output_gif = None
+                T_update, updated_rot_matrix = get_updated_RT(vertices,
                                                     faces,
                                                     Rotation_Matrix,
                                                     T,
@@ -220,30 +245,32 @@ def finetune_RT(outputs,
                                                     iou_threshold=iou_threshold,
                                                     num_epochs=num_epochs,
                                                     draw_flag=draw_flag,
-                                                    lr=lr)
-                if 'eular_angle' in outputs_update[img_idx][2]:
-                    outputs_update[img_idx][2]['eular_angle'].append(R_update)
+                                                    output_gif=output_gif,
+                                                    lr=lr,
+                                                    fix_rot=fix_rot)
+                if fix_rot:
+                    R_update = ea  # we don't change the euler angle here
                 else:
-                    outputs_update[img_idx][2]['eular_angle'] = []
-                    outputs_update[img_idx][2]['eular_angle'].append(R_update)
+                    R_update = rotation_matrix_to_euler_angles(updated_rot_matrix)
+                if 'euler_angle' in outputs_update[img_idx][2]:
+                    outputs_update[img_idx][2]['euler_angle'].append(R_update)
+                else:
+                    outputs_update[img_idx][2]['euler_angle'] = []
+                    outputs_update[img_idx][2]['euler_angle'].append(R_update)
                 outputs_update[img_idx][2]['trans_pred_world'][car_idx] = T_update
 
             # We still need  to update so the car_idx does not break
-            if 'eular_angle' in outputs_update[img_idx][2]:
-                outputs_update[img_idx][2]['eular_angle'].append([0,0,0])
+            if 'euler_angle' in outputs_update[img_idx][2]:
+                outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
             else:
-                outputs_update[img_idx][2]['eular_angle'] = []
-                outputs_update[img_idx][2]['eular_angle'].append([0,0,0])
-        # outputs_update[img_idx][0][CAR_IDX] = bboxes[CAR_IDX][idx_conf]
-        # outputs_update[img_idx][1][CAR_IDX] = [segms[CAR_IDX][x] for x in idx_conf if x]
-        outputs_update[img_idx][2]['eular_angle'] = np.array(outputs_update[img_idx][2]['eular_angle'])
-        # We just al
+                outputs_update[img_idx][2]['euler_angle'] = []
+                outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
+
+        outputs_update[img_idx][2]['euler_angle'] = np.array(outputs_update[img_idx][2]['euler_angle'])
         outputs_update[img_idx][2]['trans_pred_world'] = outputs_update[img_idx][2]['trans_pred_world']
-        # We will save a picke file here because every image takes time and it could break
-        # one image will typically takes 5 (epoch/it) * 50 (epochs) * 20 (num_cars) = 5000 second
 
         if not os.path.exists(tmp_save_dir):
             os.mkdir(tmp_save_dir)
-        output_name = tmp_save_dir + 'output_%04d.pkl' % img_idx
+        output_name = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] +'pkl'
         mmcv.dump(outputs_update[img_idx], output_name)
     return outputs_update
