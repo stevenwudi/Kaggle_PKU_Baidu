@@ -18,6 +18,7 @@ def map_main(validation_prediction, flip_model):
     global valid_df
     valid_df = pd.read_csv(validation_prediction)
     valid_df = valid_df.fillna('')
+    print("total image: %d" % len(valid_df))
     train_df = pd.read_csv('/data/Kaggle/pku-autonomous-driving/train.csv')
     train_df = train_df[train_df.ImageId.isin(valid_df.ImageId.unique())]
 

@@ -120,3 +120,6 @@ work_dirs/
 *.pth
 
 !/neural_renderer/examples/data/mask_full_size.png
+
+
+*.gif

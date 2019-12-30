@@ -102,7 +102,11 @@ class Model(nn.Module):
             image_first = image.detach().cpu().numpy()[0]
             image_overlap = self.mask_full_size + image_first
             imwrite(image_overlap*255/2, '/home/wudi/code/Kaggle_PKU_Baidu/neural_renderer/examples/data/image_overlap.png')
-        loss = torch.sum((image - self.image_ref[None, :, :]) ** 2)
+        #loss = torch.sum((image - self.image_ref[None, :, :]) ** 2)
+
+        interception = torch.sum(torch.abs(image * self.image_ref[None, :, :]))
+        union = torch.sum(image) + torch.sum(self.image_ref) - interception
+        loss = - interception /union
         return loss
 
 
@@ -129,22 +133,22 @@ def main():
     if args.make_reference_image:
         make_reference_image(args.filename_ref, args.filename_obj)
 
-    valid_pred = pkl.load(open(args.valid_pred_file, "rb"))
+    outputs = pkl.load(open(args.valid_pred_file, "rb"))
     # suppose we only evaluate the first car in the first image
     img_show = 'ID_0aa8f8389.jpg'
-    for i in range(len(valid_pred)):
-        if valid_pred[i][2]['file_name'].split('/')[-1] == img_show:
+    for i in range(len(outputs)):
+        if outputs[i][2]['file_name'].split('/')[-1] == img_show:
             img_idx = i
             break
-    car_idx = 1
+    car_idx = 5
     output_gif = args.filename_output + img_show[:-4] + '_' + str(car_idx) + '.gif'
 
-    model = Model(valid_pred, img_idx, car_idx)
+    model = Model(outputs, img_idx, car_idx)
     model.cuda()
 
     draw_flag = True
     # optimizer = chainer.optimizers.Adam(alpha=0.1)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
     loop = tqdm.tqdm(range(100))
     for i in loop:
         optimizer.zero_grad()
@@ -155,7 +159,9 @@ def main():
             images = model.renderer(model.vertices, model.faces, torch.tanh(model.textures))
             image = images.detach().cpu().numpy()[0].transpose(1, 2, 0)
             imsave('/tmp/_tmp_%04d.png' % i, image)
-        loop.set_description('Optimizing (loss %.4f), %.3f NOT overlapping.' % (loss.data, loss.data/model.mask_sum))
+        #loop.set_description('Optimizing (loss %.4f), %.3f NOT overlapping.' % (loss.data, loss.data/model.mask_sum))
+        loop.set_description('Optimizing (loss %.4f)' % (loss.data))
+
         ### we print some updates
         if False:
             updated_translation = model.renderer.t.detach().cpu().numpy()
@@ -170,7 +176,8 @@ def main():
             print('Origin eular angle - > updated eular angle')
             print(original_euler_angle)
             print(updated_euler_angle)
-        if loss.item() < model.loss_thresh:
+        #if loss.item() < model.loss_thresh:
+        if loss.item() < -0.9:   # If IoU> 0.9
             break
     if draw_flag:
         make_gif(output_gif)
