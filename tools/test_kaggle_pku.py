@@ -319,7 +319,7 @@ def main():
         if rank != 0:
             return
 
-    if False:
+    if False:   # If set to True, we will collect unfinished .pkl files
         pkl_files = [x.replace('.pkl', '') for x in os.listdir('/data/Kaggle/wudi_data/tmp_output')]
         all_files = [x[2]['file_name'].split('/')[-1].replace('.jpg', '') for x in outputs]
         not_finished = [item for item in all_files if item not in pkl_files]
@@ -340,8 +340,7 @@ def main():
                                   iou_threshold=0.8, fix_rot=True, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
         print(" Finish NMR post-processing")
         return True
-    if False:
-        # This will collect all the NMR output
+    if False: # This will collect all the NMR output
         outputs = []
         output_dir = '/data/Kaggle/wudi_data/tmp_output'
         for f in os.listdir(output_dir):
@@ -350,14 +349,16 @@ def main():
         args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
 
     if True:
-        submission = write_submission(outputs, args, dataset,
-                                      conf_thresh=0,
-                                      filter_mask=False,
-                                      horizontal_flip=args.horizontal_flip)
+        # submission = write_submission(outputs, args, dataset,
+        #                               conf_thresh=0,
+        #                               filter_mask=False,
+        #                               horizontal_flip=args.horizontal_flip)
 
         print("Writing submission using the filter by mesh, this will take 2 sec per image")
         print("You can also kill the program the uncomment the first line with filter_mask=False")
-        submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.0, horizontal_flip=args.horizontal_flip)
+        submission = write_submission_pool(outputs, args, dataset,
+                                           conf_thresh=0.0,
+                                           horizontal_flip=args.horizontal_flip)
 
         # Visualise the prediction, this will take 5 sec..
         #dataset.visualise_pred(outputs, args)
