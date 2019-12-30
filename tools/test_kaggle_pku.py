@@ -340,7 +340,7 @@ def main():
                                   iou_threshold=0.8, fix_rot=True, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
         print(" Finish NMR post-processing")
         return True
-    if False: # This will collect all the NMR output
+    if False:  # This will collect all the NMR output
         outputs = []
         output_dir = '/data/Kaggle/wudi_data/tmp_output'
         for f in os.listdir(output_dir):
