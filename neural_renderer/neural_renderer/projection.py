@@ -16,7 +16,7 @@ def projection(vertices, K, R, t, dist_coeffs, orig_size, eps=1e-9):
     '''
 
     # instead of P*x we compute x'*P'
-    vertices = torch.matmul(vertices, R.transpose(2,1)) + t
+    vertices = torch.matmul(vertices, R.transpose(2, 1)) + t[:, None, :]
     x, y, z = vertices[:, :, 0], vertices[:, :, 1], vertices[:, :, 2]
     x_ = x / (z + eps)
     y_ = y / (z + eps)
@@ -30,10 +30,10 @@ def projection(vertices, K, R, t, dist_coeffs, orig_size, eps=1e-9):
 
     # we use x_ for x' and x__ for x'' etc.
     r = torch.sqrt(x_ ** 2 + y_ ** 2)
-    x__ = x_*(1 + k1*(r**2) + k2*(r**4) + k3*(r**6)) + 2*p1*x_*y_ + p2*(r**2 + 2*x_**2)
-    y__ = y_*(1 + k1*(r**2) + k2*(r**4) + k3 *(r**6)) + p1*(r**2 + 2*y_**2) + 2*p2*x_*y_
+    x__ = x_ * (1 + k1 * (r ** 2) + k2 * (r ** 4) + k3 * (r ** 6)) + 2 * p1 * x_ * y_ + p2 * (r ** 2 + 2 * x_ ** 2)
+    y__ = y_ * (1 + k1 * (r ** 2) + k2 * (r ** 4) + k3 * (r ** 6)) + p1 * (r ** 2 + 2 * y_ ** 2) + 2 * p2 * x_ * y_
     vertices = torch.stack([x__, y__, torch.ones_like(z)], dim=-1)
-    vertices = torch.matmul(vertices, K.transpose(1,2))
+    vertices = torch.matmul(vertices, K.transpose(1, 2))
     u, v = vertices[:, :, 0], vertices[:, :, 1]
     v = float(orig_size[1]) - v
     # map u,v from [0, img_size] to [-1, 1] to use by the renderer

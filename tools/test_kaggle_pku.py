@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '7'
+os.environ['CUDA_VISIBLE_DEVICES'] = '5'
 
 import os.path as osp
 import shutil
@@ -146,7 +146,8 @@ def write_submission(outputs, args, dataset,
                 idx = idx_conf * idx_keep_mask
             else:
                 idx = idx_conf
-            if 'euler_angle' in output[2].keys():
+            #if 'euler_angle' in output[2].keys():
+            if False:   #NMR has problem saving 'euler angle' Its
                 eular_angle = output[2]['euler_angle']
             else:
                 eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
@@ -317,31 +318,53 @@ def main():
         rank, _ = get_dist_info()
         if rank != 0:
             return
-    idx = 4
-    bs = 80
-    print("output star idx: %d" % (int(idx*bs)))
-    outputs = outputs[idx*bs: (idx+1)*bs]
 
-    # we use Neural Mesh Renderer to further finetune the result
-    outputs_NMR = finetune_RT(outputs, dataset, draw_flag=False, num_epochs=20,
-                              iou_threshold=0.8, fix_rot=True, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
+    if False:
+        pkl_files = [x.replace('.pkl', '') for x in os.listdir('/data/Kaggle/wudi_data/tmp_output')]
+        all_files = [x[2]['file_name'].split('/')[-1].replace('.jpg', '') for x in outputs]
+        not_finished = [item for item in all_files if item not in pkl_files]
+        print('Unfinished :%d' % len(not_finished))
+        not_finished_idx = []
+        for i in range(len(all_files)):
+            if all_files[i] in not_finished:
+                not_finished_idx.append(i)
+        outputs = [outputs[index] for index in not_finished_idx]
 
-    # outputs_new = mmcv.load('/data/Kaggle/wudi_data/tmp_output/tmp_outputoutput_0000.pkl')
-    # args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
-    # write submission here
-    #outputs_new = [outputs_new]
-    submission = write_submission(outputs_NMR, args, dataset, filter_mask=False, horizontal_flip=args.horizontal_flip)
+        idx = 5
+        bs = 10
+        print("output star idx: %d" % (int(idx*bs)))
+        #outputs = outputs[idx*bs: (idx+1)*bs]
 
-    print("Writing submission using the filter by mesh, this will take 2 sec per image")
-    print("You can also kill the program the uncomment the first line with filter_mask=False")
-    # submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.1, horizontal_flip=args.horizontal_flip)
+        # we use Neural Mesh Renderer to further finetune the result
+        finetune_RT(outputs, dataset, draw_flag=False, num_epochs=20,
+                                  iou_threshold=0.8, fix_rot=True, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
+        print(" Finish NMR post-processing")
+        return True
+    if False:
+        # This will collect all the NMR output
+        outputs = []
+        output_dir = '/data/Kaggle/wudi_data/tmp_output'
+        for f in os.listdir(output_dir):
+            output_tmp = mmcv.load(os.path.join(output_dir, f))
+            outputs.append(output_tmp)
+        args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
 
-    # Visualise the prediction, this will take 5 sec..
-    #dataset.visualise_pred(outputs, args)
+    if True:
+        submission = write_submission(outputs, args, dataset,
+                                      conf_thresh=0,
+                                      filter_mask=False,
+                                      horizontal_flip=args.horizontal_flip)
 
-    # evaluate mAP
-    print("Start to eval mAP")
-    map_main(submission, flip_model=args.horizontal_flip)
+        print("Writing submission using the filter by mesh, this will take 2 sec per image")
+        print("You can also kill the program the uncomment the first line with filter_mask=False")
+        submission = write_submission_pool(outputs, args, dataset, conf_thresh=0.0, horizontal_flip=args.horizontal_flip)
+
+        # Visualise the prediction, this will take 5 sec..
+        #dataset.visualise_pred(outputs, args)
+
+        # evaluate mAP
+        print("Start to eval mAP")
+        map_main(submission, flip_model=args.horizontal_flip)
 
 
 if __name__ == '__main__':

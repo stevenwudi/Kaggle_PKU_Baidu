@@ -1,5 +1,6 @@
 """
 Finding camera parameters R, T
+Image per batch --> this is not likely to work!!!
 """
 import mmcv
 import os
@@ -45,8 +46,8 @@ class Model(nn.Module):
         vertices = torch.from_numpy(vertices.astype(np.float32)).cuda()
         faces = torch.from_numpy(faces.astype(np.int32)).cuda()
 
-        self.register_buffer('vertices', vertices[None, :, :])
-        self.register_buffer('faces', faces[None, :, :])
+        self.register_buffer('vertices', vertices)
+        self.register_buffer('faces', faces)
         self.translation_original = T
         self.euler_original = euler_angle
         self.fix_rot = fix_rot
@@ -67,7 +68,7 @@ class Model(nn.Module):
         self.register_buffer('K', torch.from_numpy(camera_matrix))
         # setup renderer
         if fix_rot:
-            R = torch.from_numpy(np.array(Rotation_Matrix[None, :], dtype=np.float32)).cuda()
+            R = torch.from_numpy(np.array(Rotation_Matrix, dtype=np.float32)).cuda()
             self.register_buffer('R', R)
 
             renderer = nr.Renderer(image_size=image_size,
@@ -81,13 +82,13 @@ class Model(nn.Module):
                                    orig_size=image_size,
                                    camera_mode='projection',
                                    K=camera_matrix[None, :, :])
-            renderer.R = nn.Parameter(torch.from_numpy(np.array(Rotation_Matrix[None, :], dtype=np.float32)))
-        renderer.t = nn.Parameter(torch.from_numpy(np.array(T[None, :], dtype=np.float32)))
+            renderer.R = nn.Parameter(torch.from_numpy(np.array(Rotation_Matrix, dtype=np.float32)))
+        renderer.t = nn.Parameter(torch.from_numpy(np.array(T, dtype=np.float32)))
         self.renderer = renderer
 
     def forward(self):
         image = self.renderer(self.vertices, self.faces, mode='silhouettes')
-        interception = torch.sum(torch.abs(image * self.image_ref[None, :, :]))
+        interception = torch.sum(torch.abs(image * self.image_ref))
         union = torch.sum(image) + torch.sum(self.image_ref) - interception
         loss = - interception / union
         # loss = torch.sum((image - self.image_ref[None, :, :]) ** 2)
@@ -188,6 +189,7 @@ def finetune_RT(outputs,
                 tmp_save_dir='/data/Kaggle/wudi_data/tmp_output/',
                 fix_rot=False):
     """
+
     :param outputs:
     :param dataset:
     :param difference_ratio:
@@ -208,67 +210,95 @@ def finetune_RT(outputs,
 
         conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
         idx_conf = conf > conf_thresh
+        # Di Wu parrallise the code as below for one image per GPU
 
-        # The following code is highly independent and parrallisable,
-        # CYH help to parralise the following code
+        vertices_img = []
+        max_vertices = 0
+        faces_img = []
+        min_faces = 4999   # there are in total 4999-5000 faces... we choose 4999 faces, hope it is alright
+        Rotation_Matrix_img = []
+        T_img = []
+        euler_angles_img = []
+        mask_img = []
 
         for car_idx in range(len(quaternion_pred)):
-            if idx_conf[car_idx]:  # we only update conf threshold larger than 0.1
-                # The the HTC predicted Mask which is served as the GT Mask
-                segms_car = segms[CAR_IDX][car_idx]
-                mask = maskUtils.decode(segms_car)
-                mask_full_size = np.zeros((2710, 3384))
-                mask_full_size[1480:, :] = mask
-                # Get car mesh--> vertices and faces
-                car_name = car_names[car_idx]
-                vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
-                vertices[:, 1] = -vertices[:, 1]
-                faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
-                # Get prediction of Rotation Matrix and  Translation
-                ea = euler_angles[car_idx]
-                yaw, pitch, roll = ea[0], ea[1], ea[2]
-                yaw, pitch, roll = -pitch, -yaw, -roll
-                Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
-                T = trans_pred_world[car_idx]
+            # The the HTC predicted Mask which is served as the GT Mask
+            segms_car = segms[CAR_IDX][car_idx]
+            mask = maskUtils.decode(segms_car)
+            mask_full_size = np.zeros((2710, 3384))
+            mask_full_size[1480:, :] = mask
+            # Get car mesh--> vertices and faces
+            car_name = car_names[car_idx]
+            vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
+            vertices[:, 1] = -vertices[:, 1]
+            faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
+            # Get prediction of Rotation Matrix and  Translation
+            ea = euler_angles[car_idx]
+            yaw, pitch, roll = ea[0], ea[1], ea[2]
+            yaw, pitch, roll = -pitch, -yaw, -roll
+            Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
+            T = trans_pred_world[car_idx]
 
-                if draw_flag:
-                    output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(
-                        car_idx) + '.gif'
-                else:
-                    output_gif = None
-                T_update, updated_rot_matrix = get_updated_RT(vertices,
-                                                              faces,
-                                                              Rotation_Matrix,
-                                                              T,
-                                                              [yaw, pitch, roll],
-                                                              mask_full_size,
-                                                              dataset.camera_matrix,
-                                                              image_size=(3384, 2710),
-                                                              iou_threshold=iou_threshold,
-                                                              num_epochs=num_epochs,
-                                                              draw_flag=draw_flag,
-                                                              output_gif=output_gif,
-                                                              lr=lr,
-                                                              fix_rot=fix_rot)
-                if fix_rot:
-                    R_update = ea  # we don't change the euler angle here
-                else:
-                    R_update = rotation_matrix_to_euler_angles(updated_rot_matrix)
-                if 'euler_angle' in outputs_update[img_idx][2]:
-                    outputs_update[img_idx][2]['euler_angle'].append(R_update)
-                else:
-                    outputs_update[img_idx][2]['euler_angle'] = []
-                    outputs_update[img_idx][2]['euler_angle'].append(R_update)
-                outputs_update[img_idx][2]['trans_pred_world'][car_idx] = T_update
+            vertices_img.append(vertices)
+            max_vertices = max(vertices.shape[0], max_vertices)
+            faces_img.append(faces)
+            min_faces = min(faces.shape[0], min_faces)
+            Rotation_Matrix_img.append(Rotation_Matrix)
+            T_img.append(T)
+            euler_angles_img.append(np.array([yaw, pitch, roll]))
+            mask_img.append(mask_full_size)
 
-            # We still need  to update so the car_idx does not break
-            if 'euler_angle' in outputs_update[img_idx][2]:
-                outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
-            else:
-                outputs_update[img_idx][2]['euler_angle'] = []
-                outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
+        Rotation_Matrix_img = np.stack(Rotation_Matrix_img)
+        T_img = np.stack(T_img)
+        euler_angles_img = np.stack(euler_angles_img)
+        mask_img = np.stack(mask_img)
+        # For vertices and faces each car will generate different
+        vertices_img_all = np.zeros((len(vertices_img), max_vertices, 3))
+        faces_img_all = np.zeros((len(faces_img), min_faces, 3))
+
+        for i in range(len(vertices_img)):
+            vertices_img_all[i, :vertices_img[i].shape[0], :] = vertices_img[i]
+            faces_img_all[i, :, :] = faces_img[i][:min_faces,:]
+
+        if draw_flag:
+            output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.gif'
+        else:
+            output_gif = None
+
+        T_update, updated_rot_matrix = get_updated_RT(vertices=vertices_img_all[idx_conf],
+                                                      faces=faces_img_all[idx_conf],
+                                                      Rotation_Matrix=Rotation_Matrix_img[idx_conf],
+                                                      T=T_img[idx_conf],
+                                                      euler_angle=euler_angles_img[idx_conf],
+                                                      mask_full_size=mask_img[idx_conf],
+                                                      camera_matrix=dataset.camera_matrix,
+                                                      image_size=(3384, 2710),
+                                                      iou_threshold=iou_threshold,
+                                                      num_epochs=num_epochs,
+                                                      draw_flag=draw_flag,
+                                                      output_gif=output_gif,
+                                                      lr=lr,
+                                                      fix_rot=fix_rot)
+        if fix_rot:
+            R_update = ea  # we don't change the euler angle here
+        else:
+            R_update = rotation_matrix_to_euler_angles(updated_rot_matrix)
+        if 'euler_angle' in outputs_update[img_idx][2]:
+            outputs_update[img_idx][2]['euler_angle'].append(R_update)
+        else:
+            outputs_update[img_idx][2]['euler_angle'] = []
+            outputs_update[img_idx][2]['euler_angle'].append(R_update)
+        outputs_update[img_idx][2]['trans_pred_world'][car_idx] = T_update
+
+        # We still need  to update so the car_idx does not break
+        if 'euler_angle' in outputs_update[img_idx][2]:
+            outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
+        else:
+            outputs_update[img_idx][2]['euler_angle'] = []
+            outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
 
         outputs_update[img_idx][2]['euler_angle'] = np.array(outputs_update[img_idx][2]['euler_angle'])
+        outputs_update[img_idx][2]['trans_pred_world'] = outputs_update[img_idx][2]['trans_pred_world']
 
         if not os.path.exists(tmp_save_dir):
             os.mkdir(tmp_save_dir)
