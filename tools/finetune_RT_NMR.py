@@ -9,10 +9,9 @@ import numpy as np
 from skimage.io import imsave
 import tqdm
 import pycocotools.mask as maskUtils
-from scipy.spatial.transform import Rotation as R
 import neural_renderer as nr
 
-from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, euler_to_Rot, rotation_matrix_to_euler_angles
+from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, euler_to_Rot, rot2eul
 
 from mmdet.datasets.car_models import car_id2name
 from mmdet.utils import RotationDistance, TranslationDistance
@@ -151,19 +150,17 @@ def get_updated_RT(vertices,
             print('Optimizing (loss %.4f)' % (loss.data))
             updated_translation = model.renderer.t.detach().cpu().numpy()[0]
             original_translation = model.translation_original
-            changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=True)
+            changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=False)
             print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f'
                   % (
-                  np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
+                      np.array2string(np.array(original_translation)), np.array2string(updated_translation),
+                      changed_dis))
             if not fix_rot:
                 updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
-                updated_euler_angle = rotation_matrix_to_euler_angles(updated_rot_matrix, check=False)
-                original_euler_angle = rotation_matrix_to_euler_angles(Rotation_Matrix, check=False)
-
-                changed_rot = RotationDistance(original_euler_angle, updated_euler_angle)
-
-                print('Origin eular angle: %s - > updated eular angle: %s. Changed distance: %4.f'
-                      % (np.array2string(np.array(original_euler_angle)), np.array2string(updated_euler_angle),
+                updated_euler_angle = rot2eul(updated_rot_matrix)
+                changed_rot = RotationDistance(model.euler_original, updated_euler_angle)
+                print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %4.f'
+                      % (np.array2string(np.array(model.euler_original)), np.array2string(updated_euler_angle),
                          changed_rot))
 
         if loss.item() < -model.loss_thresh:
@@ -173,9 +170,8 @@ def get_updated_RT(vertices,
     updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
     if draw_flag:
         make_gif(output_gif)
-    # ea = rotation_matrix_to_euler_angles(updated_rot_matrix, check=False)
-    # ea[0], ea[1], ea[2] = -ea[1], -ea[0], -ea[2]
-    return updated_translation, updated_rot_matrix
+
+    return updated_translation, rot2eul(updated_rot_matrix)
 
 
 def finetune_RT(outputs,
@@ -183,8 +179,7 @@ def finetune_RT(outputs,
                 iou_threshold=0.8,
                 num_epochs=50,
                 draw_flag=True,
-                lr=0.1,  # lr=0.05,
-                conf_thresh=0.1,
+                lr=0.1,
                 tmp_save_dir='/data/Kaggle/wudi_data/tmp_output/',
                 fix_rot=False):
     """
@@ -206,72 +201,57 @@ def finetune_RT(outputs,
         car_names = [car_id2name[x].name for x in kaggle_car_labels]
         euler_angles = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
 
-        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
-        idx_conf = conf > conf_thresh
-
-        # The following code is highly independent and parrallisable,
-        # CYH help to parralise the following code
-
         for car_idx in range(len(quaternion_pred)):
-            if idx_conf[car_idx]:  # we only update conf threshold larger than 0.1
-                # The the HTC predicted Mask which is served as the GT Mask
-                segms_car = segms[CAR_IDX][car_idx]
-                mask = maskUtils.decode(segms_car)
-                mask_full_size = np.zeros((2710, 3384))
-                mask_full_size[1480:, :] = mask
-                # Get car mesh--> vertices and faces
-                car_name = car_names[car_idx]
-                vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
-                vertices[:, 1] = -vertices[:, 1]
-                faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
-                # Get prediction of Rotation Matrix and  Translation
-                ea = euler_angles[car_idx]
-                yaw, pitch, roll = ea[0], ea[1], ea[2]
-                yaw, pitch, roll = -pitch, -yaw, -roll
-                Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
-                T = trans_pred_world[car_idx]
+            # The the HTC predicted Mask which is served as the GT Mask
+            segms_car = segms[CAR_IDX][car_idx]
+            mask = maskUtils.decode(segms_car)
+            mask_full_size = np.zeros((2710, 3384))
+            mask_full_size[1480:, :] = mask
+            # Get car mesh--> vertices and faces
+            car_name = car_names[car_idx]
+            vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
+            vertices[:, 1] = -vertices[:, 1]
+            faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
+            # Get prediction of Rotation Matrix and  Translation
+            ea = euler_angles[car_idx]
+            yaw, pitch, roll = ea[0], ea[1], ea[2]
+            yaw, pitch, roll = -pitch, -yaw, -roll
+            Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
+            T = trans_pred_world[car_idx]
 
-                if draw_flag:
-                    output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(
-                        car_idx) + '.gif'
-                else:
-                    output_gif = None
-                T_update, updated_rot_matrix = get_updated_RT(vertices,
-                                                              faces,
-                                                              Rotation_Matrix,
-                                                              T,
-                                                              [yaw, pitch, roll],
-                                                              mask_full_size,
-                                                              dataset.camera_matrix,
-                                                              image_size=(3384, 2710),
-                                                              iou_threshold=iou_threshold,
-                                                              num_epochs=num_epochs,
-                                                              draw_flag=draw_flag,
-                                                              output_gif=output_gif,
-                                                              lr=lr,
-                                                              fix_rot=fix_rot)
-                if fix_rot:
-                    R_update = ea  # we don't change the euler angle here
-                else:
-                    R_update = rotation_matrix_to_euler_angles(updated_rot_matrix)
-                if 'euler_angle' in outputs_update[img_idx][2]:
-                    outputs_update[img_idx][2]['euler_angle'].append(R_update)
-                else:
-                    outputs_update[img_idx][2]['euler_angle'] = []
-                    outputs_update[img_idx][2]['euler_angle'].append(R_update)
-                outputs_update[img_idx][2]['trans_pred_world'][car_idx] = T_update
-
-            # We still need  to update so the car_idx does not break
-            if 'euler_angle' in outputs_update[img_idx][2]:
-                outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
+            if draw_flag:
+                output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(
+                    car_idx) + '.gif'
             else:
-                outputs_update[img_idx][2]['euler_angle'] = []
-                outputs_update[img_idx][2]['euler_angle'].append(euler_angles[car_idx])
+                output_gif = None
+            T_update, ea_update = get_updated_RT(vertices,
+                                                 faces,
+                                                 Rotation_Matrix,
+                                                 T,
+                                                 [yaw, pitch, roll],
+                                                 mask_full_size,
+                                                 dataset.camera_matrix,
+                                                 image_size=(3384, 2710),
+                                                 iou_threshold=iou_threshold,
+                                                 num_epochs=num_epochs,
+                                                 draw_flag=draw_flag,
+                                                 output_gif=output_gif,
+                                                 lr=lr,
+                                                 fix_rot=fix_rot)
+            if fix_rot:
+                R_update = ea  # we don't change the euler angle here
+            else:
+                # We need to reverse here
+                R_update = -ea_update[1], -ea_update[0], -ea_update[2]
 
-        outputs_update[img_idx][2]['euler_angle'] = np.array(outputs_update[img_idx][2]['euler_angle'])
+            outputs_update[img_idx][2]['trans_pred_world'][car_idx] = T_update
+            euler_angles[car_idx] = R_update
+
+        if not fix_rot:
+            outputs_update[img_idx][2]['euler_angle'] = euler_angles
 
         if not os.path.exists(tmp_save_dir):
             os.mkdir(tmp_save_dir)
         output_name = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.pkl'
         mmcv.dump(outputs_update[img_idx], output_name)
-    return outputs_update
+    return True

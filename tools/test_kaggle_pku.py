@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '5'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '5'
 
 import os.path as osp
 import shutil
@@ -139,20 +139,19 @@ def write_submission(outputs, args, dataset,
             idx_conf = conf > conf_thresh
             if filter_mask:
                 # this filtering step will takes 2 second per iterations
-                #idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
                 idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
 
                 # the final id should require both
                 idx = idx_conf * idx_keep_mask
             else:
                 idx = idx_conf
-            #if 'euler_angle' in output[2].keys():
-            if False:   #NMR has problem saving 'euler angle' Its
-                eular_angle = output[2]['euler_angle']
+            if 'euler_angle' in output[2].keys():
+                euler_angle = output[2]['euler_angle']
             else:
-                eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+                euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
             translation = output[2]['trans_pred_world']
-            coords = np.hstack((eular_angle[idx], translation[idx], conf[idx, None]))
+            coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
 
             coords_str = coords2str(coords)
 
@@ -176,9 +175,9 @@ def filter_output_pool(t):
 
 
 def write_submission_pool(outputs, args, dataset,
-                     conf_thresh=0.1,
-                     horizontal_flip=False,
-                     max_workers=20):
+                          conf_thresh=0.,
+                          horizontal_flip=False,
+                          max_workers=20):
     """
     For accelerating filter image
     :param outputs:
@@ -201,7 +200,8 @@ def write_submission_pool(outputs, args, dataset,
     predictions = {}
 
     p = Pool(processes=max_workers)
-    for coords_str, ImageId in p.imap(filter_output_pool, [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
+    for coords_str, ImageId in p.imap(filter_output_pool,
+                                      [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
         predictions[ImageId] = coords_str
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
@@ -241,7 +241,11 @@ def parse_args():
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
-    parser.add_argument('--horizontal_flip',  default=False, action='store_true')
+    parser.add_argument('--horizontal_flip', default=False, action='store_true')
+    parser.add_argument('--start', type=int, default=0)
+    parser.add_argument('--end', type=int, default=400)
+    parser.add_argument('--world_size', type=int, default=3)
+
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -319,7 +323,7 @@ def main():
         if rank != 0:
             return
 
-    if False:   # If set to True, we will collect unfinished .pkl files
+    if False:  # If set to True, we will collect unfinished .pkl files
         pkl_files = [x.replace('.pkl', '') for x in os.listdir('/data/Kaggle/wudi_data/tmp_output')]
         all_files = [x[2]['file_name'].split('/')[-1].replace('.jpg', '') for x in outputs]
         not_finished = [item for item in all_files if item not in pkl_files]
@@ -332,14 +336,23 @@ def main():
 
         idx = 5
         bs = 10
-        print("output star idx: %d" % (int(idx*bs)))
-        #outputs = outputs[idx*bs: (idx+1)*bs]
+        print("output star idx: %d" % (int(idx * bs)))
+        # outputs = outputs[idx*bs: (idx+1)*bs]
 
-        # we use Neural Mesh Renderer to further finetune the result
-        finetune_RT(outputs, dataset, draw_flag=False, num_epochs=20,
-                                  iou_threshold=0.8, fix_rot=True, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
-        print(" Finish NMR post-processing")
-        return True
+    # we use Neural Mesh Renderer to further finetune the result
+    outputs = outputs[args.start: args.end]
+    local_rank = args.local_rank
+    world_size = args.world_size
+    for idx, output in enumerate(outputs):
+        if idx % world_size == local_rank:
+            finetune_RT([output], dataset,
+                        draw_flag=False,
+                        num_epochs=20,
+                        iou_threshold=0.95,
+                        lr=0.05,
+                        fix_rot=False,
+                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
+
     if False:  # This will collect all the NMR output
         outputs = []
         output_dir = '/data/Kaggle/wudi_data/tmp_output'
@@ -348,11 +361,11 @@ def main():
             outputs.append(output_tmp)
         args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
 
-    if True:
-        # submission = write_submission(outputs, args, dataset,
-        #                               conf_thresh=0,
-        #                               filter_mask=False,
-        #                               horizontal_flip=args.horizontal_flip)
+    if False:
+        submission = write_submission(outputs, args, dataset,
+                                      conf_thresh=0,
+                                      filter_mask=False,
+                                      horizontal_flip=args.horizontal_flip)
 
         print("Writing submission using the filter by mesh, this will take 2 sec per image")
         print("You can also kill the program the uncomment the first line with filter_mask=False")
@@ -361,7 +374,7 @@ def main():
                                            horizontal_flip=args.horizontal_flip)
 
         # Visualise the prediction, this will take 5 sec..
-        #dataset.visualise_pred(outputs, args)
+        # dataset.visualise_pred(outputs, args)
 
         # evaluate mAP
         print("Start to eval mAP")

@@ -13,6 +13,7 @@ import os
 from pycocotools import mask as maskUtils
 from mmcv import imwrite
 
+
 def mesh_point_to_bbox(img):
     rows = np.any(img, axis=1)
     cols = np.any(img, axis=0)
@@ -313,6 +314,18 @@ def rotation_matrix_to_euler_angles(R, check=True):
         z = 0
 
     return np.array([x, y, z])
+
+
+def rot2eul(R):
+    """
+    https://stackoverflow.com/questions/54616049/converting-a-rotation-matrix-to-euler-angles-and-back-special-case
+    :param R:
+    :return:
+    """
+    beta = -np.arcsin(R[2, 0])
+    alpha = np.arctan2(R[2, 1] / np.cos(beta), R[2, 2] / np.cos(beta))
+    gamma = np.arctan2(R[1, 0] / np.cos(beta), R[0, 0] / np.cos(beta))
+    return -np.array((beta, alpha, gamma))
 
 
 def convert_pose_mat_to_6dof(pose_file_in, pose_file_out):
@@ -692,8 +705,10 @@ def filter_output(output_idx, outputs, conf_thresh, img_prefix, dataset):
         idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
         # the final id should require both
         idx = idx_conf * idx_keep_mask
-
-        euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+        if 'euler_angle' in output[2].keys():
+            euler_angle = output[2]['euler_angle']
+        else:
+            euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
         # This is a new modification because in CYH's new json file;
         translation = output[2]['trans_pred_world']
         coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
