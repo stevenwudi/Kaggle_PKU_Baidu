@@ -44,11 +44,15 @@ def str2coords(s, names):
 
 
 def TranslationDistance(p, g, abs_dist=False):
-    dx = p['x'] - g['x']
-    dy = p['y'] - g['y']
-    dz = p['z'] - g['z']
-    diff0 = (g['x'] ** 2 + g['y'] ** 2 + g['z'] ** 2) ** 0.5
-    diff1 = (dx ** 2 + dy ** 2 + dz ** 2) ** 0.5
+    if isinstance(p, np.ndarray):
+        diff1 = np.sum((p-g)**2)**0.5
+        diff0 = (np.sum(g**2)) ** 0.5
+    else:
+        dx = p['x'] - g['x']
+        dy = p['y'] - g['y']
+        dz = p['z'] - g['z']
+        diff0 = (g['x'] ** 2 + g['y'] ** 2 + g['z'] ** 2) ** 0.5
+        diff1 = (dx ** 2 + dy ** 2 + dz ** 2) ** 0.5
     if abs_dist:
         diff = diff1
     else:
@@ -57,10 +61,14 @@ def TranslationDistance(p, g, abs_dist=False):
 
 
 def RotationDistance(p, g):
-    true = [g['pitch'], g['yaw'], g['roll']]
-    pred = [p['pitch'], p['yaw'], p['roll']]
-    q1 = R.from_euler('xyz', true)
-    q2 = R.from_euler('xyz', pred)
+    if isinstance(p, np.ndarray) or isinstance(p, list):
+        q1 = R.from_euler('xyz', p)
+        q2 = R.from_euler('xyz', g)
+    else:
+        true = [g['pitch'], g['yaw'], g['roll']]
+        pred = [p['pitch'], p['yaw'], p['roll']]
+        q1 = R.from_euler('xyz', true)
+        q2 = R.from_euler('xyz', pred)
     diff = R.inv(q2) * q1
     W = np.clip(diff.as_quat()[-1], -1., 1.)
 
