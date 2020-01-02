@@ -33,10 +33,8 @@ class FCTranslationHead(nn.Module):
         self.car_cls_rot_linear = nn.Linear(in_channels_carclsrot, fc_out_channels)
         self.bboxes_linear_1 = nn.Linear(in_channels_bboxes, fc_out_channels)
         self.bboxes_linear_2 = nn.Linear(fc_out_channels, fc_out_channels)
-        self.trans_pred = nn.Linear(fc_out_channels + fc_out_channels, 3)
+        self.trans_pred = nn.Linear(fc_out_channels + fc_out_channels, num_translation_reg)
         self.relu = nn.ReLU(inplace=True)
-        # self.sigmoid = nn.Sigmoid()
-
         # Di Wu add build loss here overriding bbox_head
         self.loss_translation = build_loss(loss_translation)
 
@@ -45,10 +43,6 @@ class FCTranslationHead(nn.Module):
         # translation mean and std:
         self.t_x_mean, self.t_y_mean, self.t_z_mean = -3, 9, 50
         self.t_x_std, self.t_y_std, self.t_z_std = 14.015, 4.695, 29.596
-
-        self.x_scale = 160
-        self.y_scale = 80
-        self.z_scale = 150
 
     def init_weights(self):
         super(FCTranslationHead, self).init_weights()
@@ -67,28 +61,21 @@ class FCTranslationHead(nn.Module):
         x_carclsrot_feat = self.relu(self.car_cls_rot_linear(x_car_cls_rot))
 
         x_merge = self.relu(torch.cat((x_bbox_feat, x_carclsrot_feat), dim=1))
-        
+
         trans_pred = self.trans_pred(x_merge)
-        trans_pred_sigmoid = trans_pred.sigmoid()
-
-        trans_pred_sigmoid_x = (trans_pred_sigmoid[:, 0] - 0.5) * self.x_scale
-        trans_pred_sigmoid_y = trans_pred_sigmoid[:, 1] * self.y_scale
-        trans_pred_sigmoid_z = trans_pred_sigmoid[:, 2] * self.z_scale
-
-        trans_pred_xyz = torch.cat([trans_pred_sigmoid_x.unsqueeze(1), trans_pred_sigmoid_y.unsqueeze(1), trans_pred_sigmoid_z.unsqueeze(1)], dim=1)
-        return trans_pred_xyz
+        return trans_pred
 
     def get_target(self, sampling_results, rcnn_train_cfg=None):
 
         pos_gt_assigned_translations = [res.pos_gt_assigned_translations for res in sampling_results]
         pos_gt_assigned_translations = torch.cat(pos_gt_assigned_translations, 0)
 
-        # pos_gt_assigned_translations[:, 0] -= self.t_x_mean
-        # pos_gt_assigned_translations[:, 0] /= self.t_x_std
-        # pos_gt_assigned_translations[:, 1] -= self.t_y_mean
-        # pos_gt_assigned_translations[:, 1] /= self.t_y_std
-        # pos_gt_assigned_translations[:, 2] -= self.t_z_mean
-        # pos_gt_assigned_translations[:, 2] /= self.t_z_std
+        pos_gt_assigned_translations[:, 0] -= self.t_x_mean
+        pos_gt_assigned_translations[:, 0] /= self.t_x_std
+        pos_gt_assigned_translations[:, 1] -= self.t_y_mean
+        pos_gt_assigned_translations[:, 1] /= self.t_y_std
+        pos_gt_assigned_translations[:, 2] -= self.t_z_mean
+        pos_gt_assigned_translations[:, 2] /= self.t_z_std
 
         return pos_gt_assigned_translations
 
@@ -163,8 +150,7 @@ class FCTranslationHead(nn.Module):
              translation_target):
 
         losses = dict()
-        losses['loss_translation'] = self.translation_distance_relative(translation_pred, translation_target)
-
+        losses['loss_translation'] = self.translation_distance(translation_pred, translation_target)
         losses['translation_distance'] = self.translation_distance(translation_pred, translation_target)
         losses['translation_distance_relative'] = self.translation_distance_relative(translation_pred,
                                                                                      translation_target)
@@ -183,23 +169,23 @@ class FCTranslationHead(nn.Module):
     def translation_distance(self, translation_pred, translation_target):
         diff = translation_pred - translation_target
 
-        # diff[:, 0] *= self.t_x_std
-        # diff[:, 1] *= self.t_y_std
-        # diff[:, 2] *= self.t_z_std
+        diff[:, 0] *= self.t_x_std
+        diff[:, 1] *= self.t_y_std
+        diff[:, 2] *= self.t_z_std
 
         translation_diff = torch.mean(torch.sqrt(torch.sum(diff ** 2, dim=1)))
         return translation_diff
 
     def pred_to_world_coord(self, translation_pred):
 
-        # translation_pred[:, 0] *= self.t_x_std
-        # translation_pred[:, 0] += self.t_x_mean
+        translation_pred[:, 0] *= self.t_x_std
+        translation_pred[:, 0] += self.t_x_mean
 
-        # translation_pred[:, 1] *= self.t_y_std
-        # translation_pred[:, 1] += self.t_y_mean
+        translation_pred[:, 1] *= self.t_y_std
+        translation_pred[:, 1] += self.t_y_mean
 
-        # translation_pred[:, 2] *= self.t_z_std
-        # translation_pred[:, 2] += self.t_z_mean
+        translation_pred[:, 2] *= self.t_z_std
+        translation_pred[:, 2] += self.t_z_mean
 
         return translation_pred
 
