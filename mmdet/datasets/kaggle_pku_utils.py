@@ -316,15 +316,30 @@ def rotation_matrix_to_euler_angles(R, check=True):
     return np.array([x, y, z])
 
 
-def rot2eul(R):
+def rot2eul(R, euler_original, thresh=1e-5, debug=True, ):
     """
     https://stackoverflow.com/questions/54616049/converting-a-rotation-matrix-to-euler-angles-and-back-special-case
+    How to handle case for cos\theta == 0:
+    https://www.gregslabaugh.net/publications/euler.pdf
     :param R:
     :return:
     """
-    beta = -np.arcsin(R[2, 0])
-    alpha = np.arctan2(R[2, 1] / np.cos(beta), R[2, 2] / np.cos(beta))
-    gamma = np.arctan2(R[1, 0] / np.cos(beta), R[0, 0] / np.cos(beta))
+    if R[2, 0]-1 > thresh or np.abs(R[2, 0]-1) < thresh:
+        beta = -np.pi/2
+        alpha = np.arctan2(-R[0, 1], -R[0, 2]) - euler_original[2]
+        gamma = euler_original[2]
+        if debug:
+            print(beta)
+    elif R[2, 0] - (-1) < thresh or np.abs(R[2, 0]+1) < thresh:
+        beta = np.pi/2
+        alpha = np.arctan2(R[0, 1], R[0, 2]) + euler_original[2]
+        gamma = euler_original[2]
+        if debug:
+            print(beta)
+    else:
+        beta = -np.arcsin(R[2, 0])
+        alpha = np.arctan2(R[2, 1] / np.cos(beta), R[2, 2] / np.cos(beta))
+        gamma = np.arctan2(R[1, 0] / np.cos(beta), R[0, 0] / np.cos(beta))
     return -np.array((beta, alpha, gamma))
 
 
