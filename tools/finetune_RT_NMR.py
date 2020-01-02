@@ -116,7 +116,9 @@ def get_updated_RT(vertices,
                    draw_flag=False,
                    output_gif=None,
                    lr=0.05,
-                   fix_rot=False):
+                   fix_rot=False,
+                   debug=False,
+                   ):
     model = Model(vertices,
                   faces,
                   Rotation_Matrix,
@@ -126,7 +128,8 @@ def get_updated_RT(vertices,
                   camera_matrix,
                   image_size=image_size,
                   iou_threshold=iou_threshold,
-                  fix_rot=fix_rot)
+                  fix_rot=fix_rot,
+                  )
     if draw_flag:
         for name, param in model.named_parameters():
             if param.requires_grad:
@@ -146,22 +149,21 @@ def get_updated_RT(vertices,
             image = images.detach().cpu().numpy()[0].transpose(1, 2, 0)
             image[:, :, 1] += model.image_ref.detach().cpu().numpy()
             imsave('/tmp/_tmp_%04d.png' % i, image)
-            ### we print some updates
-            print('Optimizing (loss %.4f)' % (loss.data))
-            updated_translation = model.renderer.t.detach().cpu().numpy()[0]
-            original_translation = model.translation_original
-            changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=False)
-            print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f'
-                  % (
-                      np.array2string(np.array(original_translation)), np.array2string(updated_translation),
-                      changed_dis))
-            if not fix_rot:
-                updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
-                updated_euler_angle = rot2eul(updated_rot_matrix)
-                changed_rot = RotationDistance(model.euler_original, updated_euler_angle)
-                print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %4.f'
-                      % (np.array2string(np.array(model.euler_original)), np.array2string(updated_euler_angle),
-                         changed_rot))
+
+            if debug:
+                ### we print some updates
+                print('Optimizing (loss %.4f)' % (loss.data))
+                updated_translation = model.renderer.t.detach().cpu().numpy()[0]
+                original_translation = model.translation_original
+                changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=False)
+                print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
+                if not fix_rot:
+                    updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+                    updated_euler_angle = rot2eul(updated_rot_matrix, model.euler_original)
+                    changed_rot = RotationDistance(model.euler_original, updated_euler_angle)
+                    print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %4.f'
+                          % (np.array2string(np.array(model.euler_original)), np.array2string(updated_euler_angle),
+                             changed_rot))
 
         if loss.item() < -model.loss_thresh:
             break
@@ -171,7 +173,7 @@ def get_updated_RT(vertices,
     if draw_flag:
         make_gif(output_gif)
 
-    return updated_translation, rot2eul(updated_rot_matrix)
+    return updated_translation, rot2eul(updated_rot_matrix, model.euler_original)
 
 
 def finetune_RT(outputs,
