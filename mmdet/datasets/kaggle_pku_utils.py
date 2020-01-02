@@ -316,7 +316,7 @@ def rotation_matrix_to_euler_angles(R, check=True):
     return np.array([x, y, z])
 
 
-def rot2eul(R, euler_original, thresh=1e-5, debug=True, ):
+def rot2eul(R, euler_original, thresh=1e-5, debug=False):
     """
     https://stackoverflow.com/questions/54616049/converting-a-rotation-matrix-to-euler-angles-and-back-special-case
     How to handle case for cos\theta == 0:
