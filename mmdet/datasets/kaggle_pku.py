@@ -13,7 +13,8 @@ from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points, \
     euler_to_Rot_apollo, euler_to_Rot_YPR, rotation_matrix_to_euler_angles
-from demo.visualisation_utils import draw_result_kaggle_pku
+from demo.visualisation_utils import draw_result_kaggle_pku,draw_box_mesh_kaggle_pku,refine_yaw_and_roll, \
+    restore_x_y_from_z_withIOU
 
 from albumentations.augmentations import transforms
 from math import acos, pi
@@ -42,8 +43,9 @@ class NumpyEncoder(json.JSONEncoder):
 class KagglePKUDataset(CustomDataset):
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/Kaggle/cwx_data'):
+    def load_annotations(self, ann_file, outdir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data'):
         # some hard coded parameters
+        self.outdir = outdir
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480  # this
         self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
@@ -68,11 +70,11 @@ class KagglePKUDataset(CustomDataset):
                 annotations = json.load(open(outfile, 'r'))
                 if False:
                     self.eular_angle_classification(annotations)
-                if True:  # plot annotation for examination
+                if False:  # plot annotation for examination
                     self.plot_and_examine(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
-                outfilekaggle = '/data/cyh/kaggle/train.json'
+                outfile = os.path.join(outdir, 'validation_400_flip.json')
                 annotations = json.load(open(outfilekaggle, 'r'))
                 PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
                 ImageId = [i.strip() for i in open(PATH + 'train-list.txt').readlines()]
@@ -140,10 +142,10 @@ class KagglePKUDataset(CustomDataset):
                 imwrite(img_aug, os.path.join(im_out_dir, im_out_file))
 
     def load_car_models(self):
-        car_model_dir = os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json')
+        car_model_dir = os.path.join(self.outdir, 'car_models_json')
         car_model_dict = {}
         for car_name in tqdm(os.listdir(car_model_dir)):
-            with open(os.path.join('/data/Kaggle/pku-autonomous-driving', 'car_models_json', car_name)) as json_file:
+            with open(os.path.join(self.outdir, 'car_models_json', car_name)) as json_file:
                 car_model_dict[car_name[:-5]] = json.load(json_file)
 
         return car_model_dict
@@ -516,9 +518,13 @@ class KagglePKUDataset(CustomDataset):
     def visualise_pred(self, outputs, args):
         car_cls_coco = 2
 
-        for idx in tqdm(range(len(self.annotations))):
-            ann = self.annotations[idx]
-            img_name = ann['filename']
+        for idx in tqdm(range(len(outputs))):
+            # ann = self.annotations[idx]
+            test_folder = '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/test_images/'
+            img_name = os.path.join(test_folder, os.path.basename(outputs[idx][2]['file_name']))
+            # if 'ID_32ef9d037' not in img_name:
+            #     continue
+            # print('img_name',img_name)
             if not os.path.isfile(img_name):
                 assert "Image file does not exist!"
             else:
@@ -528,21 +534,60 @@ class KagglePKUDataset(CustomDataset):
                 bboxes, segms, six_dof = output[0], output[1], output[2]
                 car_cls_score_pred = six_dof['car_cls_score_pred']
                 quaternion_pred = six_dof['quaternion_pred']
-                trans_pred_world = six_dof['trans_pred_world']
+                trans_pred_world = six_dof['trans_pred_world'].copy()
                 euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
                 car_labels = np.argmax(car_cls_score_pred, axis=1)
                 kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
-                car_names = [car_id2name[x].name for x in kaggle_car_labels]
+                car_names = np.array([car_id2name[x].name for x in kaggle_car_labels])
 
                 assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
                        == len(trans_pred_world) == len(euler_angle) == len(car_names)
                 # now we start to plot the image from kaggle
                 coords = np.hstack((euler_angle, trans_pred_world))
-                img_kaggle = self.visualise_kaggle(image, coords)
-                img_mesh = self.visualise_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,
-                                               trans_pred_world)
-                imwrite(img_kaggle, os.path.join(args.out[:-4] + '_kaggle_vis/' + img_name.split('/')[-1]))
-                imwrite(img_mesh, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
+
+                # trans_pred_world_refined = restore_x_y_from_z(bboxes[car_cls_coco],trans_pred_world)
+                # output[2]['trans_pred_world'] = trans_pred_world_refined
+        
+                # print('change ',trans_pred_world,trans_pred_world_refined)
+
+                trans_pred_world_refined = restore_x_y_from_z_withIOU(image,bboxes[car_cls_coco],segms[car_cls_coco],car_names, euler_angle,trans_pred_world,
+                                            self.car_model_dict,
+                                            self.camera_matrix)
+                quaternion_semisphere_refined,flag = refine_yaw_and_roll(image,bboxes[car_cls_coco],segms[car_cls_coco],car_names, euler_angle,quaternion_pred,trans_pred_world,
+                                            self.car_model_dict,
+                                            self.camera_matrix)
+                output[2]['trans_pred_world'] = trans_pred_world_refined
+                img_box_mesh = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world)
+                if flag:
+                    output[2]['quaternion_pred'] = quaternion_semisphere_refined
+                    euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+
+                img_box_mesh_refined = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world_refined)
+                # img_kaggle = self.visualise_kaggle(image, coords)
+                # img_mesh = self.visualise_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,
+                #                                trans_pred_world)
+                # imwrite(img_kaggle, os.path.join(args.out[:-4] + '_kaggle_vis/' + img_name.split('/')[-1]))
+                # imwrite(img_mesh, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
+                # img_box_mesh_half = cv2.resize(img_box_mesh,None,fx=0.5,fy=0.5)
+                # img_kaggle_half = cv2.resize(img_kaggle,None,fx=0.5,fy=0.5)
+                # img_concat = np.concatenate([img_kaggle_half,img_box_mesh_half],axis=1)
+                # imwrite(img_concat, os.path.join(args.out[:-4] + '_mes_box_vis/' + img_name.split('/')[-1]))
+                imwrite(img_box_mesh, os.path.join(args.out[:-4] + '_mes_box_vis_114/' + img_name.split('/')[-1]))
+                imwrite(img_box_mesh_refined, os.path.join(args.out[:-4] + '_mes_box_vis_114/' + img_name.split('/')[-1])[:-4]+'_refined.jpg')
+
+        return outputs
+    def visualise_box_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
+        im_combime = draw_box_mesh_kaggle_pku(image,
+                                            bboxes,
+                                            segms,
+                                            car_names,
+                                            self.car_model_dict,
+                                            self.camera_matrix,
+                                            trans_pred_world,
+                                            euler_angle)
+
+        return im_combime
+
 
     def visualise_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
 
