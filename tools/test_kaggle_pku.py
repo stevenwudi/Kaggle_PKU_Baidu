@@ -1,10 +1,12 @@
 import argparse
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '5'
 
 import os.path as osp
 import shutil
 import tempfile
+import pandas as pd
+import numpy as np
 
 import mmcv
 import torch
@@ -13,9 +15,16 @@ from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import get_dist_info, load_checkpoint
 
 from mmdet.apis import init_dist
-from mmdet.core import coco_eval, results2json, wrap_fp16_model
+from mmdet.core import wrap_fp16_model
 from mmdet.datasets import build_dataloader, build_dataset
 from mmdet.models import build_detector
+
+from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, filter_igore_masked_using_RT, filter_output
+from tqdm import tqdm
+from tools.evaluations.map_calculation import map_main
+from multiprocessing import Pool
+
+from finetune_RT_NMR import finetune_RT
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -66,7 +75,7 @@ def collect_results(result_part, size, tmpdir=None):
     if tmpdir is None:
         MAX_LEN = 512
         # 32 is whitespace
-        dir_tensor = torch.full((MAX_LEN, ),
+        dir_tensor = torch.full((MAX_LEN,),
                                 32,
                                 dtype=torch.uint8,
                                 device='cuda')
@@ -102,60 +111,141 @@ def collect_results(result_part, size, tmpdir=None):
         return ordered_results
 
 
-def write_submission(outputs, args):
-    import pandas as pd
-    import numpy as np
-    from scipy.special import softmax
-    from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
-    submission = args.out.replace('.pkl', '.csv')
+def write_submission(outputs, args, dataset,
+                     conf_thresh=0.1,
+                     filter_mask=False,
+                     horizontal_flip=False):
+    img_prefix = dataset.img_prefix
 
+    submission = args.out.replace('.pkl', '')
+    submission += '_' + img_prefix.split('/')[-1]
+    submission += '_conf_' + str(conf_thresh)
+
+    if filter_mask:
+        submission += '_filter_mask.csv'
+    elif horizontal_flip:
+        submission += '_horizontal_flip'
+    submission += '.csv'
     predictions = {}
-    PATH = '/data/Kaggle/pku-autonomous-driving/'
-    ImageId =[i.strip() for i in open(PATH + 'validation.txt').readlines()]
-    # ImageId = [x.replace('.jpg', '') for x in os.listdir(PATH + 'test_images')]
 
-    for idx, output in enumerate(outputs):
-        conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
-        euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
-        translation = output[2]['trans_pred_world']
-        coords = np.hstack((euler_angle, translation, conf[:, None]))
-        coords_str = coords2str(coords)
-        predictions[ImageId[idx]] = coords_str
+    CAR_IDX = 2  # this is the coco car class
+    for idx_img, output in tqdm(enumerate(outputs)):
+        file_name = os.path.basename(output[2]["file_name"])
+        ImageId = ".".join(file_name.split(".")[:-1])
 
-    pred_dict = {'ImageId':[],'PredictionString':[]}
-    for k,v in predictions.items():
+        # Wudi change the conf to car prediction
+        if len(output[0][CAR_IDX]):
+            conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+            idx_conf = conf > conf_thresh
+            if filter_mask:
+                # this filtering step will takes 2 second per iterations
+                # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
+
+                # the final id should require both
+                idx = idx_conf * idx_keep_mask
+            else:
+                idx = idx_conf
+            if 'euler_angle' in output[2].keys():
+                euler_angle = output[2]['euler_angle']
+            else:
+                euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+            translation = output[2]['trans_pred_world']
+            coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
+
+            coords_str = coords2str(coords)
+
+            predictions[ImageId] = coords_str
+        else:
+            predictions[ImageId] = ""
+
+    pred_dict = {'ImageId': [], 'PredictionString': []}
+    for k, v in predictions.items():
         pred_dict['ImageId'].append(k)
         pred_dict['PredictionString'].append(v)
 
     df = pd.DataFrame(data=pred_dict)
-    # print('df',df.head)
-    # test = pd.read_csv(PATH + 'sample_submission.csv')
-    # for im_id in test['ImageId']:
-    #     test.loc[test['ImageId'] == im_id, ['PredictionString']] = [predictions[im_id]]
-
+    print("Writing submission csv file to: %s" % submission)
     df.to_csv(submission, index=False)
+    return submission
+
+
+def filter_output_pool(t):
+    return filter_output(*t)
+
+
+def write_submission_pool(outputs, args, dataset,
+                          conf_thresh=0.,
+                          horizontal_flip=False,
+                          max_workers=20):
+    """
+    For accelerating filter image
+    :param outputs:
+    :param args:
+    :param dataset:
+    :param conf_thresh:
+    :param horizontal_flip:
+    :param max_workers:
+    :return:
+    """
+    img_prefix = dataset.img_prefix
+
+    submission = args.out.replace('.pkl', '')
+    submission += '_' + img_prefix.split('/')[-1]
+    submission += '_conf_' + str(conf_thresh)
+    submission += '_filter_mask.csv'
+    if horizontal_flip:
+        submission += '_horizontal_flip'
+    submission += '.csv'
+    predictions = {}
+
+    p = Pool(processes=max_workers)
+    for coords_str, ImageId in p.imap(filter_output_pool,
+                                      [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
+        predictions[ImageId] = coords_str
+
+    pred_dict = {'ImageId': [], 'PredictionString': []}
+    for k, v in predictions.items():
+        pred_dict['ImageId'].append(k)
+        pred_dict['PredictionString'].append(v)
+
+    df = pd.DataFrame(data=pred_dict)
+    print("Writing submission csv file to: %s" % submission)
+    df.to_csv(submission, index=False)
+    return submission
 
 
 def coords2str(coords):
     s = []
     for c in coords:
         for l in c:
-            s.append('%.5f'%l)
+            s.append('%.5f' % l)
     return ' '.join(s)
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
-    parser.add_argument('--config', default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py', help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov20-18-24-45/epoch_50.pth',  help='checkpoint file')
-    parser.add_argument('--out', default='/data/Kaggle/wudi_data/work_dirs/Nov20-18-24-45-epoch_50.pkl', help='output result file')
+    parser.add_argument('--config',
+                        default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
+                        help='train config file path')
+    # parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint',
+                        default='/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1/epoch_100.pth',
+                        help='checkpoint file')
+    parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
-                        choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints',' kaggle'], help='eval types')
+                        choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
+                        help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument('--horizontal_flip', default=False, action='store_true')
+    parser.add_argument('--start', type=int, default=0)
+    parser.add_argument('--end', type=int, default=400)
+    parser.add_argument('--world_size', type=int, default=3)
+
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -165,18 +255,22 @@ def parse_args():
 def main():
     args = parse_args()
 
-    assert args.out or args.show or args.json_out, \
-        ('Please specify at least one operation (save or show the results) '
-         'with the argument "--out" or "--show" or "--json_out"')
-
-    if args.out is not None and not args.out.endswith(('.pkl', '.pickle')):
-        raise ValueError('The output file must be a pkl file.')
-
     if args.json_out is not None and args.json_out.endswith('.json'):
         args.json_out = args.json_out[:-5]
 
     cfg = mmcv.Config.fromfile(args.config)
-    # set cudnn_benchmark
+    # Wudi change the args.out directly related to the model checkpoint file data
+    if args.horizontal_flip:
+        args.out = os.path.join(cfg.work_dir, 'work_dirs',
+                                cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
+                                args.checkpoint.split('/')[-2] + '_horizontal_flip.pkl')
+        print('horizontal_flip activated')
+    else:
+        args.out = os.path.join(cfg.work_dir, 'work_dirs',
+                                cfg.data.test.img_prefix.split('/')[-1].replace('images', '') +
+                                args.checkpoint.split('/')[-2] + '.pkl')
+
+        # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
         torch.backends.cudnn.benchmark = True
     cfg.model.pretrained = None
@@ -192,27 +286,27 @@ def main():
     # build the dataloader
     # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
-    data_loader = build_dataloader(
-        dataset,
-        imgs_per_gpu=1,
-        workers_per_gpu=cfg.data.workers_per_gpu,
-        dist=distributed,
-        shuffle=False)
-
-    # build the model and load checkpoint
-    model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
-    fp16_cfg = cfg.get('fp16', None)
-    if fp16_cfg is not None:
-        wrap_fp16_model(model)
-    checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    # old versions did not save class info in checkpoints, this walkaround is
-    # for backward compatibility
-    if 'CLASSES' in checkpoint['meta']:
-        model.CLASSES = checkpoint['meta']['CLASSES']
-    else:
-        model.CLASSES = dataset.CLASSES
-
     if not os.path.exists(args.out):
+        data_loader = build_dataloader(
+            dataset,
+            imgs_per_gpu=1,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False)
+
+        # build the model and load checkpoint
+        model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
+        fp16_cfg = cfg.get('fp16', None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
+        checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+        # old versions did not save class info in checkpoints, this walkaround is
+        # for backward compatibility
+        if 'CLASSES' in checkpoint['meta']:
+            model.CLASSES = checkpoint['meta']['CLASSES']
+        else:
+            model.CLASSES = dataset.CLASSES
+
         if not distributed:
             model = MMDataParallel(model, device_ids=[0])
             outputs = single_gpu_test(model, data_loader, args.show)
@@ -223,40 +317,68 @@ def main():
 
     else:
         outputs = mmcv.load(args.out)
-    write_submission(outputs, args)
-    # dataset.visualise_pred(outputs, args)
 
-    rank, _ = get_dist_info()
-    if args.out and rank == 0:
-        print('\nwriting results to {}'.format(args.out))
-        eval_types = args.eval
-        if eval_types:
-            print('Starting evaluate {}'.format(' and '.join(eval_types)))
-            if eval_types == ['proposal_fast']:
-                result_file = args.out
-                coco_eval(result_file, eval_types, dataset.coco)
-            else:
-                if not isinstance(outputs[0], dict):
-                    result_files = results2json(dataset, outputs, args.out)
-                    coco_eval(result_files, eval_types, dataset.coco)
-                else:
-                    for name in outputs[0]:
-                        print('\nEvaluating {}'.format(name))
-                        outputs_ = [out[name] for out in outputs]
-                        result_file = args.out + '.{}'.format(name)
-                        result_files = results2json(dataset, outputs_,
-                                                    result_file)
-                        coco_eval(result_files, eval_types, dataset.coco)
+    if distributed:
+        rank, _ = get_dist_info()
+        if rank != 0:
+            return
 
-    # Save predictions in the COCO json format
-    if args.json_out and rank == 0:
-        if not isinstance(outputs[0], dict):
-            results2json(dataset, outputs, args.json_out)
-        else:
-            for name in outputs[0]:
-                outputs_ = [out[name] for out in outputs]
-                result_file = args.json_out + '.{}'.format(name)
-                results2json(dataset, outputs_, result_file)
+    if False:  # If set to True, we will collect unfinished .pkl files
+        pkl_files = [x.replace('.pkl', '') for x in os.listdir('/data/Kaggle/wudi_data/tmp_output')]
+        all_files = [x[2]['file_name'].split('/')[-1].replace('.jpg', '') for x in outputs]
+        not_finished = [item for item in all_files if item not in pkl_files]
+        print('Unfinished :%d' % len(not_finished))
+        not_finished_idx = []
+        for i in range(len(all_files)):
+            if all_files[i] in not_finished:
+                not_finished_idx.append(i)
+        outputs = [outputs[index] for index in not_finished_idx]
+
+        idx = 5
+        bs = 10
+        print("output star idx: %d" % (int(idx * bs)))
+        # outputs = outputs[idx*bs: (idx+1)*bs]
+
+    # we use Neural Mesh Renderer to further finetune the result
+    outputs = outputs[args.start: args.end]
+    local_rank = args.local_rank
+    world_size = args.world_size
+    for idx, output in enumerate(outputs):
+        if idx % world_size == local_rank:
+            finetune_RT([output], dataset,
+                        draw_flag=False,
+                        num_epochs=20,
+                        iou_threshold=0.95,
+                        lr=0.05,
+                        fix_rot=False,
+                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
+
+    if False:  # This will collect all the NMR output
+        outputs = []
+        output_dir = '/data/Kaggle/wudi_data/tmp_output'
+        for f in os.listdir(output_dir):
+            output_tmp = mmcv.load(os.path.join(output_dir, f))
+            outputs.append(output_tmp)
+        args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
+
+    if False:
+        submission = write_submission(outputs, args, dataset,
+                                      conf_thresh=0,
+                                      filter_mask=False,
+                                      horizontal_flip=args.horizontal_flip)
+
+        print("Writing submission using the filter by mesh, this will take 2 sec per image")
+        print("You can also kill the program the uncomment the first line with filter_mask=False")
+        submission = write_submission_pool(outputs, args, dataset,
+                                           conf_thresh=0.0,
+                                           horizontal_flip=args.horizontal_flip)
+
+        # Visualise the prediction, this will take 5 sec..
+        # dataset.visualise_pred(outputs, args)
+
+        # evaluate mAP
+        print("Start to eval mAP")
+        map_main(submission, flip_model=args.horizontal_flip)
 
 
 if __name__ == '__main__':

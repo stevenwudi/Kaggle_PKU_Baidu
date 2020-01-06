@@ -9,6 +9,9 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.pylab as pylab
 from math import sin, cos
+import os
+from pycocotools import mask as maskUtils
+from mmcv import imwrite
 
 
 def mesh_point_to_bbox(img):
@@ -21,6 +24,45 @@ def mesh_point_to_bbox(img):
 
 
 def euler_angles_to_quaternions(angle):
+    """
+    Convert euler angels to quaternions representation.
+    该公式适用的yaw, pitch, roll与label里的定义不一样，需要做相应的变换 yaw, pitch, roll => pitch, yaw, roll
+
+    Input:
+        angle: n x 3 matrix, each row is [yaw, pitch, roll]
+    Output:
+        q: n x 4 matrix, each row is corresponding quaternion.
+    """
+
+    in_dim = np.ndim(angle)
+    if in_dim == 1:
+        angle = angle[None, :]
+
+    n = angle.shape[0]
+
+    # yaw, pitch, roll => pitch, yaw, roll
+    pitch, yaw, roll = angle[:, 0], angle[:, 1], angle[:, 2]
+
+    q = np.zeros((n, 4))
+
+    cy = np.cos(yaw * 0.5)
+    sy = np.sin(yaw * 0.5)
+    cr = np.cos(roll * 0.5)
+    sr = np.sin(roll * 0.5)
+    cp = np.cos(pitch * 0.5)
+    sp = np.sin(pitch * 0.5)
+
+    q[:, 0] = cy * cr * cp + sy * sr * sp
+    q[:, 1] = cy * sr * cp - sy * cr * sp
+    q[:, 2] = cy * cr * sp + sy * sr * cp
+    q[:, 3] = sy * cr * cp - cy * sr * sp
+
+    if in_dim == 1:
+        return q[0]
+    return q
+
+
+def euler_angles_to_quaternions_apollo(angle):
     """Convert euler angels to quaternions representation.
     Input:
         angle: n x 3 matrix, each row is [roll, pitch, yaw]
@@ -47,7 +89,6 @@ def euler_angles_to_quaternions(angle):
     q[:, 1] = cy * sr * cp - sy * cr * sp
     q[:, 2] = cy * cr * sp + sy * sr * cp
     q[:, 3] = sy * cr * cp - cy * sr * sp
-
     if in_dim == 1:
         return q[0]
     return q
@@ -80,13 +121,40 @@ def quaternion_upper_hemispher(q):
                 q = -q
             if c == 0:
                 print(q)
-                q[3] = 0
+                q[3] = 1
 
     return q
 
 
 def quaternion_to_euler_angle(q):
+    """
+    Convert quaternion to euler angel.
+    该公式适用的yaw, pitch, roll与label里的定义不一样，需要做相应的变换 yaw, pitch, roll => pitch, yaw, roll
 
+    Input:
+        q: 1 * 4 vector,
+    Output:
+        angle: 1 x 3 vector, each row is [yaw, pitch, roll]
+    """
+    w, x, y, z = q
+    t0 = +2.0 * (w * x + y * z)
+    t1 = +1.0 - 2.0 * (x * x + y * y)
+    roll = math.atan2(t0, t1)
+
+    t2 = +2.0 * (w * y - z * x)
+    t2 = +1.0 if t2 > +1.0 else t2
+    t2 = -1.0 if t2 < -1.0 else t2
+    pitch = math.asin(t2)
+
+    t3 = +2.0 * (w * z + x * y)
+    t4 = +1.0 - 2.0 * (y * y + z * z)
+    yaw = math.atan2(t3, t4)
+
+    # transform label RPY: yaw, pitch, roll => pitch, yaw, roll
+    return pitch, yaw, roll
+
+
+def quaternion_to_euler_angle_apollo(q):
     """Convert quaternion to euler angel.
     Input:
         q: 1 * 4 vector,
@@ -96,18 +164,18 @@ def quaternion_to_euler_angle(q):
     w, x, y, z = q
     t0 = +2.0 * (w * x + y * z)
     t1 = +1.0 - 2.0 * (x * x + y * y)
-    X = math.atan2(t0, t1)
+    roll = math.atan2(t0, t1)
 
     t2 = +2.0 * (w * y - z * x)
     t2 = +1.0 if t2 > +1.0 else t2
     t2 = -1.0 if t2 < -1.0 else t2
-    Y = math.asin(t2)
+    pitch = math.asin(t2)
 
     t3 = +2.0 * (w * z + x * y)
     t4 = +1.0 - 2.0 * (y * y + z * z)
-    Z = math.atan2(t3, t4)
+    yaw = math.atan2(t3, t4)
 
-    return X, Y, Z
+    return roll, pitch, yaw
 
 
 def intrinsic_vec_to_mat(intrinsic, shape=None):
@@ -134,6 +202,22 @@ def round_prop_to(num, base=4.):
     return np.ceil(num / base) * base
 
 
+def euler_to_Rot_YPR(yaw, pitch, roll):
+    Y = np.array([[cos(yaw), 0, sin(yaw)],
+                  [0, 1, 0],
+                  [-sin(yaw), 0, cos(yaw)]])
+    P = np.array([[1, 0, 0],
+                  [0, cos(pitch), -sin(pitch)],
+                  [0, sin(pitch), cos(pitch)]])
+    R = np.array([[cos(roll), -sin(roll), 0],
+                  [sin(
+
+                      roll), cos(roll), 0],
+                  [0, 0, 1]])
+
+    return Y, P, R
+
+
 def euler_to_Rot(yaw, pitch, roll):
     Y = np.array([[cos(yaw), 0, sin(yaw)],
                   [0, 1, 0],
@@ -144,7 +228,22 @@ def euler_to_Rot(yaw, pitch, roll):
     R = np.array([[cos(roll), -sin(roll), 0],
                   [sin(roll), cos(roll), 0],
                   [0, 0, 1]])
+
     return np.dot(Y, np.dot(P, R))
+
+
+def euler_to_Rot_apollo(yaw, pitch, roll):
+    Y = np.array([[cos(yaw), 0, sin(yaw)],
+                  [0, 1, 0],
+                  [-sin(yaw), 0, cos(yaw)]])
+    P = np.array([[1, 0, 0],
+                  [0, cos(pitch), -sin(pitch)],
+                  [0, sin(pitch), cos(pitch)]])
+    R = np.array([[cos(roll), -sin(roll), 0],
+                  [sin(roll), cos(roll), 0],
+                  [0, 0, 1]])
+
+    return np.dot(np.dot(R, Y), P)
 
 
 def euler_angles_to_rotation_matrix(angle, is_dir=False):
@@ -194,12 +293,12 @@ def rotation_matrix_to_euler_angles(R, check=True):
         shouldBeIdentity = np.dot(Rt, R)
         I = np.identity(3, dtype=R.dtype)
         n = np.linalg.norm(I - shouldBeIdentity)
-        #return n < 3 *(1e-6)
+        # return n < 3 *(1e-6)
         # Di Wu relax the condition for TLESS dataset
         return n < 1e-5
 
     if check:
-        assert(isRotationMatrix(R))
+        assert (isRotationMatrix(R))
 
     sy = math.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
     singular = sy < 1e-6
@@ -215,6 +314,33 @@ def rotation_matrix_to_euler_angles(R, check=True):
         z = 0
 
     return np.array([x, y, z])
+
+
+def rot2eul(R, euler_original, thresh=1e-5, debug=False):
+    """
+    https://stackoverflow.com/questions/54616049/converting-a-rotation-matrix-to-euler-angles-and-back-special-case
+    How to handle case for cos\theta == 0:
+    https://www.gregslabaugh.net/publications/euler.pdf
+    :param R:
+    :return:
+    """
+    if R[2, 0]-1 > thresh or np.abs(R[2, 0]-1) < thresh:
+        beta = -np.pi/2
+        alpha = np.arctan2(-R[0, 1], -R[0, 2]) - euler_original[2]
+        gamma = euler_original[2]
+        if debug:
+            print(beta)
+    elif R[2, 0] - (-1) < thresh or np.abs(R[2, 0]+1) < thresh:
+        beta = np.pi/2
+        alpha = np.arctan2(R[0, 1], R[0, 2]) + euler_original[2]
+        gamma = euler_original[2]
+        if debug:
+            print(beta)
+    else:
+        beta = -np.arcsin(R[2, 0])
+        alpha = np.arctan2(R[2, 1] / np.cos(beta), R[2, 2] / np.cos(beta))
+        gamma = np.arctan2(R[1, 0] / np.cos(beta), R[0, 0] / np.cos(beta))
+    return -np.array((beta, alpha, gamma))
 
 
 def convert_pose_mat_to_6dof(pose_file_in, pose_file_out):
@@ -238,8 +364,8 @@ def convert_pose_mat_to_6dof(pose_file_in, pose_file_out):
         rpy = rotation_matrix_to_euler_angles(mat[:3, :3])
         output_motion = np.hstack((xyz, rpy)).flatten()
         out_str = '%s %s\n' % (image_name, np.array2string(output_motion,
-            separator=',',
-            formatter={'float_kind':lambda x: "%.7f" % x})[1:-1])
+                                                           separator=',',
+                                                           formatter={'float_kind': lambda x: "%.7f" % x})[1:-1])
         f.write(out_str)
     f.close()
 
@@ -386,7 +512,7 @@ def im_car_trans_geometric_ssd6d(dataset, boxes, euler_angle, car_cls, im_scale=
 
         # lr denotes diagonal length of the precomputed bounding box and ls denotes the diagonal length
         # of the predicted bounding box on the image plane
-        ls = np.sqrt((box[2] - box[0]) ** 2 + (box[3] - box[1])**2)
+        ls = np.sqrt((box[2] - box[0]) ** 2 + (box[3] - box[1]) ** 2)
         # project 3D points to 2d image plane
         # https://docs.opencv.org/2.4/modules/calib3d/doc/camera_calibration_and_3d_reconstruction.html
         euler_angle_i = euler_angle[car_idx]
@@ -398,14 +524,14 @@ def im_car_trans_geometric_ssd6d(dataset, boxes, euler_angle, car_cls, im_scale=
 
         u = fx * x_y_z_R_T_hat[0, :] + cx
         v = fy * x_y_z_R_T_hat[1, :] + cy
-        lr = np.sqrt((u.max() - u.min())**2 + (v.max() - v.min())**2)
+        lr = np.sqrt((u.max() - u.min()) ** 2 + (v.max() - v.min()) ** 2)
 
         zs = lr * zr / ls
 
         xc = (box[0] + box[2]) / 2
         yc = (box[1] + box[3]) / 2
-        xc_syn = (u.max() + u.min())/2
-        yc_syn = (v.max() + v.min())/2
+        xc_syn = (u.max() + u.min()) / 2
+        yc_syn = (v.max() + v.min()) / 2
 
         xt = zs * (xc - xc_syn) / fx
         yt = zs * (yc - yc_syn) / fy
@@ -428,9 +554,184 @@ def draw_line(image, points):
 def draw_points(image, points):
     for (p_x, p_y, p_z) in points:
         cv2.circle(image, (p_x, p_y), int(1000 / p_z), (0, 255, 0), -1)
-#         if p_x > image.shape[1] or p_y > image.shape[0]:
-#             print('Point', p_x, p_y, 'is out of image with shape', image.shape)
+    #         if p_x > image.shape[1] or p_y > image.shape[0]:
+    #             print('Point', p_x, p_y, 'is out of image with shape', image.shape)
     return image
+
+
+def filter_igore_masked_images(
+        img_name,
+        mask_list,
+        img_prefix,
+        iou_threshold=0.5):
+    """
+    We filter out the ignore mask according to IoU
+    :param mask_list:
+    :param img_prefix:
+    :return:
+    """
+    # a hard coded path for extractin ignore test mask region
+    if 'valid' in img_prefix:
+        mask_dir = img_prefix.replace('validation_images', 'train_masks')
+    else:
+        mask_dir = img_prefix.replace('test_images', 'test_masks')
+
+    mask_file = os.path.join(mask_dir, img_name + '.jpg')
+    if os.path.isfile(mask_file):
+        mask_im = cv2.imread(mask_file)
+        mask_im = np.mean(mask_im, axis=2)
+        mask_im[mask_im > 0] = 1
+    else:
+        # there is no ignore mask
+        return [True] * len(mask_list)
+
+    idx_keep_mask = [False] * len(mask_list)
+    for i, mask_car_rle in enumerate(mask_list):
+        mask_car = maskUtils.decode(mask_car_rle)
+        im_combime = np.zeros(mask_im.shape)
+        im_combime[1480:, :] = mask_car
+
+        # now we calculate the IoU:
+        area_car = im_combime.sum()
+        interception = im_combime * mask_im
+        area_interception = interception.sum()
+        iou_car = area_interception / area_car
+        if iou_car < iou_threshold:
+            idx_keep_mask[i] = True
+
+    return idx_keep_mask
+
+
+def filter_igore_masked_using_RT(
+        img_name,
+        six_dof,
+        img_prefix,
+        dataset,
+        iou_threshold=0.9):
+    """
+    We filter out the ignore mask according to IoU
+    :param mask_list:
+    :param img_prefix:
+    :return:
+    """
+
+    # a hard coded path for extractin ignore test mask region
+    if 'valid' in img_prefix:
+        mask_dir = img_prefix.replace('validation_images', 'train_masks')
+    else:
+        mask_dir = img_prefix.replace('test_images', 'test_masks')
+
+    mask_file = os.path.join(mask_dir, img_name + '.jpg')
+    if os.path.isfile(mask_file):
+        mask_im = cv2.imread(mask_file)
+        mask_im = np.mean(mask_im, axis=2)
+        mask_im[mask_im > 0] = 1
+    else:
+        # there is no ignore mask
+        return [True] * six_dof['quaternion_pred'].shape[0]
+
+    idx_keep_mask = [False] * six_dof['quaternion_pred'].shape[0]
+
+    # output is a tuple of three elements
+    car_cls_score_pred = six_dof['car_cls_score_pred']
+    quaternion_pred = six_dof['quaternion_pred']
+    trans_pred_world = six_dof['trans_pred_world']
+    euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+    car_labels = np.argmax(car_cls_score_pred, axis=1)
+    kaggle_car_labels = [dataset.unique_car_mode[x] for x in car_labels]
+    car_names = [dataset.car_id2name[x].name for x in kaggle_car_labels]
+
+    for i in range(len(car_cls_score_pred)):
+
+        # We start to render the mask according to R,T
+        # now we draw mesh
+        # car_id2name is from:
+        # https://github.com/ApolloScapeAuto/dataset-api/blob/master/car_instance/car_models.py
+        car_name = car_names[i]
+        vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
+        vertices[:, 1] = -vertices[:, 1]
+        triangles = np.array(dataset.car_model_dict[car_name]['faces']) - 1
+
+        # project 3D points to 2d image plane
+        yaw, pitch, roll = euler_angle[i]
+        # I think the pitch and yaw should be exchanged
+        yaw, pitch, roll = -pitch, -yaw, -roll
+        Rt = np.eye(4)
+        t = np.array(trans_pred_world[i])
+        Rt[:3, 3] = t
+        Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+        Rt = Rt[:3, :]
+        P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+        P[:, :-1] = vertices
+        P = P.T
+
+        img_cor_points = np.dot(dataset.camera_matrix, np.dot(Rt, P))
+        img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        # project 3D points to 2d image plane
+        mask_seg = np.zeros(dataset.image_shape, dtype=np.uint8)
+        for t in triangles:
+            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                             dtype=np.int32)
+            # This will draw the mask for segmenation
+            cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+            # cv2.polylines(mask_seg_mesh, np.int32([coord]), 1, (0, 255, 0))
+
+        # now we calculate the IoU:
+        area_car = mask_seg.sum()
+        interception = mask_seg * mask_im
+        area_interception = interception.sum()
+        iou_car = area_interception / area_car
+        if iou_car < iou_threshold:
+            idx_keep_mask[i] = True
+        # else:
+        #     # iou car, we save it
+        #     img_output_dir = '/data/Kaggle/wudi_data/work_dirs/filter_image_mask_demo'
+        #     im_name = os.path.join(img_output_dir, img_name + '_%d.jpg'%i)
+        #     im_combined = mask_im*0.5 + mask_seg/255*0.5
+        #     imwrite(im_combined*255, im_name)
+
+    return idx_keep_mask
+
+
+def coords2str(coords):
+    s = []
+    for c in coords:
+        for l in c:
+            s.append('%.5f' % l)
+    return ' '.join(s)
+
+
+def filter_output(output_idx, outputs, conf_thresh, img_prefix, dataset):
+    output = outputs[output_idx]
+    file_name = os.path.basename(output[2]["file_name"])
+    ImageId = ".".join(file_name.split(".")[:-1])
+    CAR_IDX = 2  # this is the coco car class
+
+    # Wudi change the conf to car prediction
+    if len(output[0][CAR_IDX]):
+        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+        idx_conf = conf > conf_thresh
+
+        # this filtering step will takes 2 second per iterations
+        # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+        idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
+        # the final id should require both
+        idx = idx_conf * idx_keep_mask
+        if 'euler_angle' in output[2].keys():
+            euler_angle = output[2]['euler_angle']
+        else:
+            euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
+        # This is a new modification because in CYH's new json file;
+        translation = output[2]['trans_pred_world']
+        coords = np.hstack((euler_angle[idx], translation[idx], conf[idx, None]))
+        coords_str = coords2str(coords)
+    else:
+        coords_str = ""
+
+    return coords_str, ImageId
 
 
 if __name__ == '__main__':

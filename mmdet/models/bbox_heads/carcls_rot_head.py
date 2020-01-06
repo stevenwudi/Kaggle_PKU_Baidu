@@ -90,7 +90,10 @@ class ConvFCCarClsRotHead(BBoxHead):
 
         # Di Wu add build loss here overriding bbox_head
         self.loss_car_cls = build_loss(loss_car_cls)
-        self.loss_quaternion = build_loss(loss_quaternion)
+        if loss_quaternion['type'] == 'L1':
+            self.loss_quaternion = nn.L1Loss()
+        else:
+            self.loss_quaternion = build_loss(loss_quaternion)
 
     def _add_conv_fc_branch(self,
                             num_branch_convs,
@@ -218,17 +221,13 @@ class ConvFCCarClsRotHead(BBoxHead):
              car_cls_score_pred,
              quaternion_pred,
              car_cls_score_target,
-             quaternion_target,
-             car_cls_weight=1.0,
-             rot_weight=1.0):
+             quaternion_target):
         losses = dict()
 
         losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
-        losses['car_cls_ce_loss'] *= car_cls_weight
         losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
 
         losses['loss_quaternion'] = self.loss_quaternion(quaternion_pred, quaternion_target)
-        losses['loss_quaternion'] *= rot_weight
         losses['rotation_distance'] = self.rotation_similiarity(quaternion_pred, quaternion_target)
 
         return losses
@@ -236,7 +235,7 @@ class ConvFCCarClsRotHead(BBoxHead):
     def rotation_similiarity(self, quaternion_pred, quaternion_target):
         diff = torch.abs(torch.sum(quaternion_pred*quaternion_target, dim=1))
         dis_rot = torch.mean(2 * torch.acos(diff) * 180 / np.pi)
-        return dis_rot
+        return dis_rot.detach()
 
 
 @HEADS.register_module

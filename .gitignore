@@ -106,7 +106,7 @@ venv.bak/
 # cython generated cpp
 mmdet/ops/nms/src/soft_nms_cpu.cpp
 mmdet/version.py
-data
+
 .vscode
 .idea
 
@@ -118,3 +118,8 @@ work_dirs/
 
 # Pytorch
 *.pth
+
+!/neural_renderer/examples/data/mask_full_size.png
+
+
+*.gif

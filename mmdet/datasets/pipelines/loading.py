@@ -95,7 +95,7 @@ class LoadAnnotations(object):
         h, w = results['img_info']['height'], results['img_info']['width']
         gt_masks = results['ann_info']['masks']
         if self.poly2mask:
-            if not isinstance(gt_masks[0], np.ndarray) :
+            if not isinstance(gt_masks[0], np.ndarray):
                 gt_masks = [self._poly2mask(mask, h, w) for mask in gt_masks]
         results['gt_masks'] = gt_masks
         results['mask_fields'].append('gt_masks')

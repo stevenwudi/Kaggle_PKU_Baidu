@@ -21,6 +21,7 @@ class FCTranslationHead(nn.Module):
                  in_channels_carclsrot=1024,
                  fc_out_channels=100,
                  num_translation_reg=3,
+                 bbox_relative=False,  # if bbox_relative=False, then it requires training/test input the same
                  loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
                  *args, **kwargs):
         super(FCTranslationHead, self).__init__(*args, **kwargs)
@@ -28,7 +29,7 @@ class FCTranslationHead(nn.Module):
         self.in_channels_bboxes = in_channels_bboxes
         self.in_channels_carclsrot = in_channels_carclsrot
         self.num_translation_reg = num_translation_reg
-
+        self.bbox_relative = bbox_relative
         self.car_cls_rot_linear = nn.Linear(in_channels_carclsrot, fc_out_channels)
         self.bboxes_linear_1 = nn.Linear(in_channels_bboxes, fc_out_channels)
         self.bboxes_linear_2 = nn.Linear(fc_out_channels, fc_out_channels)
@@ -38,10 +39,10 @@ class FCTranslationHead(nn.Module):
         self.loss_translation = build_loss(loss_translation)
 
         # camera intrinsic also is saved here:
-        self.fx, self.cx, self.fy, self.cy = 2304.5479, 1686.2379, 2305.8757, (2710 - 1480)/2
+        self.fx, self.cx, self.fy, self.cy = 2304.5479, 1686.2379, 2305.8757, (2710 - 1480) / 2
         # translation mean and std:
         self.t_x_mean, self.t_y_mean, self.t_z_mean = -3, 9, 50
-        self.t_x_std,  self.t_y_std, self.t_z_std = 14.015, 4.695, 29.596
+        self.t_x_std, self.t_y_std, self.t_z_std = 14.015, 4.695, 29.596
 
     def init_weights(self):
         super(FCTranslationHead, self).init_weights()
@@ -108,6 +109,41 @@ class FCTranslationHead(nn.Module):
 
         return pred_boxes
 
+    def bbox_transform_pytorch_relative(self, rois, scale_factor, device_id, ori_shape):
+        """Forward transform that maps proposal boxes to predicted ground-truth
+        boxes using bounding-box regression deltas. See bbox_transform_inv for a
+        description of the weights argument.
+        This is a pytorch head
+        """
+        ### TODO delete the following 3 lines #####
+        #pad_shape = [1230, 3384]
+        # pad_shape[0] *= 1248/576
+        # pad_shape[1] *= 3392/1600
+        #####
+
+        rois = rois / scale_factor  # We transform invidiat back to the original pixel space (1280, 3384) before resizing
+        widths = rois[:, 2] - rois[:, 0]
+        heights = rois[:, 3] - rois[:, 1]
+        ctr_x = rois[:, 0] + 0.5 * widths
+        ctr_y = rois[:, 1] + 0.5 * heights
+
+        pred_boxes = torch.zeros(rois.shape, dtype=rois.dtype).cuda(device_id)
+
+        pred_boxes[:, 0] = ctr_x
+        pred_boxes[:, 1] = ctr_y
+        pred_boxes[:, 2] = widths
+        pred_boxes[:, 3] = heights
+
+        pred_boxes[:, 0] -= ori_shape[1] / 2
+        pred_boxes[:, 0] /= ori_shape[1]
+        pred_boxes[:, 1] -= ori_shape[0] / 2
+        pred_boxes[:, 1] /= ori_shape[0]
+
+        pred_boxes[:, 2] /= ori_shape[1]
+        pred_boxes[:, 3] /= ori_shape[0]
+
+        return pred_boxes
+
     @force_fp32(apply_to=('translation_pred'))
     def loss(self,
              translation_pred,
@@ -116,8 +152,19 @@ class FCTranslationHead(nn.Module):
         losses = dict()
         losses['loss_translation'] = self.translation_distance(translation_pred, translation_target)
         losses['translation_distance'] = self.translation_distance(translation_pred, translation_target)
+        losses['translation_distance_relative'] = self.translation_distance_relative(translation_pred,
+                                                                                     translation_target)
 
+        # The metrics are detached from backpropagation
+        losses['translation_distance'] = losses['translation_distance'].detach()
+        losses['translation_distance_relative'] = losses['translation_distance_relative'].detach()
         return losses
+
+    def translation_distance_relative(self, translation_pred, translation_target):
+        diff = translation_pred - translation_target
+        distance = torch.sqrt(torch.sum(translation_target ** 2, dim=1))
+        translation_diff = torch.sqrt(torch.sum(diff ** 2, dim=1)) / distance
+        return torch.mean(translation_diff)
 
     def translation_distance(self, translation_pred, translation_target):
         diff = translation_pred - translation_target
@@ -126,7 +173,7 @@ class FCTranslationHead(nn.Module):
         diff[:, 1] *= self.t_y_std
         diff[:, 2] *= self.t_z_std
 
-        translation_diff = torch.mean(torch.sqrt(torch.sum(diff**2, dim=1)))
+        translation_diff = torch.mean(torch.sqrt(torch.sum(diff ** 2, dim=1)))
         return translation_diff
 
     def pred_to_world_coord(self, translation_pred):
@@ -141,6 +188,7 @@ class FCTranslationHead(nn.Module):
         translation_pred[:, 2] += self.t_z_mean
 
         return translation_pred
+
 
 @HEADS.register_module
 class SharedTranslationHead(FCTranslationHead):

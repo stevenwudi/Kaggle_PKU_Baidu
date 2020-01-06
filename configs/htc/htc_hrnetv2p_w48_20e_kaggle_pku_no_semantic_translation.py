@@ -139,6 +139,8 @@ model = dict(
         fc_out_channels=100,
         num_translation_reg=3,
         loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
+
+    bayesian_weight_learning=False,
 )
 
 # model training and testing settings
@@ -217,9 +219,11 @@ train_cfg = dict(
             debug=False)
     ],
     stage_loss_weights=[1, 0.5, 0.25],
+
+    bayesian_weight_learning=True,
     car_cls_weight=1.0,
-    rot_weight=100.,
-    translation_weight=1.,
+    rot_weight=10.,
+    translation_weight=1.0,
 )
 test_cfg = dict(
     rpn=dict(
@@ -236,8 +240,9 @@ test_cfg = dict(
         mask_thr_binary=0.5),
     keep_all_stages=False)
 # dataset settings
-dataset_type = 'KaggkePKUDataset'
+dataset_type = 'KagglePKUDataset'
 data_root = '/data/Kaggle/pku-autonomous-driving/'
+# data_root = '/data/Kaggle/ApolloScape_3D_car/train/'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
 train_pipeline = [
@@ -246,9 +251,9 @@ train_pipeline = [
          with_carcls_rot=True, with_translation=True),
     dict(type='CropBottom', bottom_half=1480),
     #dict(type='Resize', img_scale=(1300, 800), keep_ratio=True),
-    dict(type='Resize', img_scale=(1700, 618), keep_ratio=True),
+    dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
     #dict(type='Resize', img_scale=(1000, 300), keep_ratio=True),
-    dict(type='RandomFlip', flip_ratio=1),
+    dict(type='RandomFlip', flip_ratio=0),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
@@ -262,11 +267,11 @@ test_pipeline = [
     dict(type='CropBottom', bottom_half=1480),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(1700, 618),
+        img_scale=(1664, 576),
         flip=False,
         transforms=[
             #dict(type='Resize', keep_ratio=True),
-            dict(type='Resize', img_scale=(1700, 618), keep_ratio=True),
+            dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
             #dict(type='RandomFlip', flip_ratio=0.5),
             dict(type='RandomFlip', flip_ratio=0),
             dict(type='Normalize', **img_norm_cfg),
@@ -284,21 +289,64 @@ data = dict(
         ann_file=data_root + 'train.csv',
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
-    val=dict(
-        type=dataset_type,
-        data_root=data_root,
-        ann_file=data_root + 'train.csv',
-        img_prefix=data_root + 'train_images/',
-        pipeline=test_pipeline),
+    val=list([
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast/',
+                pipeline=test_pipeline),
+            dict(
+                type=dataset_type,
+                data_root=data_root,
+                ann_file='/data/Kaggle/pku-autonomous-driving/validation.csv',
+                img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue/',
+                pipeline=test_pipeline),
+        ]),
     test=dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        img_prefix=data_root + 'test_images/',
-        #img_prefix=data_root + 'train_images/',
-        pipeline=test_pipeline))
+        img_prefix=data_root + 'validation_images/',
+        pipeline=test_pipeline),
+    )
+evaluation=dict(
+        conf_thresh=0.1,
+        interval=1,
+    )
+
 # optimizer
-optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
+optimizer = dict(type='Adam', lr=0.0001)
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
 lr_config = dict(
@@ -306,7 +354,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[20, 40])
+    step=[30, 60])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -317,12 +365,14 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 50
-dist_params = dict(backend='nccl')
+total_epochs = 80
+dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
 log_level = 'INFO'
-work_dir = '/data/Kaggle/yyj_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation'
+work_dir = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Adam'
 load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-# load_from = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov18-18-08-41/epoch_47.pth'
+# load_from = '/data/cyh/kaggle/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_Nov27-14-16-45/epoch_50.pth'
 
 resume_from = None
 workflow = [('train', 1)]
+
+
