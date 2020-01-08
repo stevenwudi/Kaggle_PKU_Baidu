@@ -26,7 +26,6 @@ def write_submission(outputs):
         except:
             continue
 
-
     
     pred_dict = {'ImageId':[],'PredictionString':[]}
     for k,v in predictions.items():
