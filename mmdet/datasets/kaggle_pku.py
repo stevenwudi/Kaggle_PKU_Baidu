@@ -12,7 +12,8 @@ from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions,\
-    quaternion_upper_hemispher, quaternion_to_euler_angle, draw_line, draw_points, non_max_suppression_fast,\
+    quaternion_upper_hemispher, quaternion_to_euler_angle, draw_line, draw_points, non_max_suppression_fast
+
 from demo.visualisation_utils import draw_box_mesh_kaggle_pku,refine_yaw_and_roll, \
     restore_x_y_from_z_withIOU, draw_result_kaggle_pku
 
@@ -302,7 +303,7 @@ class KagglePKUDataset(CustomDataset):
                 }
                 return annotation
 
-    def eular_angle_classification(self, annotations):
+    def eular_angle_classification(self, annotations, draw_dir=""):
         # for ann in tqdm(annotations):
         for ann in tqdm(annotations[5000: 5010]):
             # for ann in tqdm(annotations[0: 50]):
