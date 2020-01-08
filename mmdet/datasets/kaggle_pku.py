@@ -515,7 +515,7 @@ class KagglePKUDataset(CustomDataset):
 
         return True
 
-    def visualise_pred(self, outputs, args):
+    def visualise_pred_postprocessing(self, outputs, args):
         car_cls_coco = 2
 
         for idx in tqdm(range(len(outputs))):

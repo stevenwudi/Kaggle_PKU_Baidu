@@ -14,10 +14,7 @@ def write_submission(outputs):
     PATH = '/data/Kaggle/pku-autonomous-driving/'
     ImageId =[i.strip() for i in open(PATH + 'validation.txt').readlines()]
     # ImageId = [x.replace('.jpg', '') for x in os.listdir(PATH + 'test_images')]
-<<<<<<< HEAD
-=======
 
->>>>>>> d44094071a19ff4fe01bd60154f65a9d0862039a
     for idx, output in enumerate(outputs):
         conf = np.max(softmax(output[2]['car_cls_score_pred'], axis=1), axis=1)
         euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
@@ -29,10 +26,6 @@ def write_submission(outputs):
         except:
             continue
 
-<<<<<<< HEAD
-=======
-
->>>>>>> d44094071a19ff4fe01bd60154f65a9d0862039a
     
     pred_dict = {'ImageId':[],'PredictionString':[]}
     for k,v in predictions.items():

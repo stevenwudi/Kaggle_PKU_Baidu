@@ -369,7 +369,8 @@ def main():
         #                                    horizontal_flip=args.horizontal_flip)
 
         # Visualise the prediction, this will take 5 sec..
-        outputs_refined = dataset.visualise_pred(outputs, args)
+        ## the following function apply visualisation and post processing toghther
+        outputs_refined = dataset.visualise_pred_postprocessing(outputs, args)
         mmcv.dump(outputs_refined, '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/test_cwx114_10_0.05.pkl')
         submission = write_submission(outputs_refined, args, dataset,
                                       conf_thresh=0.15,
