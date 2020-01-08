@@ -273,7 +273,7 @@ train_pipeline = [
          with_carcls_rot=True, with_translation=True),
     dict(type='CropBottom', bottom_half=1480),
     dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
-    dict(type='RandomFlip', flip_ratio=0),
+    dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(
@@ -372,8 +372,8 @@ dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8002")
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
 #load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-load_from = '/data/Kaggle/wudi_data/Jan07-20-00-59/epoch_5.pth'
-#resume_from = '/data/Kaggle/wudi_data/Dec14-08-44-20/epoch_77.pth'
-resume_from = None
+#load_from = '/data/Kaggle/wudi_data/Jan07-20-00-59/epoch_5.pth'
+resume_from = '/data/Kaggle/wudi_data/Jan08-09-54-32/epoch_2.pth'
+#resume_from = None
 
 workflow = [('train', 1)]
