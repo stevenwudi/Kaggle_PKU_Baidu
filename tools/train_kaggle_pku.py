@@ -2,7 +2,7 @@ from __future__ import division
 import argparse
 import subprocess
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '2'
+#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import torch
 from datetime import datetime
 
@@ -51,7 +51,7 @@ def main():
         cfg.resume_from = args.resume_from
     cfg.gpus = args.gpus
     # Di WU change the saving directory according to the datetime
-    cfg.work_dir = cfg.work_dir + datetime.now().strftime("%b%d-%H-%M-%S") + str(get_git_revision_short_hash())
+    cfg.work_dir = cfg.work_dir + datetime.now().strftime("%b%d-%H-%M-%S")
 
     if args.autoscale_lr:
         # apply the linear scaling rule (https://arxiv.org/abs/1706.02677)
