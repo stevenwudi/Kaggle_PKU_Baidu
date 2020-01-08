@@ -44,7 +44,7 @@ class FCTranslationHead(nn.Module):
         # if we use bboxes to regress the x,y,z
         self.translation_bboxes_regression = translation_bboxes_regression
         if self.translation_bboxes_regression:
-            bboxes_file_name = '../mmdet/models/bbox_heads/bboxes_with_translation_pick.pkl'
+            bboxes_file_name = '/data/Kaggle/bboxes_with_translation_pick.pkl'
             try:
                 self.bboxes_with_translation_pick = mmcv.load(bboxes_file_name)
                 # The translational prediction will now be dependend upon anchor boxes

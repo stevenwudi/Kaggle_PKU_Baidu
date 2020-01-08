@@ -117,7 +117,7 @@ def get_updated_RT(vertices,
                    output_gif=None,
                    lr=0.05,
                    fix_rot=False,
-                   debug=True,
+                   debug=False,
                    ):
     model = Model(vertices,
                   faces,

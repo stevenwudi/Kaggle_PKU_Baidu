@@ -249,7 +249,7 @@ def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train a detector')
-    parser.add_argument('--idx', default=133, type=int, help='starting index for viewing')
+    parser.add_argument('--idx', default=0, type=int, help='starting index for viewing')
     args = parser.parse_args()
 
     return args
@@ -258,12 +258,13 @@ def parse_args():
 if __name__ == '__main__':
     car_model_dir = 'E:\DATASET\pku-autonomous-driving\car_models_json'
     valid_pred_file = r'E:\DATASET\pku-autonomous-driving\cwx_data\validation_all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1.pkl'
-    #valid_pred_file = r'E:\DATASET\pku-autonomous-driving\wudi_data\tmp_output\tmp_outputoutput_0000.pkl'
+    valid_pred_file = r'E:\DATASET\pku-autonomous-driving\wudi_data\tmp_output\tmp_outputoutput_0000.pkl'
 
     train_img_dir = r'E:\DATASET\pku-autonomous-driving\cwx_data\all_yihao069e100s5070_resume55Dec23-09-14-266141a3d1_valid_ep64_mes_vis'
     train_df = pd.read_csv(r'E:\DATASET\pku-autonomous-driving/train.csv')
 
     valid_pred = pkl.load(open(valid_pred_file, "rb"))
+    valid_pred = [valid_pred]
     args = parse_args()
     start_vis_index = args.idx
 

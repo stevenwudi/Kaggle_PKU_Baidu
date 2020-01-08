@@ -340,19 +340,13 @@ def main():
         # outputs = outputs[idx*bs: (idx+1)*bs]
 
     # we use Neural Mesh Renderer to further finetune the result
-    for idx, output in enumerate(outputs):
-        if output[2]['file_name'].split('/')[-1].replace('.jpg', '') == 'ID_2e24dd0ea':
-            print(idx)
-            break
-    #outputs = [outputs[idx]]
-
-    #outputs = outputs[args.start: args.end]
+    outputs = outputs[args.start: args.end]
     local_rank = args.local_rank
     world_size = args.world_size
     for idx, output in enumerate(outputs):
         if idx % world_size == local_rank:
             finetune_RT([output], dataset,
-                        draw_flag=True,
+                        draw_flag=False,
                         num_epochs=20,
                         iou_threshold=0.95,
                         lr=0.05,
@@ -380,7 +374,7 @@ def main():
                                            horizontal_flip=args.horizontal_flip)
 
         # Visualise the prediction, this will take 5 sec..
-        dataset.visualise_pred(outputs, args)
+        # dataset.visualise_pred(outputs, args)
 
         # evaluate mAP
         print("Start to eval mAP")
