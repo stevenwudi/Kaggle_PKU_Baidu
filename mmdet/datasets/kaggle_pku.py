@@ -5,14 +5,14 @@ import os
 from tqdm import tqdm
 import cv2
 from mmcv.image import imread, imwrite
+import mmcv
 from pycocotools import mask as maskUtils
 
 from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
-    quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points, \
-    euler_to_Rot_apollo, euler_to_Rot_YPR, rotation_matrix_to_euler_angles
+    quaternion_upper_hemispher, quaternion_to_euler_angle, draw_line, draw_points, non_max_suppression_fast
 from demo.visualisation_utils import draw_result_kaggle_pku
 
 from albumentations.augmentations import transforms
@@ -66,10 +66,6 @@ class KagglePKUDataset(CustomDataset):
 
             if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
-                if False:
-                    self.eular_angle_classification(annotations)
-                if True:  # plot annotation for examination
-                    self.plot_and_examine(annotations)
             else:
                 ## we add train.txt and validation.txt, 3862 and 400 respectively
                 outfilekaggle = '/data/cyh/kaggle/train.json'
@@ -89,11 +85,6 @@ class KagglePKUDataset(CustomDataset):
             annotations = self.clean_corrupted_images(annotations)
             annotations = self.clean_outliers(annotations)
 
-            # annotations = annotations[:5]
-
-            # CWX mess it up?
-            for ann in annotations:
-                ann['height'] = 2710
             self.print_statistics_annotations(annotations)
             if False:
                 self.plot_and_examine(annotations)
@@ -104,12 +95,17 @@ class KagglePKUDataset(CustomDataset):
                 info = {'filename': filename}
                 annotations.append(info)
 
-            # annotations = annotations[:5]
             # We also generate the albumentation enhances valid images
             # below is a hard coded list....
             if False:
                 self.generate_albu_valid(annotations)
 
+        # We also will generate a pickle file if the translation, SSD like offset regression
+        # this will need to be done only once
+        if False:
+            self.group_rectangles(annotations)
+
+        annotations = annotations
         self.annotations = annotations
 
         return annotations
@@ -476,7 +472,7 @@ class KagglePKUDataset(CustomDataset):
                 # Apollo below is correct
                 # https://en.wikipedia.org/wiki/Euler_angles
                 # Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
-                rot_mat = euler_to_Rot(eular_angle[0], eular_angle[1], eular_angle[2]).T
+                rot_mat = euler_to_Rot(-eular_angle[1], -eular_angle[0], -eular_angle[2]).T
                 # check eular from rot mat
                 Rt[:3, :3] = rot_mat
                 Rt = Rt[:3, :]
@@ -661,6 +657,45 @@ class KagglePKUDataset(CustomDataset):
         print("Totaly corrupted count is: %d, clean count: %d" % (corrupted_count, clean_count))
         return annotations_clean
 
+    def group_rectangles(self, annotations,
+                         outfile='/data/Kaggle/bboxes_with_translation_pick.pkl',
+                         draw_flag=True):
+        """
+        This will generate the referenced bboxes for translation regression. Only done onces
+        :param annotations:
+        :param outfile:
+        :param draw_flag:
+        :return:
+        """
+
+        bboxes_with_translation = []
+        for idx in range(len(annotations)):
+            ann = annotations[idx]
+            bboxes_with_translation.append(np.concatenate((ann['bboxes'], ann['translations']), axis=1))
+
+        bboxes_with_translation = np.vstack(bboxes_with_translation)
+        print('Total number of cars: %d.' % bboxes_with_translation.shape[0])
+        # We read an image first
+        bboxes_with_translation_pick = non_max_suppression_fast(bboxes_with_translation, overlapThresh=0.99)
+        # Some boxes are outside the boundary, we need to get rid of them:
+        idx_valid = np.array(bboxes_with_translation_pick[:, 0] <= self.image_shape[0]) & \
+                    np.array(bboxes_with_translation_pick[:, 1] <= self.image_shape[1]) & \
+                    np.array(bboxes_with_translation_pick[:, 0] >= 0) & np.array(bboxes_with_translation_pick[:, 1] >= 1480)
+
+        bboxes_with_translation_pick = bboxes_with_translation_pick[idx_valid]
+        print('Final number of selected boxed: %d.' % bboxes_with_translation_pick.shape[0])
+        mmcv.dump(bboxes_with_translation_pick, outfile)
+
+        if draw_flag:
+            img = imread(annotations[0]['filename'])
+            img_2 = img.copy()
+            for bb in bboxes_with_translation:
+                img = cv2.rectangle(img, (bb[0], bb[1]), (bb[2], bb[3]), color=(0,255, 0), thickness=1)
+            imwrite(img, '/data/Kaggle/wudi_data/rect_all.jpg')
+            for bb in bboxes_with_translation_pick:
+                img_2 = cv2.rectangle(img_2, (bb[0], bb[1]), (bb[2], bb[3]), color=(0, 255, 0), thickness=1)
+            imwrite(img_2, '/data/Kaggle/wudi_data/rect_selected.jpg')
+
     def print_statistics_annotations(self, annotations):
         """
         Print some statistics from annotations
@@ -689,7 +724,7 @@ class KagglePKUDataset(CustomDataset):
         print('Total images: %d, car num sum: %d, minmin: %d, max: %d, mean: %d' %
               (len(annotations), car_per_image.sum(), car_per_image.min(), car_per_image.max(), car_per_image.mean()))
         """
-        Total images: 4257, car num sum: 49607, minmin: 1, max: 44, mean: 11
+        Total images: 6691, car num sum: 74029, minmin: 1, max: 43, mean: 11
         """
         xp, yp = np.array(xp), np.array(yp)
         print("x min: %d, max: %d, mean: %d" % (int(min(xp)), int(max(xp)), int(xp.mean())))

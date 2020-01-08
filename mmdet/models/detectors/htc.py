@@ -148,9 +148,12 @@ class HybridTaskCascade(CascadeRCNN):
             else:
                 pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
             trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
-            pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
 
-            loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
+            if self.translation_head.translation_bboxes_regression:
+                loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred, pos_bboxes[im_idx], scale_factor[im_idx], device_id)
+            else:
+                pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+                loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
 
         return loss_translation
 
@@ -278,7 +281,10 @@ class HybridTaskCascade(CascadeRCNN):
         else:
             pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
         trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
-        trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
+        if self.translation_head.translation_bboxes_regression:
+            trans_pred_world = self.translation_head.pred_to_world_coord_SSD(trans_pred, pos_bboxes, scale_factor, device_id)
+        else:
+            trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
         trans_pred_world = trans_pred_world.cpu().numpy()
 
         return trans_pred_world

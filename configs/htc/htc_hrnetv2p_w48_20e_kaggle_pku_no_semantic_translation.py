@@ -138,6 +138,7 @@ model = dict(
         in_channels_carclsrot=1024,
         fc_out_channels=100,
         num_translation_reg=3,
+        translation_bboxes_regression=True,  # If set to True, we will have a SSD like offset regression
         loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
 
     bayesian_weight_learning=False,
@@ -220,7 +221,6 @@ train_cfg = dict(
     ],
     stage_loss_weights=[1, 0.5, 0.25],
 
-    bayesian_weight_learning=True,
     car_cls_weight=1.0,
     rot_weight=10.,
     translation_weight=1.0,
