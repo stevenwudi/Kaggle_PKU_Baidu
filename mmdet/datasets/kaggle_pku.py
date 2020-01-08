@@ -42,7 +42,7 @@ class NumpyEncoder(json.JSONEncoder):
 class KagglePKUDataset(CustomDataset):
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/Kaggle/cwx_data'):
+    def load_annotations(self, ann_file):
         # some hard coded parameters
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480  # this

@@ -47,6 +47,7 @@ class FCTranslationHead(nn.Module):
             bboxes_file_name = '../mmdet/models/bbox_heads/bboxes_with_translation_pick.pkl'
             try:
                 self.bboxes_with_translation_pick = mmcv.load(bboxes_file_name)
+                print('Finish loading file: %s' % bboxes_file_name)
                 # The translational prediction will now be dependend upon anchor boxes
                 num_anchor_boxes = self.bboxes_with_translation_pick.shape[0]
                 self.trans_pred = nn.Linear(fc_out_channels + fc_out_channels, num_anchor_boxes * num_translation_reg)
