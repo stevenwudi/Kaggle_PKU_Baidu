@@ -214,6 +214,7 @@ class RandomFlip(object):
                 results[key] = [mask[:, ::-1] for mask in results[key]]
 
             # flip eular angles and quaterion_semispheres
+
             for idx in range(len(results.get('ann_info', {}).get('eular_angles', []))):
                 ### the eular angles sequence should correspond to yaw, pitch, roll, otherwise it may mixup below
                 yaw_inverse = results['ann_info']['eular_angles'][idx][0]  ## yaw inverse(no inverse)
@@ -222,16 +223,19 @@ class RandomFlip(object):
 
                 eular_angle_flip = np.array([yaw_inverse, pitch_inverse, roll_inverse])
 
+
                 quaternion = euler_angles_to_quaternions(eular_angle_flip)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
                 quaternion_semisphere = np.array(quaternion_semisphere, dtype=np.float32)
                 results['quaternion_semispheres'][idx] = quaternion_semisphere
 
             # flip transation
+
             for idx in range(len(results.get('ann_info', {}).get('translations', []))):
                 x_camera = results['ann_info']['translations'][idx][0]
                 Z = results['ann_info']['translations'][idx][2]
                 x_camera_flip = 2 * self.delta_x * Z / self.fx - x_camera  ## due to the offset between cx and width//2
+
                 results['translations'][idx][0] = x_camera_flip  ## x inverse
 
         return results
