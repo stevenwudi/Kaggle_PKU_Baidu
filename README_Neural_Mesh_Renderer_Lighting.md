@@ -15,20 +15,21 @@ And the direction and intensity of the lighting is important.
 ### Lighting
 
 Lighting can be applied directly to a mesh. In NMR, there are ambient light
-and directional light. Let <img src="https://latex.codecogs.com/gif.latex?$l^a$ /> and 
-<img src="https://latex.codecogs.com/gif.latex?$l^d$ /> be the  intensities of the ambient light and 
+<img src="https://render.githubusercontent.com/render/math?math=l^a">
+be the  intensities of the ambient light and 
+<img src="https://render.githubusercontent.com/render/math?math=l^d">
 directional light, respectively, 
-<img src="https://latex.codecogs.com/gif.latex?$n^d$ /> be a unit vector indicating the 
-direction of the directional light, and $n_j$ be the normal vector of a surface.
+<img src="https://render.githubusercontent.com/render/math?math=n^d">
+be a unit vector indicating the direction of the directional light, and
+<img src="https://render.githubusercontent.com/render/math?math=n_j">
+be the normal vector of a surface.
 The modified color of a pixel 
-<img src="https://latex.codecogs.com/gif.latex?$I^l_j$ /> on the surface will be
-<img src="https://latex.codecogs.com/gif.latex? I^l_j = (l^a + (n^d \cdot n_j)l^d)I_j$ />.
+<img src="https://render.githubusercontent.com/render/math?math=I^l_j">
+<img src="https://render.githubusercontent.com/render/math?math=I^l_j = (l^a + (n^d \cdot n_j)l^d)I_j">
+.
 
 In the NMR formulation, gradients also flow into the intensities 
-<img src="https://latex.codecogs.com/gif.latex?$l^a$ /> and 
-<img src="https://latex.codecogs.com/gif.latex?$l_d$ />,
-as well as the direction 
-<img src="https://latex.codecogs.com/gif.latex?$n^d$ />of the directional light.
+as well as the direction of the directional light.
  Therefore, light sources can also be included as an optimisation target.
 
 
