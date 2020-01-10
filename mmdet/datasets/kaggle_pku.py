@@ -534,8 +534,6 @@ class KagglePKUDataset(CustomDataset):
                 assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
                        == len(trans_pred_world) == len(euler_angle) == len(car_names)
 
-                coords = np.hstack((euler_angle, trans_pred_world))
-
                 # print('change ',trans_pred_world,trans_pred_world_refined)
                 quaternion_semisphere_refined, flag = refine_yaw_and_roll(image, bboxes[car_cls_coco],
                                                                           segms[car_cls_coco], car_names, euler_angle,
