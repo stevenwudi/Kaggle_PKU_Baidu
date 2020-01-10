@@ -45,7 +45,7 @@ class NumpyEncoder(json.JSONEncoder):
 class KagglePKUDataset(CustomDataset):
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/pku-autonomous-driving'):
 
         # some hard coded parameters
         self.outdir = outdir
