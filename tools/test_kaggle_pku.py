@@ -340,14 +340,31 @@ def main():
 
         idx = 5
         bs = 10
-        print("output star idx: %d" % (int(idx*bs)))
-        #outputs = outputs[idx*bs: (idx+1)*bs]
 
-        # we use Neural Mesh Renderer to further finetune the result
-        finetune_RT(outputs, dataset, draw_flag=False, num_epochs=20,
-                                  iou_threshold=0.8, fix_rot=True, tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
-        print(" Finish NMR post-processing")
-        return True
+        print("output star idx: %d" % (int(idx * bs)))
+        # outputs = outputs[idx*bs: (idx+1)*bs]
+
+    # we use Neural Mesh Renderer to further finetune the result
+    for idx, output in enumerate(outputs):
+        if output[2]['file_name'].split('/')[-1].replace('.jpg', '') == 'ID_2e24dd0ea':
+            print(idx)
+            break
+    #outputs = [outputs[idx]]
+
+    #outputs = outputs[args.start: args.end]
+    local_rank = args.local_rank
+    world_size = args.world_size
+    for idx, output in enumerate(outputs):
+        if idx % world_size == local_rank:
+            finetune_RT([output], dataset,
+                        draw_flag=True,
+                        num_epochs=20,
+                        iou_threshold=0.95,
+                        lr=0.05,
+                        fix_rot=False,
+                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
+
+
     if False:  # This will collect all the NMR output
         outputs = []
         output_dir = '/data/Kaggle/wudi_data/tmp_output'
@@ -369,6 +386,9 @@ def main():
         #                                    horizontal_flip=args.horizontal_flip)
 
         # Visualise the prediction, this will take 5 sec..
+        dataset.visualise_pred(outputs, args)
+
+
         ## the following function apply visualisation and post processing toghther
         outputs_refined = dataset.visualise_pred_postprocessing(outputs, args)
         mmcv.dump(outputs_refined, '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/test_cwx114_10_0.05.pkl')

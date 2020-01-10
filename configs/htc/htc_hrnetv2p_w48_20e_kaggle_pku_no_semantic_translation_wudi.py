@@ -136,9 +136,10 @@ model = dict(
         fc_out_channels=100,
         num_translation_reg=3,
         bbox_relative=False,  # if bbox_relative=False, then it requires training/test input the same
+        translation_bboxes_regression=True,  # If set to True, we will have a SSD like offset regression
         loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
 
-    bayesian_weight_learning=False,
+    bayesian_weight_learning=True,  # If set to true, the loss weight coefficient will be updated.
 
 )
 
@@ -264,7 +265,6 @@ albu_train_transforms = [
                 p=0.1)
         ],
         p=0.1),
-    #dict(type='CLAHE', clip_limit=4.0, p=0.2),
 ]
 
 train_pipeline = [
@@ -272,10 +272,8 @@ train_pipeline = [
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True,
          with_carcls_rot=True, with_translation=True),
     dict(type='CropBottom', bottom_half=1480),
-    # dict(type='Resize', img_scale=(1300, 800), keep_ratio=True),
     dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
-    # dict(type='Resize', img_scale=(1000, 300), keep_ratio=True),
-    dict(type='RandomFlip', flip_ratio=0),
+    dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(
@@ -295,13 +293,9 @@ test_pipeline = [
     dict(
         type='MultiScaleFlipAug',
         img_scale=(1664, 576),  # (576, 1600, 3)
-        # img_scale=(3384, 1230),
         flip=False,  # test pipelines doest not need this
         transforms=[
-            # dict(type='Resize', keep_ratio=True),
             dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
-            # dict(type='Resize', img_scale=(3384, 1230), keep_ratio=True),
-            # dict(type='RandomFlip', flip_ratio=0.5),
             dict(type='RandomFlip', flip_ratio=0.),   # We always want to have this flip_ratio=1.0 for test
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
@@ -318,9 +312,9 @@ data = dict(
     train=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file='/data/cyh/kaggle/kaggle_apollo_combine_6692.json',
-
-        #ann_file=data_root + 'apollo_kaggle_combined_6725_wudi.json',  #
+        #ann_file='/data/cyh/kaggle/kaggle_apollo_combine_6692.json',
+        # ann_file=data_root + 'apollo_kaggle_combined_6725_wudi.json',
+        ann_file='/data/Kaggle/kaggle_apollo_combined_6691_origin.json',  # 6691 means the final cleaned data
         img_prefix=data_root + 'train_images/',
         pipeline=train_pipeline),
     val=dict(
@@ -333,17 +327,17 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
-        # img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussianBlur',  # valid variation
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_GaussNoise',  # valid variation
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast',  # valid variation
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
 
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
+        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
 
 evaluation = dict(
@@ -351,7 +345,7 @@ evaluation = dict(
     interval=1,
 )
 # optimizer
-optimizer = dict(type='Adam', lr=0.0001)
+optimizer = dict(type='Adam', lr=0.0003)  # We increase the learning rate to 3e-4 (It is supposed to be the best practice)
 
 optimizer_config = dict(grad_clip=dict(max_norm=35, norm_type=2))
 # learning policy
@@ -377,9 +371,9 @@ dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8002")
 
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
-load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-#load_from = '/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth'
-#resume_from = '/data/Kaggle/wudi_data/Dec14-08-44-20/epoch_77.pth'
-resume_from = None
+#load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
+#load_from = '/data/Kaggle/wudi_data/Jan07-20-00-59/epoch_5.pth'
+resume_from = '/data/Kaggle/wudi_data/Jan08-09-54-32/epoch_2.pth'
+#resume_from = None
 
 workflow = [('train', 1)]

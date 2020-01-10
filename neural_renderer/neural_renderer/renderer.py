@@ -13,7 +13,7 @@ class Renderer(nn.Module):
                  fill_back=True, camera_mode='projection',
                  K=None, R=None, t=None, dist_coeffs=None, orig_size=(1024, 768),
                  perspective=True, viewing_angle=30, camera_direction=[0, 0, 1],
-                 near=0.1, far=100,
+                 near=0.1, far=150,
                  light_intensity_ambient=0.5, light_intensity_directional=0.5,
                  light_color_ambient=[1, 1, 1], light_color_directional=[1, 1, 1],
                  light_direction=[0, 1, 0]):

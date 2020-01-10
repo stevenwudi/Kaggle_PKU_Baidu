@@ -5,15 +5,17 @@ import os
 from tqdm import tqdm
 import cv2
 from mmcv.image import imread, imwrite
+import mmcv
 from pycocotools import mask as maskUtils
 
 from .custom import CustomDataset
 from .registry import DATASETS
 from .car_models import car_id2name
+
 from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
-    quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points, \
-    euler_to_Rot_apollo, euler_to_Rot_YPR, rotation_matrix_to_euler_angles
-from demo.visualisation_utils import draw_result_kaggle_pku,draw_box_mesh_kaggle_pku,refine_yaw_and_roll, \
+    quaternion_upper_hemispher, quaternion_to_euler_angle, draw_line, draw_points, non_max_suppression_fast
+
+from demo.visualisation_utils import draw_result_kaggle_pku, draw_box_mesh_kaggle_pku, refine_yaw_and_roll, \
     restore_x_y_from_z_withIOU, get_IOU, nms_with_IOU
 
 from albumentations.augmentations import transforms
@@ -43,7 +45,8 @@ class NumpyEncoder(json.JSONEncoder):
 class KagglePKUDataset(CustomDataset):
     CLASSES = ('car',)
 
-    def load_annotations(self, ann_file, outdir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data'):
+    def load_annotations(self, ann_file, outdir='/data/Kaggle/pku-autonomous-driving'):
+
         # some hard coded parameters
         self.outdir = outdir
         self.image_shape = (2710, 3384)  # this is generally the case
@@ -68,38 +71,22 @@ class KagglePKUDataset(CustomDataset):
 
             if False:
                 annotations = json.load(open(outfile, 'r'))
-                if False:
-                    self.eular_angle_classification(annotations)
-                if False:  # plot annotation for examination
-                    self.plot_and_examine(annotations)
             else:
-                ## we add train.txt and validation.txt, 3862 and 400 respectively
-                outfile = os.path.join(outdir, 'kaggle_apollo_combined_6692_origin.json')
-                annotations = json.load(open(outfile, 'r'))
-                # annotations = json.load(open(outfilekaggle, 'r'))
-                # PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
-                # ImageId = [i.strip() for i in open(PATH + 'train-list.txt').readlines()]
-                # train = pd.read_csv(ann_file)
-                # self.print_statistics(train)
-                # for idx in tqdm(range(len(train))[:10]):
-                #     # filename = train['ImageId'].iloc[idx] + '.jpg'
-                #     # if filename not in ImageId:
-                #     #     continue
-                #     annotation = self.load_anno_idx(idx, train)
-                #     annotations.append(annotation)
-                # with open(outfile, 'w') as f:
-                #     json.dump(annotations, f, indent=4, cls=NumpyEncoder)
-            # annotations = self.clean_corrupted_images(annotations)
-            # annotations = self.clean_outliers(annotations)
+                PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
+                ImageId = [i.strip() for i in open(PATH + 'train-list.txt').readlines()]
+                train = pd.read_csv(ann_file)
+                for idx in tqdm(range(len(train))):
+                    filename = train['ImageId'].iloc[idx] + '.jpg'
+                    if filename not in ImageId:
+                        continue
+                    annotation = self.load_anno_idx(idx, train)
+                    annotations.append(annotation)
+                with open(outfile, 'w') as f:
+                    json.dump(annotations, f, indent=4, cls=NumpyEncoder)
+            annotations = self.clean_corrupted_images(annotations)
+            annotations = self.clean_outliers(annotations)
 
-            # annotations = annotations[:5]
-
-            # CWX mess it up?
-            for ann in annotations:
-                ann['filename'] = os.path.join(outdir,'train_images',os.path.basename(ann['filename']))
             self.print_statistics_annotations(annotations)
-            if False:
-                self.plot_and_examine(annotations)
 
         else:
             for fn in os.listdir(self.img_prefix):
@@ -107,12 +94,17 @@ class KagglePKUDataset(CustomDataset):
                 info = {'filename': filename}
                 annotations.append(info)
 
-            # annotations = annotations[:5]
             # We also generate the albumentation enhances valid images
             # below is a hard coded list....
             if False:
                 self.generate_albu_valid(annotations)
 
+        # We also will generate a pickle file if the translation, SSD like offset regression
+        # this will need to be done only once
+        if False:
+            self.group_rectangles(annotations)
+
+        annotations = annotations
         self.annotations = annotations
 
         return annotations
@@ -311,7 +303,7 @@ class KagglePKUDataset(CustomDataset):
                 }
                 return annotation
 
-    def eular_angle_classification(self, annotations):
+    def eular_angle_classification(self, annotations, draw_dir=""):
         # for ann in tqdm(annotations):
         for ann in tqdm(annotations[5000: 5010]):
             # for ann in tqdm(annotations[0: 50]):
@@ -416,7 +408,7 @@ class KagglePKUDataset(CustomDataset):
     def plot_and_examine(self, annotations, draw_dir='/data/Kaggle/wudi_data/train_image_gt_vis'):
 
         # for ann in tqdm(annotations):
-        #for ann in tqdm(annotations[5000: 5010]):
+        # for ann in tqdm(annotations[5000: 5010]):
         for ann in tqdm(annotations):
 
             img_name = ann['filename']
@@ -479,7 +471,7 @@ class KagglePKUDataset(CustomDataset):
                 # Apollo below is correct
                 # https://en.wikipedia.org/wiki/Euler_angles
                 # Y, P, R = euler_to_Rot_YPR(eular_angle[1], eular_angle[0], eular_angle[2])
-                rot_mat = euler_to_Rot(eular_angle[0], eular_angle[1], eular_angle[2]).T
+                rot_mat = euler_to_Rot(-eular_angle[1], -eular_angle[0], -eular_angle[2]).T
                 # check eular from rot mat
                 Rt[:3, :3] = rot_mat
                 Rt = Rt[:3, :]
@@ -523,9 +515,7 @@ class KagglePKUDataset(CustomDataset):
             # ann = self.annotations[idx]
             test_folder = '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/test_images/'
             img_name = os.path.join(test_folder, os.path.basename(outputs[idx][2]['file_name']))
-            # if 'ID_32ef9d037' not in img_name:
-            #     continue
-            # print('img_name',img_name)
+
             if not os.path.isfile(img_name):
                 assert "Image file does not exist!"
             else:
@@ -543,23 +533,25 @@ class KagglePKUDataset(CustomDataset):
 
                 assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
                        == len(trans_pred_world) == len(euler_angle) == len(car_names)
-                # now we start to plot the image from kaggle
+
                 coords = np.hstack((euler_angle, trans_pred_world))
-        
+
                 # print('change ',trans_pred_world,trans_pred_world_refined)
-                quaternion_semisphere_refined,flag = refine_yaw_and_roll(image,bboxes[car_cls_coco],segms[car_cls_coco],car_names, euler_angle,quaternion_pred,trans_pred_world,
-                                            self.car_model_dict,
-                                            self.camera_matrix)
+                quaternion_semisphere_refined, flag = refine_yaw_and_roll(image, bboxes[car_cls_coco],
+                                                                          segms[car_cls_coco], car_names, euler_angle,
+                                                                          quaternion_pred, trans_pred_world,
+                                                                          self.car_model_dict,
+                                                                          self.camera_matrix)
                 if flag:
                     output[2]['quaternion_pred'] = quaternion_semisphere_refined
                     euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
 
-                trans_pred_world_refined = restore_x_y_from_z_withIOU(image,bboxes[car_cls_coco],segms[car_cls_coco],car_names, euler_angle,trans_pred_world,
-                                            self.car_model_dict,
-                                            self.camera_matrix)
+                trans_pred_world_refined = restore_x_y_from_z_withIOU(image, bboxes[car_cls_coco], segms[car_cls_coco],
+                                                                      car_names, euler_angle, trans_pred_world,
+                                                                      self.car_model_dict,
+                                                                      self.camera_matrix)
                 output[2]['trans_pred_world'] = trans_pred_world_refined
-                
-                
+
                 # img_box_mesh_refined = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world_refined)
                 # img_box_mesh_refined, iou_flag = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world)
                 # if iou_flag:
@@ -583,12 +575,12 @@ class KagglePKUDataset(CustomDataset):
         test_folder = '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/test_images/'
         ## first we have to guarantee the outputs image names keep sequence consistence
         output_model_merge = []
-        for idx,(a,b) in enumerate(zip(outputs[0],outputs[1])):
+        for idx, (a, b) in enumerate(zip(outputs[0], outputs[1])):
             print(idx)
             img_name_a = os.path.basename(a[2]['file_name'])
             img_name_b = os.path.basename(b[2]['file_name'])
             assert img_name_a == img_name_b
-            img_name = os.path.join(test_folder,img_name_a)
+            img_name = os.path.join(test_folder, img_name_a)
             if not os.path.isfile(img_name):
                 assert "Image file does not exist!"
             else:
@@ -599,24 +591,26 @@ class KagglePKUDataset(CustomDataset):
                 segms_merge = segms_a.copy()
                 six_dof_merge = six_dof_a.copy()
 
-                bboxes_a_with_IOU = get_IOU(image, bboxes_a[car_cls_coco], segms_a[car_cls_coco], six_dof_a, car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
-                bboxes_b_with_IOU = get_IOU(image, bboxes_b[car_cls_coco], segms_b[car_cls_coco], six_dof_b, car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
-                bboxes_with_IOU = np.concatenate([bboxes_a_with_IOU,bboxes_b_with_IOU],axis=0)
-                inds = nms_with_IOU(bboxes_with_IOU) ## IOU nms filter out processing return output indices
+                bboxes_a_with_IOU = get_IOU(image, bboxes_a[car_cls_coco], segms_a[car_cls_coco], six_dof_a,
+                                            car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
+                bboxes_b_with_IOU = get_IOU(image, bboxes_b[car_cls_coco], segms_b[car_cls_coco], six_dof_b,
+                                            car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
+                bboxes_with_IOU = np.concatenate([bboxes_a_with_IOU, bboxes_b_with_IOU], axis=0)
+                inds = nms_with_IOU(bboxes_with_IOU)  ## IOU nms filter out processing return output indices
                 inds = np.array(inds)
                 inds_a = inds[np.where(inds < bboxes_a_with_IOU.shape[0])]
                 inds_b = inds[np.where(inds >= bboxes_a_with_IOU.shape[0])] - bboxes_a_with_IOU.shape[0]
                 bboxes_merge[car_cls_coco] = np.concatenate(
-                    [bboxes_a[car_cls_coco][inds_a],bboxes_b[car_cls_coco][inds_b]],axis=0)
+                    [bboxes_a[car_cls_coco][inds_a], bboxes_b[car_cls_coco][inds_b]], axis=0)
                 segms_merge[car_cls_coco] = np.concatenate(
-                    [np.array(segms_a[car_cls_coco])[inds_a], np.array(segms_b[car_cls_coco])[inds_b]],axis=0)
+                    [np.array(segms_a[car_cls_coco])[inds_a], np.array(segms_b[car_cls_coco])[inds_b]], axis=0)
                 six_dof_merge['car_cls_score_pred'] = np.concatenate(
-                    [six_dof_a['car_cls_score_pred'][inds_a], six_dof_b['car_cls_score_pred'][inds_b]],axis=0)
+                    [six_dof_a['car_cls_score_pred'][inds_a], six_dof_b['car_cls_score_pred'][inds_b]], axis=0)
                 six_dof_merge['quaternion_pred'] = np.concatenate(
                     [six_dof_a['quaternion_pred'][inds_a], six_dof_b['quaternion_pred'][inds_b]], axis=0)
                 six_dof_merge['trans_pred_world'] = np.concatenate(
                     [six_dof_a['trans_pred_world'][inds_a], six_dof_b['trans_pred_world'][inds_b]], axis=0)
-                output_model_merge.append((bboxes_merge,segms_merge,six_dof_merge))
+                output_model_merge.append((bboxes_merge, segms_merge, six_dof_merge))
 
                 car_cls_score_pred = six_dof_merge['car_cls_score_pred']
                 quaternion_pred = six_dof_merge['quaternion_pred']
@@ -626,23 +620,26 @@ class KagglePKUDataset(CustomDataset):
                 kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
                 car_names = np.array([car_id2name[x].name for x in kaggle_car_labels])
                 # img_box_mesh_refined = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world_refined)
-                img_box_mesh_refined, iou_flag = self.visualise_box_mesh(image,bboxes_merge[car_cls_coco], segms_merge[car_cls_coco],car_names, euler_angle,trans_pred_world)
-                imwrite(img_box_mesh_refined, os.path.join(args.out[:-4] + '_mes_box_vis_merged/' + img_name.split('/')[-1])[:-4]+'_merged.jpg')
+                img_box_mesh_refined, iou_flag = self.visualise_box_mesh(image, bboxes_merge[car_cls_coco],
+                                                                         segms_merge[car_cls_coco], car_names,
+                                                                         euler_angle, trans_pred_world)
+                imwrite(img_box_mesh_refined,
+                        os.path.join(args.out[:-4] + '_mes_box_vis_merged/' + img_name.split('/')[-1])[
+                        :-4] + '_merged.jpg')
 
         return output_model_merge
 
     def visualise_box_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
         im_combime, iou_flag = draw_box_mesh_kaggle_pku(image,
-                                            bboxes,
-                                            segms,
-                                            car_names,
-                                            self.car_model_dict,
-                                            self.camera_matrix,
-                                            trans_pred_world,
-                                            euler_angle)
+                                                        bboxes,
+                                                        segms,
+                                                        car_names,
+                                                        self.car_model_dict,
+                                                        self.camera_matrix,
+                                                        trans_pred_world,
+                                                        euler_angle)
 
         return im_combime, iou_flag
-
 
     def visualise_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
 
@@ -761,6 +758,46 @@ class KagglePKUDataset(CustomDataset):
         print("Totaly corrupted count is: %d, clean count: %d" % (corrupted_count, clean_count))
         return annotations_clean
 
+    def group_rectangles(self, annotations,
+                         outfile='/data/Kaggle/bboxes_with_translation_pick.pkl',
+                         draw_flag=True):
+        """
+        This will generate the referenced bboxes for translation regression. Only done onces
+        :param annotations:
+        :param outfile:
+        :param draw_flag:
+        :return:
+        """
+
+        bboxes_with_translation = []
+        for idx in range(len(annotations)):
+            ann = annotations[idx]
+            bboxes_with_translation.append(np.concatenate((ann['bboxes'], ann['translations']), axis=1))
+
+        bboxes_with_translation = np.vstack(bboxes_with_translation)
+        print('Total number of cars: %d.' % bboxes_with_translation.shape[0])
+        # We read an image first
+        bboxes_with_translation_pick = non_max_suppression_fast(bboxes_with_translation, overlapThresh=0.99)
+        # Some boxes are outside the boundary, we need to get rid of them:
+        idx_valid = np.array(bboxes_with_translation_pick[:, 0] <= self.image_shape[0]) & \
+                    np.array(bboxes_with_translation_pick[:, 1] <= self.image_shape[1]) & \
+                    np.array(bboxes_with_translation_pick[:, 0] >= 0) & np.array(
+            bboxes_with_translation_pick[:, 1] >= 1480)
+
+        bboxes_with_translation_pick = bboxes_with_translation_pick[idx_valid]
+        print('Final number of selected boxed: %d.' % bboxes_with_translation_pick.shape[0])
+        mmcv.dump(bboxes_with_translation_pick, outfile)
+
+        if draw_flag:
+            img = imread(annotations[0]['filename'])
+            img_2 = img.copy()
+            for bb in bboxes_with_translation:
+                img = cv2.rectangle(img, (bb[0], bb[1]), (bb[2], bb[3]), color=(0, 255, 0), thickness=1)
+            imwrite(img, '/data/Kaggle/wudi_data/rect_all.jpg')
+            for bb in bboxes_with_translation_pick:
+                img_2 = cv2.rectangle(img_2, (bb[0], bb[1]), (bb[2], bb[3]), color=(0, 255, 0), thickness=1)
+            imwrite(img_2, '/data/Kaggle/wudi_data/rect_selected.jpg')
+
     def print_statistics_annotations(self, annotations):
         """
         Print some statistics from annotations
@@ -789,7 +826,7 @@ class KagglePKUDataset(CustomDataset):
         print('Total images: %d, car num sum: %d, minmin: %d, max: %d, mean: %d' %
               (len(annotations), car_per_image.sum(), car_per_image.min(), car_per_image.max(), car_per_image.mean()))
         """
-        Total images: 4257, car num sum: 49607, minmin: 1, max: 44, mean: 11
+        Total images: 6691, car num sum: 74029, minmin: 1, max: 43, mean: 11
         """
         xp, yp = np.array(xp), np.array(yp)
         print("x min: %d, max: %d, mean: %d" % (int(min(xp)), int(max(xp)), int(xp.mean())))

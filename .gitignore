@@ -123,3 +123,5 @@ work_dirs/
 
 
 *.gif
+
+!/mmdet/models/bbox_heads/bboxes_with_translation_pick.pkl
