@@ -2,21 +2,16 @@ from collections import OrderedDict
 import torch
 
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
-in_file = '/data/Kaggle/wudi_data/work_dirs/htc_hrnetv2p_w48_20e_kaggle_pku_Nov13-11-15-55/epoch_2.pth'
-out_file = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
-
-
-# in_file = '/data/Kaggle/mmdet_pretrained_weights/htc_hrnetv2p_w48_28e_20190810-a4274b38.pth'
-# out_file = '/data/Kaggle/mmdet_pretrained_weights/trimmed_hrnetv2p_w48_28e_20190810-a4274b38.pth'
-#
+in_file = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48/epoch_100.pth'
+out_file = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48_trimmed_translation.pth'
 
 checkpoint = torch.load(in_file)
 in_state_dict = checkpoint.pop('state_dict')
 out_state_dict = OrderedDict()
 
-delete_dict = ['semantic_head']
+delete_dict = ['translation_head']
 
 for key, val in in_state_dict.items():
     find_flag = False

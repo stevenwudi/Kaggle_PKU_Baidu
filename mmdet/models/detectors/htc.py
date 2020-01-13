@@ -45,7 +45,7 @@ class HybridTaskCascade(CascadeRCNN):
         self.with_translation = with_translation
 
         # Bayesian learning of the weight
-        if self.bayesian_weight_learning:
+        if self.bayesian_weight_learning and self.train_cfg is not None:
             self.fc_car_cls_weight = nn.Linear(in_features=1, out_features=1, bias=False)
             self.fc_rot_weight = nn.Linear(in_features=1, out_features=1, bias=False)
             self.fc_translation_weight = nn.Linear(in_features=1, out_features=1, bias=False)

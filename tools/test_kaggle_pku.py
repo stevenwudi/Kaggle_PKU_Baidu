@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '3'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import os.path as osp
 import shutil
@@ -24,7 +24,8 @@ from tqdm import tqdm
 from tools.evaluations.map_calculation import map_main
 from multiprocessing import Pool
 
-from finetune_RT_NMR import finetune_RT
+#from finetune_RT_NMR import finetune_RT
+from finetune_RT_NMR_img import finetune_RT
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -223,18 +224,12 @@ def coords2str(coords):
     return ' '.join(s)
 
 
-
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config',
-                        default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_yyj.py',
+                        default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    # parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth', help='checkpoint file')
-    parser.add_argument('--checkpoint',
-                        default='/nfsc/vcdata/cyh/epoch_147.pth',
-                        help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan13-09-27/epoch_132.pth', help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
@@ -245,6 +240,7 @@ def parse_args():
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
     parser.add_argument('--horizontal_flip',  default=False, action='store_true')
+    parser.add_argument('--world_size', default=8)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -267,7 +263,7 @@ def main():
     else:
         args.out = os.path.join(cfg.work_dir,
                                 cfg.data.test.img_prefix.split('/')[-2].replace('_images', '_') +
-                                args.checkpoint.split('/')[-1][:-4] + '.pkl')
+                                args.checkpoint.split('/')[-2] + '.pkl')
 
         # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -283,44 +279,38 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     # build the dataloader
-    # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
-    # if not os.path.exists(args.out):
-    #     data_loader = build_dataloader(
-    #         dataset,
-    #         imgs_per_gpu=1,
-    #         workers_per_gpu=cfg.data.workers_per_gpu,
-    #         dist=distributed,
-    #         shuffle=False)
-    #
-    #     # build the model and load checkpoint
-    #     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
-    #     fp16_cfg = cfg.get('fp16', None)
-    #     if fp16_cfg is not None:
-    #         wrap_fp16_model(model)
-    #     checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-    #     # old versions did not save class info in checkpoints, this walkaround is
-    #     # for backward compatibility
-    #     if 'CLASSES' in checkpoint['meta']:
-    #         model.CLASSES = checkpoint['meta']['CLASSES']
-    #     else:
-    #         model.CLASSES = dataset.CLASSES
-    #
-    #     if not distributed:
-    #         model = MMDataParallel(model, device_ids=[0])
-    #         outputs = single_gpu_test(model, data_loader, args.show)
-    #     else:
-    #         model = MMDistributedDataParallel(model.cuda())
-    #         outputs = multi_gpu_test(model, data_loader, args.tmpdir)
-    #     mmcv.dump(outputs, args.out)
-    #
-    # else:
-    #     outputs = mmcv.load(args.out)
+    if not os.path.exists(args.out):
+        data_loader = build_dataloader(
+            dataset,
+            imgs_per_gpu=1,
+            workers_per_gpu=cfg.data.workers_per_gpu,
+            dist=distributed,
+            shuffle=False)
 
+        # build the model and load checkpoint
+        model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
+        fp16_cfg = cfg.get('fp16', None)
+        if fp16_cfg is not None:
+            wrap_fp16_model(model)
+        checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
+        # old versions did not save class info in checkpoints, this walkaround is
+        # for backward compatibility
+        if 'CLASSES' in checkpoint['meta']:
+            model.CLASSES = checkpoint['meta']['CLASSES']
+        else:
+            model.CLASSES = dataset.CLASSES
 
-    # outputs = mmcv.load('/nfsc/vcdata/cyh/Dec29-albu_pretrain_yyj_no_flip_resume_2.pkl') ## 0.109
-    # outputs = mmcv.load('/nfsc/vcdata/cyh/test_Dec30-albu_pretrain_yyj_flip_resume_3.pkl') ## 0.110
-    outputs = mmcv.load('/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/allcombine7092_50100150flip05_fineturn100resume82Jan04-08-18-49_d88480523.pkl') ## 0.114
+        if not distributed:
+            model = MMDataParallel(model, device_ids=[0])
+            outputs = single_gpu_test(model, data_loader, args.show)
+        else:
+            model = MMDistributedDataParallel(model.cuda())
+            outputs = multi_gpu_test(model, data_loader, args.tmpdir)
+        mmcv.dump(outputs, args.out)
+
+    else:
+        outputs = mmcv.load(args.out)
 
     if distributed:
         rank, _ = get_dist_info()
@@ -345,11 +335,11 @@ def main():
         # outputs = outputs[idx*bs: (idx+1)*bs]
 
     # we use Neural Mesh Renderer to further finetune the result
-    for idx, output in enumerate(outputs):
-        if output[2]['file_name'].split('/')[-1].replace('.jpg', '') == 'ID_2e24dd0ea':
-            print(idx)
-            break
-    #outputs = [outputs[idx]]
+    # for idx, output in enumerate(outputs):
+    #     if output[2]['file_name'].split('/')[-1].replace('.jpg', '') == 'ID_2e24dd0ea':
+    #         print(idx)
+    #         break
+    outputs = [outputs[0]]
 
     #outputs = outputs[args.start: args.end]
     local_rank = args.local_rank
@@ -373,7 +363,7 @@ def main():
             outputs.append(output_tmp)
         args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
 
-    if True:
+    if False:
         # submission = write_submission(outputs, args, dataset,
         #                               conf_thresh=0.1,
         #                               filter_mask=False,
@@ -398,7 +388,7 @@ def main():
                                       horizontal_flip=args.horizontal_flip)
         # evaluate mAP
         print("Start to eval mAP")
-        # map_main(submission, flip_model=args.horizontal_flip)
+        map_main(submission, flip_model=args.horizontal_flip)
 
 
 if __name__ == '__main__':
