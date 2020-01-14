@@ -16,7 +16,7 @@ from .kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
     quaternion_upper_hemispher, quaternion_to_euler_angle, draw_line, draw_points, non_max_suppression_fast
 
 from demo.visualisation_utils import draw_result_kaggle_pku, draw_box_mesh_kaggle_pku, refine_yaw_and_roll, \
-    restore_x_y_from_z_withIOU, get_IOU, nms_with_IOU
+    restore_x_y_from_z_withIOU, get_IOU, nms_with_IOU, nms_with_IOU_and_vote
 
 from albumentations.augmentations import transforms
 from math import acos, pi
@@ -565,6 +565,103 @@ class KagglePKUDataset(CustomDataset):
                 # imwrite(img_box_mesh_refined, os.path.join(args.out[:-4] + '_mes_box_vis_10_0.7_IOU=0/' + img_name.split('/')[-1])[:-4]+'_refined.jpg')
 
         return outputs
+
+    def distributed_visualise_pred_merge_postprocessing(self, img_id, outputs, args, vote=2, tmp_dir="./results/", draw_flag=False):
+        car_cls_coco = 2
+
+        bboxes_list = []
+        segms_list = []
+        six_dof_list = []
+        bboxes_with_IOU_list = []
+
+        bboxes_merge = outputs[0][img_id][0].copy()
+        segms_merge = outputs[0][img_id][1].copy()
+        six_dof_merge = outputs[0][img_id][2].copy()
+
+        last_name = ""
+        for i, output in enumerate(outputs):
+            a = output[img_id]
+            file_name = os.path.basename(a[2]['file_name'])
+            if last_name != "" and file_name != last_name:
+                assert "Image error!"
+            last_name = file_name
+
+            img_name = os.path.join(self.img_prefix, file_name)
+            if not os.path.isfile(img_name):
+                assert "Image file does not exist!"
+
+            image = imread(img_name)
+            bboxes, segms, six_dof = a[0], a[1], a[2]
+            bboxes_list.append(bboxes)
+            segms_list.append(segms)
+            six_dof_list.append(six_dof)
+
+            bboxes_with_IOU = get_IOU(image, bboxes[car_cls_coco], segms[car_cls_coco], six_dof,
+                                            car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
+
+            new_bboxes_with_IOU = np.zeros((bboxes_with_IOU.shape[0], bboxes_with_IOU.shape[1]+1))
+            for bbox_idx in range(bboxes_with_IOU.shape[0]):
+                new_bboxes_with_IOU[bbox_idx] = np.append(bboxes_with_IOU[bbox_idx], float(i))
+
+            bboxes_with_IOU_list.append(new_bboxes_with_IOU)
+
+        bboxes_with_IOU = np.concatenate(bboxes_with_IOU_list, axis=0)
+        inds = nms_with_IOU_and_vote(bboxes_with_IOU, vote=vote)  ## IOU nms filter out processing return output indices
+        inds = np.array(inds)
+
+        inds_list = []
+        start = 0
+        for bboxes_iou in bboxes_with_IOU_list:
+            end = bboxes_iou.shape[0] + start
+            i = np.where((inds >= start) & (inds < end))
+            if i:
+                inds_current = inds[i] - start
+            else:
+                inds_current = []
+            inds_list.append(inds_current)
+            start = end
+
+        bboxes_merge_concat = []
+        segms_merge_concat = []
+        car_cls_score_pred_concat = []
+        quaternion_pred_concat = []
+        trans_pred_world_concat = []
+
+        for ids, bboxes, segms, six_dof in zip(inds_list, bboxes_list, segms_list, six_dof_list):
+            bboxes_merge_concat.append(bboxes[car_cls_coco][ids])
+            segms_merge_concat.append(np.array(segms[car_cls_coco])[ids])
+            car_cls_score_pred_concat.append(six_dof['car_cls_score_pred'][ids])
+            quaternion_pred_concat.append(six_dof['quaternion_pred'][ids])
+            trans_pred_world_concat.append(six_dof['trans_pred_world'][ids])
+
+
+        bboxes_merge[car_cls_coco] = np.concatenate(bboxes_merge_concat, axis=0)
+        segms_merge[car_cls_coco] = np.concatenate(segms, axis=0)
+        six_dof_merge['car_cls_score_pred'] = np.concatenate(car_cls_score_pred_concat, axis=0)
+        six_dof_merge['quaternion_pred'] = np.concatenate(quaternion_pred_concat, axis=0)
+        six_dof_merge['trans_pred_world'] = np.concatenate(trans_pred_world_concat, axis=0)
+        
+        output_model_merge = (bboxes_merge, segms_merge, six_dof_merge)
+
+        if draw_flag:
+            car_cls_score_pred = six_dof_merge['car_cls_score_pred']
+            quaternion_pred = six_dof_merge['quaternion_pred']
+            trans_pred_world = six_dof_merge['trans_pred_world'].copy()
+            euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+            car_labels = np.argmax(car_cls_score_pred, axis=1)
+            kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
+            car_names = np.array([car_id2name[x].name for x in kaggle_car_labels])
+            # img_box_mesh_refined = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world_refined)
+            img_box_mesh_refined, iou_flag = self.visualise_box_mesh(image, bboxes_merge[car_cls_coco],
+                                                                     segms_merge[car_cls_coco], car_names,
+                                                                     euler_angle, trans_pred_world)
+            imwrite(img_box_mesh_refined,
+                    os.path.join(args.out[:-4] + '_mes_box_vis_merged/' + img_name.split('/')[-1])[
+                    :-4] + '_merged.jpg')
+        
+        tmp_file = os.path.join(tmp_dir, "{}.pkl".format(last_name[:-4]))
+        mmcv.dump(output_model_merge, tmp_file)
+        return output_model_merge
 
     def visualise_pred_merge_postprocessing(self, outputs, args, conf_thred=0.8):
         car_cls_coco = 2
