@@ -161,7 +161,7 @@ def get_updated_RT(vertices,
                     updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
                     updated_euler_angle = rot2eul(updated_rot_matrix, model.euler_original)
                     changed_rot = RotationDistance(model.euler_original, updated_euler_angle)
-                    print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %4.f'
+                    print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %.4f'
                           % (np.array2string(np.array(model.euler_original)), np.array2string(updated_euler_angle),
                              changed_rot))
 
@@ -215,11 +215,18 @@ def finetune_RT(outputs,
             vertices[:, 1] = -vertices[:, 1]
             faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
             # Get prediction of Rotation Matrix and  Translation
-            ea = euler_angles[car_idx]
+            ea = 0.1593, 0.04511, -3.08948
+            T = np.array([-6.1449, 20.1106, 120.369])
+            # ea = 0.1374788, 3.1345, -3.12617
+            #T = np.array([-12.7547, 9.9363, 120.369])
+
+            #T = np.array([-12.7547, 9.9363, 53.36])
+            if False:
+                ea = euler_angles[car_idx]
+                T = trans_pred_world[car_idx]
             yaw, pitch, roll = ea[0], ea[1], ea[2]
             yaw, pitch, roll = -pitch, -yaw, -roll
             Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
-            T = trans_pred_world[car_idx]
 
             if draw_flag:
                 output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(

@@ -346,9 +346,13 @@ def finetune_RT(outputs,
         # We choose the closest z two cars
         idx_conf = np.array([False] * len(conf))  # We choose only one car
 
-        for close_idx in np.argsort(trans_pred_world[:, -1])[:num_car_for_light_rendering]:
+        lighting_count = 0
+        for close_idx in np.argsort(trans_pred_world[:, -1]):
             if conf_list[close_idx]:
                 idx_conf[close_idx] = True
+                lighting_count += 1
+                if lighting_count >= num_car_for_light_rendering:
+                    break
 
         # Di Wu parrallise the code as below for one image per GPU
         rgb_image = imread(output[2]['file_name'])
