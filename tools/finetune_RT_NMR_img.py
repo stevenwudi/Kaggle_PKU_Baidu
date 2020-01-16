@@ -117,6 +117,7 @@ class Model(nn.Module):
 
     def forward(self):
         image_rgb = self.renderer(self.vertices, self.faces, self.textures, mode='rgb')
+        #print("Rendered RGB max: %.4f" % torch.max(image_rgb))
         image_gray = image_rgb.sum(dim=0).sum(dim=0)
         image_gray = image_gray
         loss = torch.sum((image_gray - self.masked_grayscale_img) ** 2)
@@ -289,7 +290,7 @@ def get_updated_RT(vertices,
     return updated_translation, rot2eul(updated_rot_matrix, model.euler_original)
 
 
-def finetune_RT(outputs,
+def finetune_RT(output,
                 dataset,
                 loss_grayscale_light=0.05,
                 loss_grayscale_RT=0.05,
@@ -300,7 +301,7 @@ def finetune_RT(outputs,
                 conf_thresh=0.8,
                 tmp_save_dir='/data/Kaggle/wudi_data/tmp_output/',
                 fix_rot=True,
-                num_car_for_light_rendering=2):
+                num_car_for_light_rendering=3):
     """
     We first get the lighting parameters: using 2 cars gray scale,
     then use grayscale loss and IoU loss to update T, and R(optional)
@@ -327,157 +328,153 @@ def finetune_RT(outputs,
     """
     CAR_IDX = 2
     output_gif = None
-    outputs_update = outputs.copy()
-
+    outputs_update = [output].copy()
+    camera_matrix = dataset.camera_matrix.copy()
+    camera_matrix[1, 2] -= 1480  # Because we have only bottom half
     # First we collect all the car instances info. in an image
-    for img_idx in tqdm.tqdm(range(len(outputs))):
-        output = outputs[img_idx]
-        bboxes, segms, six_dof = output[0], output[1], output[2]
-        car_cls_score_pred = six_dof['car_cls_score_pred']
-        quaternion_pred = six_dof['quaternion_pred']
-        trans_pred_world = six_dof['trans_pred_world']
-        car_labels = np.argmax(car_cls_score_pred, axis=1)
-        kaggle_car_labels = [dataset.unique_car_mode[x] for x in car_labels]
-        car_names = [car_id2name[x].name for x in kaggle_car_labels]
-        euler_angles = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+    bboxes, segms, six_dof = output[0], output[1], output[2]
+    car_cls_score_pred = six_dof['car_cls_score_pred']
+    quaternion_pred = six_dof['quaternion_pred']
+    trans_pred_world = six_dof['trans_pred_world']
+    car_labels = np.argmax(car_cls_score_pred, axis=1)
+    kaggle_car_labels = [dataset.unique_car_mode[x] for x in car_labels]
+    car_names = [car_id2name[x].name for x in kaggle_car_labels]
+    euler_angles = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
 
-        conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
-        conf_list = conf > conf_thresh
-        # We choose the closest z two cars
-        idx_conf = np.array([False] * len(conf))  # We choose only one car
+    conf = output[0][CAR_IDX][:, -1]  # output [0] is the bbox
+    conf_list = conf > conf_thresh
+    # We choose the closest z two cars
+    idx_conf = np.array([False] * len(conf))  # We choose only one car
 
-        lighting_count = 0
-        for close_idx in np.argsort(trans_pred_world[:, -1]):
-            if conf_list[close_idx]:
-                idx_conf[close_idx] = True
-                lighting_count += 1
-                if lighting_count >= num_car_for_light_rendering:
-                    break
+    lighting_count = 0
+    for close_idx in np.argsort(trans_pred_world[:, -1]):
+        if conf_list[close_idx]:
+            idx_conf[close_idx] = True
+            lighting_count += 1
+            if lighting_count >= num_car_for_light_rendering:
+                break
 
-        # Di Wu parrallise the code as below for one image per GPU
-        rgb_image = imread(output[2]['file_name'])
-        # convert the rgb image to grayscale
-        grayscale_image = color.rgb2gray(rgb_image)
+    # Di Wu parrallise the code as below for one image per GPU
+    rgb_image = imread(output[2]['file_name'])
+    # convert the rgb image to grayscale
+    grayscale_image = color.rgb2gray(rgb_image)
 
-        vertices_img = []
-        max_vertices = 0
-        faces_img = []
-        # there are in total 4999-5000 faces... we choose 4999 faces, for some car, not rendering one
-        # face should be alright.
-        min_faces = 4999
-        Rotation_Matrix_img = []
-        T_img = []
-        euler_angles_img = []
-        mask_img = []
+    vertices_img = []
+    max_vertices = 0
+    faces_img = []
+    # there are in total 4999-5000 faces... we choose 4999 faces, for some car, not rendering one
+    # face should be alright.
+    min_faces = 4999
+    Rotation_Matrix_img = []
+    T_img = []
+    euler_angles_img = []
+    mask_img = []
 
-        for car_idx in range(len(quaternion_pred)):
-            # The the HTC predicted Mask which is served as the GT Mask
-            segms_car = segms[CAR_IDX][car_idx]
-            mask = maskUtils.decode(segms_car)
-            # Get car mesh--> vertices and faces
-            car_name = car_names[car_idx]
-            vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
-            vertices[:, 1] = -vertices[:, 1]
-            faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
-            # Get prediction of Rotation Matrix and  Translation
-            ea = euler_angles[car_idx]
-            yaw, pitch, roll = ea[0], ea[1], ea[2]
-            yaw, pitch, roll = -pitch, -yaw, -roll
-            Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
-            T = trans_pred_world[car_idx]
+    for car_idx in range(len(quaternion_pred)):
+        # The the HTC predicted Mask which is served as the GT Mask
+        segms_car = segms[CAR_IDX][car_idx]
+        mask = maskUtils.decode(segms_car)
+        # Get car mesh--> vertices and faces
+        car_name = car_names[car_idx]
+        vertices = np.array(dataset.car_model_dict[car_name]['vertices'])
+        vertices[:, 1] = -vertices[:, 1]
+        faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
+        # Get prediction of Rotation Matrix and  Translation
+        ea = euler_angles[car_idx]
+        yaw, pitch, roll = ea[0], ea[1], ea[2]
+        yaw, pitch, roll = -pitch, -yaw, -roll
+        Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
+        T = trans_pred_world[car_idx]
 
-            vertices_img.append(vertices)
-            max_vertices = max(vertices.shape[0], max_vertices)
-            faces_img.append(faces)
-            min_faces = min(faces.shape[0], min_faces)
-            Rotation_Matrix_img.append(Rotation_Matrix)
-            T_img.append(T)
-            euler_angles_img.append(np.array([yaw, pitch, roll]))
-            mask_img.append(mask)
+        vertices_img.append(vertices)
+        max_vertices = max(vertices.shape[0], max_vertices)
+        faces_img.append(faces)
+        min_faces = min(faces.shape[0], min_faces)
+        Rotation_Matrix_img.append(Rotation_Matrix)
+        T_img.append(T)
+        euler_angles_img.append(np.array([yaw, pitch, roll]))
+        mask_img.append(mask)
 
-        Rotation_Matrix_img = np.stack(Rotation_Matrix_img)
-        T_img = np.stack(T_img)
-        euler_angles_img = np.stack(euler_angles_img)
-        mask_img = np.stack(mask_img)
-        masked_grayscale_img = mask_img[idx_conf].sum(axis=0) * grayscale_image[1480:, :]
-        masked_grayscale_img = masked_grayscale_img / masked_grayscale_img.max()
-        # For vertices and faces each car will generate different
-        vertices_img_all = np.zeros((len(vertices_img), max_vertices, 3))
-        faces_img_all = np.zeros((len(faces_img), min_faces, 3))
+    Rotation_Matrix_img = np.stack(Rotation_Matrix_img)
+    T_img = np.stack(T_img)
+    euler_angles_img = np.stack(euler_angles_img)
+    mask_img = np.stack(mask_img)
+    masked_grayscale_img = mask_img[idx_conf].sum(axis=0) * grayscale_image[1480:, :]
+    masked_grayscale_img = masked_grayscale_img / masked_grayscale_img.max()
+    # For vertices and faces each car will generate different
+    vertices_img_all = np.zeros((len(vertices_img), max_vertices, 3))
+    faces_img_all = np.zeros((len(faces_img), min_faces, 3))
 
-        for i in range(len(vertices_img)):
-            vertices_img_all[i, :vertices_img[i].shape[0], :] = vertices_img[i]
-            faces_img_all[i, :, :] = faces_img[i][:min_faces, :]
+    for i in range(len(vertices_img)):
+        vertices_img_all[i, :vertices_img[i].shape[0], :] = vertices_img[i]
+        faces_img_all[i, :, :] = faces_img[i][:min_faces, :]
 
-        if draw_flag:
-            output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.gif'
+    if draw_flag:
+        output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.gif'
 
-        camera_matrix = dataset.camera_matrix
-        camera_matrix[1, 2] -= 1480  # Because we have only bottom half
-        light_intensity_directional, light_intensity_ambient, light_direction = get_updated_lighting(
-            vertices=vertices_img_all[idx_conf],
-            faces=faces_img_all[idx_conf],
-            Rotation_Matrix=Rotation_Matrix_img[idx_conf],
-            T=T_img[idx_conf],
-            euler_angle=euler_angles_img[idx_conf],
-            mask_full_size=mask_img[idx_conf],
-            masked_grayscale_img=masked_grayscale_img,
-            camera_matrix=dataset.camera_matrix,
-            image_size=(3384, 2710 - 1480),
-            loss_thresh=loss_grayscale_light,
-            num_epochs=20,
-            draw_flag=draw_flag,
-            output_gif=output_gif,
-            lr=lr,
-            fix_rot=True,
-            fix_trans=True,
-            fix_light_source=False)
+    light_intensity_directional, light_intensity_ambient, light_direction = get_updated_lighting(
+        vertices=vertices_img_all[idx_conf],
+        faces=faces_img_all[idx_conf],
+        Rotation_Matrix=Rotation_Matrix_img[idx_conf],
+        T=T_img[idx_conf],
+        euler_angle=euler_angles_img[idx_conf],
+        mask_full_size=mask_img[idx_conf],
+        masked_grayscale_img=masked_grayscale_img,
+        camera_matrix=camera_matrix,
+        image_size=(3384, 2710 - 1480),
+        loss_thresh=loss_grayscale_light,
+        num_epochs=num_epochs,
+        draw_flag=draw_flag,
+        output_gif=output_gif,
+        lr=lr,
+        fix_rot=True,
+        fix_trans=True,
+        fix_light_source=False)
 
-        # Now we start to fine tune R, T
-        for i, true_flag in enumerate(conf_list):
-            if true_flag:
-                if draw_flag:
-                    output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(i) + '.gif'
-                # Now we consider only one masked grayscale car
-                masked_grayscale_car = mask_img[i] * grayscale_image[1480:, :]
-                masked_grayscale_car = masked_grayscale_car / masked_grayscale_car.max()
-                T_update, ea_update = get_updated_RT(vertices=vertices_img_all[None, i],
-                                      faces=faces_img_all[None, i],
-                                      Rotation_Matrix=Rotation_Matrix_img[None, i],
-                                      T=T_img[None, i],
-                                      euler_angle=euler_angles_img[i],
-                                      mask_full_size=mask_img[None, i],
-                                      masked_grayscale_img=masked_grayscale_car,
-                                      camera_matrix=dataset.camera_matrix,
-                                      image_size=(3384, 2710 - 1480),
-                                      loss_RT=loss_grayscale_RT,
-                                      num_epochs=num_epochs,
-                                      draw_flag=draw_flag,
-                                      output_gif=output_gif,
-                                      lr=lr,
-                                      fix_rot=fix_rot,
-                                      light_intensity_directional=light_intensity_directional,
-                                      light_intensity_ambient=light_intensity_ambient,
-                                      light_direction=light_direction)
+    # Now we start to fine tune R, T
+    for i, true_flag in enumerate(conf_list):
+        if true_flag:
+            if draw_flag:
+                output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(i) + '.gif'
+            # Now we consider only one masked grayscale car
+            masked_grayscale_car = mask_img[i] * grayscale_image[1480:, :]
+            #masked_grayscale_car = masked_grayscale_car / masked_grayscale_car.max()
+            T_update, ea_update = get_updated_RT(vertices=vertices_img_all[None, i],
+                                  faces=faces_img_all[None, i],
+                                  Rotation_Matrix=Rotation_Matrix_img[None, i],
+                                  T=T_img[None, i],
+                                  euler_angle=euler_angles_img[i],
+                                  mask_full_size=mask_img[None, i],
+                                  masked_grayscale_img=masked_grayscale_car,
+                                  camera_matrix=camera_matrix,
+                                  image_size=(3384, 2710 - 1480),
+                                  loss_RT=loss_grayscale_RT,
+                                  num_epochs=num_epochs,
+                                  draw_flag=draw_flag,
+                                  output_gif=output_gif,
+                                  lr=lr,
+                                  fix_rot=fix_rot,
+                                  light_intensity_directional=light_intensity_directional,
+                                  light_intensity_ambient=light_intensity_ambient,
+                                  light_direction=light_direction)
 
-                if not fix_rot:
-                    # we don't change the euler angle here
-                    R_update = -euler_angles_img[i][1], -euler_angles_img[i][0], -euler_angles_img[i][2]
-                else:
-                    # We need to reverse here
-                    R_update = -ea_update[1], -ea_update[0], -ea_update[2]
+            if fix_rot:
+                # we don't change the euler angle here
+                R_update = -euler_angles_img[i][1], -euler_angles_img[i][0], -euler_angles_img[i][2]
+            else:
+                # We need to reverse here
+                R_update = -ea_update[1], -ea_update[0], -ea_update[2]
 
-                outputs_update[img_idx][2]['trans_pred_world'][i] = T_update
-                euler_angles[i] = R_update
+            # outputs_update is a list of length 0
+            outputs_update[0][2]['trans_pred_world'][i] = T_update
+            euler_angles[i] = R_update
 
-            if not fix_rot:
-                outputs_update[img_idx][2]['euler_angle'] = euler_angles
+        if not fix_rot:
+            outputs_update[0][2]['euler_angle'] = euler_angles
 
-            if not os.path.exists(tmp_save_dir):
-                os.mkdir(tmp_save_dir)
-            output_name = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.pkl'
-            mmcv.dump(outputs_update[img_idx], output_name)
-        return True
-
-
+        if not os.path.exists(tmp_save_dir):
+            os.mkdir(tmp_save_dir)
+        output_name = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.pkl'
+        mmcv.dump(outputs_update[0], output_name)
     return
+
