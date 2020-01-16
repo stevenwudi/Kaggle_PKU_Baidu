@@ -125,3 +125,10 @@ work_dirs/
 *.gif
 
 !/mmdet/models/bbox_heads/bboxes_with_translation_pick.pkl
+!/mmdet/models/bbox_heads/bboxes_with_translation_pick_543.pkl
+
+!/neural_renderer/examples/data/ID_2e24dd0ea_2.gif
+
+!/neural_renderer/examples/data/masked_grayscale_img.jpg
+
+!/neural_renderer/examples/data/ID_63fe3fe12_lighting_update.gif

@@ -36,7 +36,6 @@ class FCTranslationHead(nn.Module):
         self.car_cls_rot_linear = nn.Linear(in_channels_carclsrot, fc_out_channels)
         self.bboxes_linear_1 = nn.Linear(in_channels_bboxes, fc_out_channels)
         self.bboxes_linear_2 = nn.Linear(fc_out_channels, fc_out_channels)
-        self.trans_pred = nn.Linear(fc_out_channels + fc_out_channels, num_translation_reg)
         self.relu = nn.ReLU(inplace=True)
         # Di Wu add build loss here overriding bbox_head
         self.loss_translation = build_loss(loss_translation)
@@ -44,7 +43,7 @@ class FCTranslationHead(nn.Module):
         # if we use bboxes to regress the x,y,z
         self.translation_bboxes_regression = translation_bboxes_regression
         if self.translation_bboxes_regression:
-            bboxes_file_name = '../mmdet/models/bbox_heads/bboxes_with_translation_pick.pkl'
+            bboxes_file_name = '../mmdet/models/bbox_heads/bboxes_with_translation_pick_543.pkl'
             try:
                 self.bboxes_with_translation_pick = mmcv.load(bboxes_file_name)
                 print('Finish loading file: %s' % bboxes_file_name)
@@ -55,6 +54,8 @@ class FCTranslationHead(nn.Module):
             except IOError:
                 print('There was an error opening the file!')
                 return
+        else:
+            self.trans_pred = nn.Linear(fc_out_channels + fc_out_channels, num_translation_reg)
 
         # camera intrinsic also is saved here:
         self.fx, self.cx, self.fy, self.cy = 2304.5479, 1686.2379, 2305.8757, (2710 - 1480) / 2
@@ -112,7 +113,7 @@ class FCTranslationHead(nn.Module):
         rois = rois_resize / scale_factor  # We transform it back to the original pixel space before resizing
         rois = rois.cpu().data.numpy()
         # Now we find the IoU > iou_thresh
-        boxes = self.bboxes_with_translation_pick
+        boxes = self.bboxes_with_translation_pick.copy()
         # Because we crop the bottom
         boxes[:, 1] -= 1480
         boxes[:, 3] -= 1480
@@ -125,10 +126,8 @@ class FCTranslationHead(nn.Module):
 
         # get the real world coordinate [x, y, z]
         # pred_boxes denote the world coornidates of the referenced boxes
-        pred_boxes = torch.from_numpy(boxes[:, 4:].astype(rois.dtype)).cuda(device_id)
-        distance = torch.sqrt(torch.sum(pred_boxes ** 2, dim=1))
-
-        target_translations = torch.zeros(trans_pred.shape, dtype=trans_pred.dtype).cuda(device_id)
+        boxes_world_xyz = torch.from_numpy(boxes[:, 4:].astype(rois.dtype)).cuda(device_id)
+        distance = torch.sqrt(torch.sum(boxes_world_xyz ** 2, dim=1))
 
         losses = dict()
         losses['loss_translation'] = 0
@@ -154,18 +153,18 @@ class FCTranslationHead(nn.Module):
             matched_expand = matched_idx[:, None].expand(matched_idx.shape[0], 3).contiguous().view(-1)
             matched_expand = matched_expand.float().cuda(device_id)
             # calculate the reference g as in SSD paper eq. (2)
-            g = (pos_gt_assigned_translations[i] - pred_boxes) / distance[:, None]
+            g = (pos_gt_assigned_translations[i] - boxes_world_xyz) / distance[:, None]
 
-            target_translations[i] = g.view(-1) * matched_expand
+            target_translations = g.view(-1) * matched_expand
             trans_pred[i] = trans_pred[i] * matched_expand
 
             # We still have smooth L1 loss with beta=0.1, because the translation threshold starts from 0.1
-            diff = torch.abs(trans_pred[i] - target_translations[i])
+            diff = torch.abs(trans_pred[i] - target_translations)
             loss = torch.where(diff < beta, 0.5 * diff * diff / beta, diff - 0.5 * beta)
             losses['loss_translation'] += loss.sum()/matched_expand.sum()
 
             # Get the world coordinate and distance
-            translation_pred = self.get_trans_by_SSD_regression(trans_pred[i], pred_boxes, distance, idx_max)
+            translation_pred = self.get_trans_by_SSD_regression(trans_pred[i], boxes_world_xyz, distance, idx_max)
             translation_target = pos_gt_assigned_translations[i]
             diff_distance = translation_pred - translation_target
             distance_i = torch.sqrt(torch.sum(translation_target ** 2))
@@ -184,10 +183,10 @@ class FCTranslationHead(nn.Module):
 
         return losses
 
-    def get_trans_by_SSD_regression(self, trans_pred_i, pred_boxes, distance, idx_max):
+    def get_trans_by_SSD_regression(self, trans_pred_i, boxes_world_xyz, distance, idx_max):
 
-        trans_pred_i = trans_pred_i.view(pred_boxes.shape[0], pred_boxes.shape[1])
-        real_world_coord = trans_pred_i * distance[:, None] + pred_boxes
+        trans_pred_i = trans_pred_i.view(boxes_world_xyz.shape[0], boxes_world_xyz.shape[1])
+        real_world_coord = trans_pred_i * distance[:, None] + boxes_world_xyz
 
         return real_world_coord[idx_max]
 
@@ -302,16 +301,16 @@ class FCTranslationHead(nn.Module):
 
     def pred_to_world_coord_SSD(self,
                                 trans_pred,
-                                rois,
+                                rois_resize,
                                 scale_factor,
                                 device_id,
                                 iou_thresh=0.5):
 
-        rois = rois / scale_factor  # We transform it back to the original pixel space before resizing
+        rois = rois_resize / scale_factor  # We transform it back to the original pixel space before resizing
         rois = rois.cpu().data.numpy()
 
         # Now we find the IoU > iou_thresh
-        boxes = self.bboxes_with_translation_pick
+        boxes = self.bboxes_with_translation_pick.copy()
         # Because we crop the bottom
         boxes[:, 1] -= 1480
         boxes[:, 3] -= 1480
@@ -323,8 +322,8 @@ class FCTranslationHead(nn.Module):
         area = (x2 - x1 + 1) * (y2 - y1 + 1)
 
         # get the real world coordinate [x, y, z]
-        pred_boxes = torch.from_numpy(boxes[:, 4:].astype(rois.dtype)).cuda(device_id)
-        distance = torch.sqrt(torch.sum(pred_boxes ** 2, dim=1))
+        boxes_world_xyz = torch.from_numpy(boxes[:, 4:].astype(rois.dtype)).cuda(device_id)
+        distance = torch.sqrt(torch.sum(boxes_world_xyz ** 2, dim=1))
 
         translation_pred = torch.zeros((rois.shape[0], 3), dtype=trans_pred.dtype).cuda(device_id)
         for i, roi in enumerate(rois):
@@ -342,7 +341,7 @@ class FCTranslationHead(nn.Module):
             idx_max = np.argmax(overlap)
 
             # Get the world coordinate and distance
-            translation_pred[i] = self.get_trans_by_SSD_regression(trans_pred[i], pred_boxes, distance, idx_max)
+            translation_pred[i] = self.get_trans_by_SSD_regression(trans_pred[i], boxes_world_xyz, distance, idx_max)
 
         return translation_pred
 

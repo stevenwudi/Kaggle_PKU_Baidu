@@ -16,14 +16,14 @@ from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, euler_angles_to_quater
 
 
 def nms_with_IOU(bboxes_with_IOU, thresh=0.55):
-    x1 = bboxes_with_IOU[:,0]
-    y1 = bboxes_with_IOU[:,1]
-    x2 = bboxes_with_IOU[:,2]
-    y2 = bboxes_with_IOU[:,3]
-    IOU_scores = bboxes_with_IOU[:,-1]
+    x1 = bboxes_with_IOU[:, 0]
+    y1 = bboxes_with_IOU[:, 1]
+    x2 = bboxes_with_IOU[:, 2]
+    y2 = bboxes_with_IOU[:, 3]
+    IOU_scores = bboxes_with_IOU[:, -1]
 
-    areas = (x2 - x1 + 1) * (y2- y1 + 1)
-    order = IOU_scores.argsort()[::-1] ## indices stored
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = IOU_scores.argsort()[::-1]  ## indices stored
 
     keep = []
     while order.size > 0:
@@ -36,7 +36,7 @@ def nms_with_IOU(bboxes_with_IOU, thresh=0.55):
 
         w = np.maximum(0.0, xx2 - xx1 + 1)
         h = np.maximum(0.0, yy2 - yy1 + 1)
-        inter = w*h
+        inter = w * h
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
 
         inds = np.where(ovr <= thresh)[0]
@@ -46,16 +46,16 @@ def nms_with_IOU(bboxes_with_IOU, thresh=0.55):
 
 
 def nms_with_IOU_and_vote(bboxes_with_IOU, thresh=0.55, vote=0):
-    x1 = bboxes_with_IOU[:,0]
-    y1 = bboxes_with_IOU[:,1]
-    x2 = bboxes_with_IOU[:,2]
-    y2 = bboxes_with_IOU[:,3]
+    x1 = bboxes_with_IOU[:, 0]
+    y1 = bboxes_with_IOU[:, 1]
+    x2 = bboxes_with_IOU[:, 2]
+    y2 = bboxes_with_IOU[:, 3]
     # score = bboxes_with_IOU[:, 4]
     IOU_scores = bboxes_with_IOU[:, 5]
     model_type = bboxes_with_IOU[:, 6]
 
-    areas = (x2 - x1 + 1) * (y2- y1 + 1)
-    order = IOU_scores.argsort()[::-1] ## indices stored
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = IOU_scores.argsort()[::-1]  ## indices stored
 
     keep = []
     while order.size > 0:
@@ -67,7 +67,7 @@ def nms_with_IOU_and_vote(bboxes_with_IOU, thresh=0.55, vote=0):
 
         w = np.maximum(0.0, xx2 - xx1 + 1)
         h = np.maximum(0.0, yy2 - yy1 + 1)
-        inter = w*h
+        inter = w * h
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
 
         inds = np.where(ovr <= thresh)[0]
@@ -84,32 +84,29 @@ def nms_with_IOU_and_vote(bboxes_with_IOU, thresh=0.55, vote=0):
     return keep
 
 
-
-
-def get_xy_from_z(boxes,t):
+def get_xy_from_z(boxes, t):
     boxes_copy = boxes.copy()
-    x,y,z = t
-    cx,cy = 1686.2379,1354.9849
-    fx,fy = 2304.5479,2305.8757
+    x, y, z = t
+    cx, cy = 1686.2379, 1354.9849
+    fx, fy = 2304.5479, 2305.8757
     crop_top = 1480
     boxes_copy[1::2] += crop_top
-    center = np.array([np.mean(boxes_copy[:-1][0::2]),np.mean(boxes_copy[1::2])])
-    X = (center[0]-cx)*z/fx
-    Y = (center[1]-cy)*z/fy
+    center = np.array([np.mean(boxes_copy[:-1][0::2]), np.mean(boxes_copy[1::2])])
+    X = (center[0] - cx) * z / fx
+    Y = (center[1] - cy) * z / fy
 
     # print('x,X,y,Y',x,X,y,Y)
-    return np.array([X,Y,z])
+    return np.array([X, Y, z])
 
 
-
-def restore_x_y_from_z(bboxes,trans_pred_world):
+def restore_x_y_from_z(bboxes, trans_pred_world):
     # bboxes_refined = bboxes.copy()
     # print('bboxes',bboxes.shape)
     trans_pred_world_refinder = trans_pred_world.copy()
     for i in range(trans_pred_world.shape[0]):
         box = bboxes[i]
         t = trans_pred_world[i]
-        X,Y = get_xy_from_z(box,t)
+        X, Y = get_xy_from_z(box, t)
         trans_pred_world_refinder[i][0] = X
         trans_pred_world_refinder[i][1] = Y
     return trans_pred_world_refinder
@@ -198,13 +195,13 @@ def imshow_det_bboxes(img,
 
 # TODO: merge this method with the one in BaseDetector
 def show_result_kaggle_pku(img,
-                result,
-                class_names,
-                score_thr=0.3,
-                wait_time=0,
-                transparency=0.3,
-                show=True,
-                out_file=None):
+                           result,
+                           class_names,
+                           score_thr=0.3,
+                           wait_time=0,
+                           transparency=0.3,
+                           show=True,
+                           out_file=None):
     """Visualize the detection results on the image.
 
     Args:
@@ -239,7 +236,7 @@ def show_result_kaggle_pku(img,
         for i in inds:
             color_mask = np.random.randint(0, 256, (1, 3), dtype=np.uint8)
             mask = maskUtils.decode(segms[i]).astype(np.bool)
-            img[mask] = img[mask] * (1-transparency) + color_mask * transparency
+            img[mask] = img[mask] * (1 - transparency) + color_mask * transparency
     # draw bounding boxes
     labels = [
         np.full(bbox.shape[0], i, dtype=np.int32)
@@ -262,8 +259,8 @@ def show_result_kaggle_pku(img,
         return img
 
 
-def get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,
-                    mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t):
+def get_iou_score(bbox_idx, car_model_dict, camera_matrix, class_names,
+                  mask_all_pred, mask_all_mesh, mask_all_pred_area, euler_angle, t):
     vertices = np.array(car_model_dict[class_names[bbox_idx]]['vertices'])
     vertices[:, 1] = -vertices[:, 1]
     triangles = np.array(car_model_dict[class_names[bbox_idx]]['faces']) - 1
@@ -286,24 +283,26 @@ def get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,
 
     mask_all_mesh_tmp = mask_all_mesh.copy()
     for tri in triangles:
-        coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]], dtype=np.int32)
+        coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]],
+                         dtype=np.int32)
         coord[:, 1] -= 1480
-        cv2.drawContours(mask_all_mesh_tmp,np.int32([coord]),0,1,-1)
+        cv2.drawContours(mask_all_mesh_tmp, np.int32([coord]), 0, 1, -1)
         # cv2.drawContours(img,np.int32([coord]),0,color,-1)
 
-    intersection_area = np.sum(mask_all_pred*mask_all_mesh_tmp)
-    union_area = np.sum(np.logical_or(mask_all_pred,mask_all_mesh_tmp))
-    iou_mask_score = intersection_area/mask_all_pred_area
-    iou_score = intersection_area/union_area
-    return iou_mask_score,iou_score
+    intersection_area = np.sum(mask_all_pred * mask_all_mesh_tmp)
+    union_area = np.sum(np.logical_or(mask_all_pred, mask_all_mesh_tmp))
+    iou_mask_score = intersection_area / mask_all_pred_area
+    iou_score = intersection_area / union_area
+    return iou_mask_score, iou_score
 
-def refine_yaw_and_roll(img_original,bboxes,segms, class_names,euler_angle,quaternion_pred,trans_pred_world,
-                                car_model_dict,
-                                camera_matrix,
-                                score_thr=0.1,
-                                roll_threshold = 0.2,
-                                # roll_threshold = 0.18,
-                                yaw_threshold = (0,0.3)):
+
+def refine_yaw_and_roll(img_original, bboxes, segms, class_names, euler_angle, quaternion_pred, trans_pred_world,
+                        car_model_dict,
+                        camera_matrix,
+                        score_thr=0.1,
+                        roll_threshold=0.2,
+                        # roll_threshold = 0.18,
+                        yaw_threshold=(0, 0.3)):
     ### we find that sometimes the predicted roll or yaw is out of normal range,so we confine it to normal range.
     ## roll mainly locates from -0.1 to 0.1 we confine the value out of absolute value of 0.2
     pi = math.pi
@@ -312,58 +311,63 @@ def refine_yaw_and_roll(img_original,bboxes,segms, class_names,euler_angle,quate
     euler_angle_refined = euler_angle.copy()
     quaternion_pred_refined = quaternion_pred.copy()
     for bbox_idx in range(len(bboxes)):
-        if bboxes[bbox_idx,-1] <= score_thr: ## we only restore case when score > score_thr(0.1)
+        if bboxes[bbox_idx, -1] <= score_thr:  ## we only restore case when score > score_thr(0.1)
             continue
         ea = euler_angle_refined[bbox_idx]
         yaw, pitch, roll = ea
-        candidate_roll = candidates[np.argmin(np.abs(candidates-roll))]
-        if yaw < yaw_threshold[0] or yaw > yaw_threshold[1] or np.abs(roll-candidate_roll) > roll_threshold:
+        candidate_roll = candidates[np.argmin(np.abs(candidates - roll))]
+        if yaw < yaw_threshold[0] or yaw > yaw_threshold[1] or np.abs(roll - candidate_roll) > roll_threshold:
             if yaw < yaw_threshold[0]:
-                print('yaw change',yaw,yaw_threshold[0])
-                yaw = 0.15 ## waited to be determined
-                
-            if yaw > yaw_threshold[1]:
-                print('yaw change',yaw,yaw_threshold[1])
-                yaw = 0.15 ## waited to be determined
+                print('yaw change', yaw, yaw_threshold[0])
+                yaw = 0.15  ## waited to be determined
 
-            if np.abs(roll-candidate_roll) > roll_threshold:
-                print('roll',roll,candidate_roll)
+            if yaw > yaw_threshold[1]:
+                print('yaw change', yaw, yaw_threshold[1])
+                yaw = 0.15  ## waited to be determined
+
+            if np.abs(roll - candidate_roll) > roll_threshold:
+                print('roll', roll, candidate_roll)
                 roll = candidate_roll
 
-            quaternion_refined = euler_angles_to_quaternions(np.array([yaw,pitch,roll]))
+            quaternion_refined = euler_angles_to_quaternions(np.array([yaw, pitch, roll]))
             quaternion_semisphere_refined = quaternion_upper_hemispher(quaternion_refined)
-            quaternion_pred_refined[bbox_idx] =  np.array(quaternion_semisphere_refined)
+            quaternion_pred_refined[bbox_idx] = np.array(quaternion_semisphere_refined)
             flag = True
-    return quaternion_pred_refined,flag
+    return quaternion_pred_refined, flag
 
-def restore_x_y_from_z_withIOU(img_original,bboxes,segms, class_names,euler_angle,trans_pred_world,
-                                car_model_dict,
-                                camera_matrix,
-                                score_thr=0.1,
-                                # refined_threshold1=5,
-                                refined_threshold1=10,
-                                refined_threshold2=28,
-                                IOU_threshold=0.3):
-    img = img_original[1480:,:,:].copy()
+
+def restore_x_y_from_z_withIOU(img_original, bboxes, segms, class_names, euler_angle, trans_pred_world,
+                               car_model_dict,
+                               camera_matrix,
+                               score_thr=0.1,
+                               # refined_threshold1=5,
+                               refined_threshold1=10,
+                               refined_threshold2=28,
+                               IOU_threshold=0.3):
+    img = img_original[1480:, :, :].copy()
     trans_pred_world_refined = trans_pred_world.copy()
     for bbox_idx in range(len(bboxes)):
-        if bboxes[bbox_idx,-1] <= score_thr: ## we only restore case when score > score_thr(0.1)
+        if bboxes[bbox_idx, -1] <= score_thr:  ## we only restore case when score > score_thr(0.1)
             continue
 
         bbox = bboxes[bbox_idx]
 
         ## below is the predicted mask
-        mask_all_pred = np.zeros(img.shape[:-1]) ## this is the background mask
+        mask_all_pred = np.zeros(img.shape[:-1])  ## this is the background mask
         mask_all_mesh = np.zeros(img.shape[:-1])
         mask_pred = maskUtils.decode(segms[bbox_idx]).astype(np.bool)
         mask_all_pred += mask_pred
-        mask_all_pred_area = np.sum(mask_all_pred==1)
+        mask_all_pred_area = np.sum(mask_all_pred == 1)
 
         t = trans_pred_world[bbox_idx]
-        t_refined = get_xy_from_z(bbox,t)
+        t_refined = get_xy_from_z(bbox, t)
 
-        score_iou_mask_before,score_iou_before = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t)
-        score_iou_mask_after,score_iou_after = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t_refined)
+        score_iou_mask_before, score_iou_before = get_iou_score(bbox_idx, car_model_dict, camera_matrix, class_names,
+                                                                mask_all_pred, mask_all_mesh, mask_all_pred_area,
+                                                                euler_angle, t)
+        score_iou_mask_after, score_iou_after = get_iou_score(bbox_idx, car_model_dict, camera_matrix, class_names,
+                                                              mask_all_pred, mask_all_mesh, mask_all_pred_area,
+                                                              euler_angle, t_refined)
         if t[2] > refined_threshold2:
             # print('t1',t[2])
             # score_iou_mask_before,score_iou_before = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t)
@@ -373,40 +377,40 @@ def restore_x_y_from_z_withIOU(img_original,bboxes,segms, class_names,euler_angl
             trans_pred_world_refined[bbox_idx] = t_refined
         elif t[2] < refined_threshold1:
             if score_iou_before < IOU_threshold:
-                print('score_iou_before',score_iou_before)
+                print('score_iou_before', score_iou_before)
                 continue
             # print('t2',t[2])
-        else:   
+        else:
             # print('t3',t[2])
             # score_iou_mask_before,score_iou_before = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t)
             # score_iou_mask_after,score_iou_after = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t_refined)
-            
+
             # if score_before > score_after:
-                # print('score bad',score_before,score_after)
+            # print('score bad',score_before,score_after)
             # if score_before < 0.8 and score_after - score_before > 0.1:
             # if score_iou_before < 0.9 and score_iou_after - score_iou_after > 0.1:
             # if score_iou_after - score_iou_before > 0.2:
             # if score_iou_after - score_iou_before > 0:
             if score_iou_after - score_iou_before > 0.05:
-            # if score_before < 0.8 and score_after - score_before > 0.07:
-            # if score_before < 0.85 and score_after - score_before > 0.05:
-                print('score good',score_iou_before,score_iou_after)
+                # if score_before < 0.8 and score_after - score_before > 0.07:
+                # if score_before < 0.85 and score_after - score_before > 0.05:
+                print('score good', score_iou_before, score_iou_after)
                 trans_pred_world_refined[bbox_idx] = t_refined
         if score_iou_after < IOU_threshold:
             ## we filter out candidate with IOU <=0.3
-            print('score_iou_after',score_iou_after)
+            print('score_iou_after', score_iou_after)
             continue
-            
 
     return trans_pred_world_refined
 
-def get_IOU(img_original, bboxes, segms, six_dof, car_id2name,
-                car_model_dict,
-                unique_car_mode,
-                camera_matrix):
-    img = img_original[1480:, :, :].copy()
-    bboxes_with_IOU = np.zeros((bboxes.shape[0],bboxes.shape[1]+1)).astype(bboxes.dtype) ## we add IOU score for each line
 
+def get_IOU(img_original, bboxes, segms, six_dof, car_id2name,
+            car_model_dict,
+            unique_car_mode,
+            camera_matrix):
+    img = img_original[1480:, :, :].copy()
+    bboxes_with_IOU = np.zeros((bboxes.shape[0], bboxes.shape[1] + 1)).astype(
+        bboxes.dtype)  ## we add IOU score for each line
 
     quaternion_pred = six_dof['quaternion_pred']
     euler_angles = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
@@ -419,7 +423,7 @@ def get_IOU(img_original, bboxes, segms, six_dof, car_id2name,
         box = bboxes[bbox_idx]
         t = trans_pred_world[bbox_idx]
         ## below is the predicted mask
-        mask_all_pred = np.zeros(img.shape[:-1]) ## this is the background mask
+        mask_all_pred = np.zeros(img.shape[:-1])  ## this is the background mask
         mask_all_mesh = np.zeros(img.shape[:-1])
         mask_pred = maskUtils.decode(segms[bbox_idx]).astype(np.bool)
         mask_all_pred += mask_pred
@@ -445,34 +449,33 @@ def get_IOU(img_original, bboxes, segms, six_dof, car_id2name,
         img_cor_points[:, 1] /= img_cor_points[:, 2]
 
         for tri in triangles:
-            coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]], dtype=np.int32)
+            coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]],
+                             dtype=np.int32)
             coord[:, 1] -= 1480
-            cv2.drawContours(mask_all_mesh,np.int32([coord]),0,1,-1)
+            cv2.drawContours(mask_all_mesh, np.int32([coord]), 0, 1, -1)
 
-
-        intersection_area = np.sum(mask_all_pred*mask_all_mesh)
-        union_area = np.sum(np.logical_or(mask_all_pred,mask_all_mesh))
-        iou_score = intersection_area/union_area
-        bboxes_with_IOU[bbox_idx] = np.append(box,iou_score)
+        intersection_area = np.sum(mask_all_pred * mask_all_mesh)
+        union_area = np.sum(np.logical_or(mask_all_pred, mask_all_mesh))
+        iou_score = intersection_area / union_area
+        bboxes_with_IOU[bbox_idx] = np.append(box, iou_score)
     return bboxes_with_IOU
 
 
-
 def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
-                           car_model_dict,
-                           camera_matrix,
-                           trans_pred_world,
-                           euler_angle,
-                           score_thr=0.1,
-                           thickness=1,
-                           transparency=0.5,
-                           font_scale=0.8,
-                           ):
-    img = img_original[1480:,:,:].copy() ## crop half
+                             car_model_dict,
+                             camera_matrix,
+                             trans_pred_world,
+                             euler_angle,
+                             score_thr=0.1,
+                             thickness=1,
+                             transparency=0.5,
+                             font_scale=0.8,
+                             ):
+    img = img_original[1480:, :, :].copy()  ## crop half
     iou_flag = False
     trans_pred_world_raw = trans_pred_world.copy()
-    if score_thr>0:
-        inds = bboxes[:,-1] > score_thr
+    if score_thr > 0:
+        inds = bboxes[:, -1] > score_thr
         bboxes = bboxes[inds, :]
         segms = np.array(segms)[inds]
         trans_pred_world = trans_pred_world[inds, :]
@@ -485,13 +488,12 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
         bbox = bboxes[bbox_idx]
 
         ## below is the predicted mask
-        mask_all_pred = np.zeros(img.shape[:-1]) ## this is the background mask
+        mask_all_pred = np.zeros(img.shape[:-1])  ## this is the background mask
         mask_all_mesh = np.zeros(img.shape[:-1])
         mask_pred = maskUtils.decode(segms[bbox_idx]).astype(np.bool)
         mask_all_pred += mask_pred
-        mask_all_pred_area = np.sum(mask_all_pred==1)
+        mask_all_pred_area = np.sum(mask_all_pred == 1)
         # img[mask_pred] = img[mask_pred] * (1-transparency) + color_ndarray * transparency
-
 
         label_text = class_names[bbox_idx]
         bbox_int = bbox.astype(np.int32)
@@ -504,7 +506,6 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
         vertices[:, 1] = -vertices[:, 1]
         triangles = np.array(car_model_dict[class_names[bbox_idx]]['faces']) - 1
 
-        
         ea = euler_angle[bbox_idx]
         yaw, pitch, roll = ea[0], ea[1], ea[2]
         yaw, pitch, roll = -pitch, -yaw, -roll
@@ -521,24 +522,23 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
         img_cor_points[:, 0] /= img_cor_points[:, 2]
         img_cor_points[:, 1] /= img_cor_points[:, 2]
 
-
         for tri in triangles:
-            coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]], dtype=np.int32)
+            coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]],
+                             dtype=np.int32)
             coord[:, 1] -= 1480
-            cv2.polylines(img, np.int32([coord]), 1, color,thickness=1)
-            cv2.drawContours(mask_all_mesh,np.int32([coord]),0,1,-1)
+            cv2.polylines(img, np.int32([coord]), 1, color, thickness=1)
+            cv2.drawContours(mask_all_mesh, np.int32([coord]), 0, 1, -1)
             # cv2.drawContours(img,np.int32([coord]),0,color,-1)
 
-        intersection_area = np.sum(mask_all_pred*mask_all_mesh)
-        union_area = np.sum(np.logical_or(mask_all_pred,mask_all_mesh))
-        iou_mask_score = round(intersection_area/mask_all_pred_area,3)
-        iou_score = round(intersection_area/union_area,3)
+        intersection_area = np.sum(mask_all_pred * mask_all_mesh)
+        union_area = np.sum(np.logical_or(mask_all_pred, mask_all_mesh))
+        iou_mask_score = round(intersection_area / mask_all_pred_area, 3)
+        iou_score = round(intersection_area / union_area, 3)
         label_text_t = ''
         cls_score = bboxes[bbox_idx][-1]
 
-        
-        if iou_score<0.3:
-            print('iou_score',iou_score,cls_score)
+        if iou_score < 0.3:
+            print('iou_score', iou_score, cls_score)
             iou_flag = True
         # for i in ea:
         #     i = round(i,4)
@@ -558,7 +558,8 @@ def draw_box_mesh_kaggle_pku(img_original, bboxes, segms, class_names,
                     cv2.FONT_ITALIC, font_scale, color)
     im_combime = img_original.copy()
     im_combime[1480:, :, :] = img
-    return im_combime, iou_flag 
+    return im_combime, iou_flag
+
 
 def draw_result_kaggle_pku(img_original, bboxes, segms, car_names,
                            car_model_dict,
@@ -594,7 +595,7 @@ def draw_result_kaggle_pku(img_original, bboxes, segms, car_names,
             color_mask = np.random.randint(0, 256, (1, 3), dtype=np.uint8)
             color_lists.append(color_mask)
             mask = maskUtils.decode(segms[i]).astype(np.bool)
-            img[mask] = img[mask] * (1-transparency) + color_mask * transparency
+            img[mask] = img[mask] * (1 - transparency) + color_mask * transparency
     # draw bounding boxes
     im_combime = img_original.copy()
     im_combime[1480:, :, :] = img
@@ -608,7 +609,6 @@ def draw_result_kaggle_pku(img_original, bboxes, segms, car_names,
         euler_angle,
         color_lists,
         score_thr=score_thr)
-
 
     return im_combime
 
@@ -697,9 +697,10 @@ def imdraw_det_bboxes(img,
         color_mesh = np.int32(color_lists[bbox_idx][0])
         color_tuple = tuple([int(x) for x in color_mesh])
         for t in triangles:
-            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]], dtype=np.int32)
+            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                             dtype=np.int32)
             # This will draw the mask for segmenation
-            #cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+            # cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
             coord[:, 1] -= 1480
             cv2.polylines(img, np.int32([coord]), 1, color=color_tuple)
 
@@ -772,7 +773,8 @@ def visual_PnP(img, PnP_pred, camera_matrix, vertices, triangles):
 
         color_tuple = tuple([int(x) for x in color_mesh[0]])
         for t in triangles:
-            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]], dtype=np.int32)
+            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                             dtype=np.int32)
             cv2.polylines(img, np.int32([coord]), 1, color=color_tuple)
 
     return img

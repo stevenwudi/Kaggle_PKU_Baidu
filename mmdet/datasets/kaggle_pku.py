@@ -68,8 +68,7 @@ class KagglePKUDataset(CustomDataset):
         annotations = []
         if not self.test_mode:
             outfile = ann_file
-
-            if False:
+            if os.path.isfile(outfile):
                 annotations = json.load(open(outfile, 'r'))
             else:
                 PATH = '/data/Kaggle/ApolloScape_3D_car/train/split/'
@@ -104,7 +103,6 @@ class KagglePKUDataset(CustomDataset):
         if False:
             self.group_rectangles(annotations)
 
-        annotations = annotations
         self.annotations = annotations
 
         return annotations
@@ -534,8 +532,6 @@ class KagglePKUDataset(CustomDataset):
                 assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
                        == len(trans_pred_world) == len(euler_angle) == len(car_names)
 
-                coords = np.hstack((euler_angle, trans_pred_world))
-
                 # print('change ',trans_pred_world,trans_pred_world_refined)
                 quaternion_semisphere_refined, flag = refine_yaw_and_roll(image, bboxes[car_cls_coco],
                                                                           segms[car_cls_coco], car_names, euler_angle,
@@ -876,8 +872,8 @@ class KagglePKUDataset(CustomDataset):
         # We read an image first
         bboxes_with_translation_pick = non_max_suppression_fast(bboxes_with_translation, overlapThresh=0.99)
         # Some boxes are outside the boundary, we need to get rid of them:
-        idx_valid = np.array(bboxes_with_translation_pick[:, 0] <= self.image_shape[0]) & \
-                    np.array(bboxes_with_translation_pick[:, 1] <= self.image_shape[1]) & \
+        idx_valid = np.array(bboxes_with_translation_pick[:, 0] <= self.image_shape[1]) & \
+                    np.array(bboxes_with_translation_pick[:, 1] <= self.image_shape[0]) & \
                     np.array(bboxes_with_translation_pick[:, 0] >= 0) & np.array(
             bboxes_with_translation_pick[:, 1] >= 1480)
 

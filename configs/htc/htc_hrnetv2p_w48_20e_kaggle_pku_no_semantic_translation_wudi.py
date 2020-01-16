@@ -221,8 +221,8 @@ train_cfg = dict(
     stage_loss_weights=[1, 0.5, 0.25],
 
     car_cls_weight=1.0,
-    rot_weight=9.,
-    translation_weight=2.2,
+    rot_weight=10.,
+    translation_weight=100.,
 )
 test_cfg = dict(
     rpn=dict(
@@ -327,7 +327,7 @@ data = dict(
         type=dataset_type,
         data_root=data_root,
         ann_file=data_root + '',
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
@@ -337,7 +337,7 @@ data = dict(
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
 
-        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images/',
         pipeline=test_pipeline))
 
 evaluation = dict(
@@ -354,7 +354,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[30, 70])
+    step=[30, 120])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -365,7 +365,7 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 100
+total_epochs = 200
 #dist_params = dict(backend='nccl')
 dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8002")
 
@@ -373,7 +373,8 @@ log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
 #load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 #load_from = '/data/Kaggle/wudi_data/Jan07-20-00-59/epoch_5.pth'
-resume_from = '/data/Kaggle/wudi_data/Jan08-09-54-32/epoch_2.pth'
-#resume_from = None
-
+load_from = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48_trimmed_translation.pth'
+#resume_from = '/data/Kaggle/wudi_data/Jan08-09-54-32/epoch_2.pth'
+#resume_from = '/data/Kaggle/wudi_data/Jan11-12-52/epoch_131.pth'
+resume_from = None
 workflow = [('train', 1)]
