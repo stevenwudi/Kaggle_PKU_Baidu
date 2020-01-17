@@ -161,10 +161,10 @@ def get_updated_RT(vertices,
             if debug:
                 ### we print some updates
                 print('Optimizing (loss %.4f)' % (loss.data))
-                updated_translation = model.renderer.t.detach().cpu().numpy()[0]
+                translation = model.renderer.t.detach().cpu().numpy()[0]
                 original_translation = model.translation_original
-                changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=False)
-                print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
+                changed_dis = TranslationDistance(original_translation, translation, abs_dist=False)
+                print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (np.array2string(np.array(original_translation)), np.array2string(translation), changed_dis))
                 if not fix_rot:
                     rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
                     updated_euler_angle = rot2eul(rot_matrix, model.euler_original)
