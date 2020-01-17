@@ -83,6 +83,45 @@ def nms_with_IOU_and_vote(bboxes_with_IOU, thresh=0.55, vote=0):
 
     return keep
 
+def nms_with_IOU_and_vote_index(bboxes_with_IOU, thresh=0.55, vote=0):
+    x1 = bboxes_with_IOU[:, 0]
+    y1 = bboxes_with_IOU[:, 1]
+    x2 = bboxes_with_IOU[:, 2]
+    y2 = bboxes_with_IOU[:, 3]
+    # score = bboxes_with_IOU[:, 4]
+    IOU_scores = bboxes_with_IOU[:, 5]
+    model_type = bboxes_with_IOU[:, 6]
+
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = IOU_scores.argsort()[::-1]  ## indices stored
+
+    keep = {}
+    while order.size > 0:
+        i = order[0]
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
+
+        inds = np.where(ovr <= thresh)[0]
+        delete_inds = np.where(ovr > thresh)[0]
+
+        if vote > 0:
+            if len(set(model_type[order[delete_inds + 1]])) < vote:
+                order = order[inds + 1]
+                continue
+
+        keep[i] = np.append(order[delete_inds + 1], i)
+
+        order = order[inds + 1]
+
+    return keep
+
 
 def get_xy_from_z(boxes, t):
     boxes_copy = boxes.copy()

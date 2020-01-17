@@ -137,13 +137,21 @@ def get_updated_RT(vertices,
     model.cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    # loop = tqdm.tqdm(range(num_epochs))
-    # for i in loop:
+    
+    updated_translation = None
+    updated_rot_matrix = None
+    max_iou = -1
     for i in range(num_epochs):
         optimizer.zero_grad()
         loss = model()
         loss.backward()
         optimizer.step()
+
+        if -loss.item() > max_iou:
+            updated_translation = model.renderer.t.detach().cpu().numpy()[0]
+            updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+            max_iou = -loss.item()
+
         if draw_flag:  # We don't save the images
             images = model.renderer(model.vertices, model.faces, torch.tanh(model.textures))
             image = images.detach().cpu().numpy()[0].transpose(1, 2, 0)
@@ -153,13 +161,13 @@ def get_updated_RT(vertices,
             if debug:
                 ### we print some updates
                 print('Optimizing (loss %.4f)' % (loss.data))
-                updated_translation = model.renderer.t.detach().cpu().numpy()[0]
+                translation = model.renderer.t.detach().cpu().numpy()[0]
                 original_translation = model.translation_original
-                changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=False)
-                print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
+                changed_dis = TranslationDistance(original_translation, translation, abs_dist=False)
+                print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (np.array2string(np.array(original_translation)), np.array2string(translation), changed_dis))
                 if not fix_rot:
-                    updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
-                    updated_euler_angle = rot2eul(updated_rot_matrix, model.euler_original)
+                    rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+                    updated_euler_angle = rot2eul(rot_matrix, model.euler_original)
                     changed_rot = RotationDistance(model.euler_original, updated_euler_angle)
                     print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %.4f'
                           % (np.array2string(np.array(model.euler_original)), np.array2string(updated_euler_angle),
@@ -167,9 +175,7 @@ def get_updated_RT(vertices,
 
         if loss.item() < -model.loss_thresh:
             break
-
-    updated_translation = model.renderer.t.detach().cpu().numpy()[0]
-    updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+    
     if draw_flag:
         make_gif(output_gif)
 
