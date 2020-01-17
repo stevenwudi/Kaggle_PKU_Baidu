@@ -318,7 +318,7 @@ def main():
 
         create_lock(lock_file)
         print(pkl_file)
-        dataset.distributed_visualise_pred_merge_postprocessing(i, outputs, args, args.tmpdir)
+        dataset.distributed_visualise_pred_merge_postprocessing(i, outputs, args, tmp_dir=args.tmpdir, vote=2)
         remove_lock(lock_file)
 
     pkl_list = glob.glob(os.path.join(args.tmpdir, "*.pkl"))
