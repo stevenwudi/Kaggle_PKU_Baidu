@@ -2,9 +2,9 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+
 def lighting(faces, textures, intensity_ambient=0.5, intensity_directional=0.5,
              color_ambient=(1, 1, 1), color_directional=(1, 1, 1), direction=(0, 1, 0)):
-
     bs, nf = faces.shape[:2]
     device = faces.device
 
@@ -52,6 +52,6 @@ def lighting(faces, textures, intensity_ambient=0.5, intensity_directional=0.5,
         light += intensity_directional * (color_directional[:, None, :] * cos[:, :, None])
 
     # apply
-    light = light[:,:,None, None, None, :]
+    light = light[:, :, None, None, None, :]
     textures *= light
     return textures

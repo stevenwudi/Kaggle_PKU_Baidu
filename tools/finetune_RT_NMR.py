@@ -117,7 +117,7 @@ def get_updated_RT(vertices,
                    output_gif=None,
                    lr=0.05,
                    fix_rot=False,
-                   debug=False,
+                   debug=True,
                    ):
     model = Model(vertices,
                   faces,
@@ -137,13 +137,21 @@ def get_updated_RT(vertices,
     model.cuda()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    # loop = tqdm.tqdm(range(num_epochs))
-    # for i in loop:
+    
+    updated_translation = None
+    updated_rot_matrix = None
+    max_iou = -1
     for i in range(num_epochs):
         optimizer.zero_grad()
         loss = model()
         loss.backward()
         optimizer.step()
+
+        if -loss.item() > max_iou:
+            updated_translation = model.renderer.t.detach().cpu().numpy()[0]
+            updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+            max_iou = -loss.item()
+
         if draw_flag:  # We don't save the images
             images = model.renderer(model.vertices, model.faces, torch.tanh(model.textures))
             image = images.detach().cpu().numpy()[0].transpose(1, 2, 0)
@@ -153,23 +161,21 @@ def get_updated_RT(vertices,
             if debug:
                 ### we print some updates
                 print('Optimizing (loss %.4f)' % (loss.data))
-                updated_translation = model.renderer.t.detach().cpu().numpy()[0]
+                translation = model.renderer.t.detach().cpu().numpy()[0]
                 original_translation = model.translation_original
-                changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=False)
-                print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
+                changed_dis = TranslationDistance(original_translation, translation, abs_dist=False)
+                print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (np.array2string(np.array(original_translation)), np.array2string(translation), changed_dis))
                 if not fix_rot:
-                    updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
-                    updated_euler_angle = rot2eul(updated_rot_matrix, model.euler_original)
+                    rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+                    updated_euler_angle = rot2eul(rot_matrix, model.euler_original)
                     changed_rot = RotationDistance(model.euler_original, updated_euler_angle)
-                    print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %4.f'
+                    print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %.4f'
                           % (np.array2string(np.array(model.euler_original)), np.array2string(updated_euler_angle),
                              changed_rot))
 
         if loss.item() < -model.loss_thresh:
             break
-
-    updated_translation = model.renderer.t.detach().cpu().numpy()[0]
-    updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+    
     if draw_flag:
         make_gif(output_gif)
 
@@ -215,11 +221,18 @@ def finetune_RT(outputs,
             vertices[:, 1] = -vertices[:, 1]
             faces = np.array(dataset.car_model_dict[car_name]['faces']) - 1
             # Get prediction of Rotation Matrix and  Translation
-            ea = euler_angles[car_idx]
+            ea = 0.1593, 0.04511, -3.08948
+            T = np.array([-6.1449, 20.1106, 120.369])
+            # ea = 0.1374788, 3.1345, -3.12617
+            #T = np.array([-12.7547, 9.9363, 120.369])
+
+            #T = np.array([-12.7547, 9.9363, 53.36])
+            if False:
+                ea = euler_angles[car_idx]
+                T = trans_pred_world[car_idx]
             yaw, pitch, roll = ea[0], ea[1], ea[2]
             yaw, pitch, roll = -pitch, -yaw, -roll
             Rotation_Matrix = euler_to_Rot(yaw, pitch, roll).T
-            T = trans_pred_world[car_idx]
 
             if draw_flag:
                 output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(

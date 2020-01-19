@@ -18,7 +18,7 @@ from scipy.spatial.transform import Rotation as R
 from mmdet.utils.map_calculation import TranslationDistance, RotationDistance, RotationDistance_q
 from sklearn.metrics import average_precision_score
 
-from mmdet.datasets.kaggle_pku_utils import euler_to_Rot
+from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, rot2eul
 from demo.visualisation_utils import visual_PnP
 
 # Camera internals
@@ -50,7 +50,7 @@ kp_index = np.array(
 
 im_all = os.listdir(apollo_data_root + 'keypoints')
 # Read Image, we read only one
-im_name = im_all[0]
+im_name = im_all[1]
 im = cv2.imread(os.path.join(apollo_data_root + 'images', im_name + '.jpg'))
 im_combined = im.copy()
 size = im.shape
@@ -98,16 +98,7 @@ for kpfile in sorted(os.listdir(os.path.join(ke_dir, im_name))):
 
         print("Rotation Vector:\n {0}".format(rotation_vector))
         print("Translation Vector:\n {0}".format(translation_vector))
-        (success, rotation_vector, translation_vector) = cv2.solvePnP(model_points,
-                                                                      image_points,
-                                                                      camera_matrix,
-                                                                      dist_coeffs,
-                                                                      rvec=rvect,
-                                                                      tvec=tvec,
-                                                                      useExtrinsicGuess=True,
-                                                                      flags=cv2.SOLVEPNP_ITERATIVE)
-        print("Rotation Vector:\n {0}".format(rotation_vector))
-        print("Translation Vector:\n {0}".format(translation_vector))
+
         # Write to prediction
         # rotation vector is not eular angle!!!
         r = R.from_rotvec(rotation_vector[:, 0])
@@ -194,8 +185,8 @@ for idx in range(10):
                 min_idx = idx
 
         # set the result
-        if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
-        #if min_tr_dist < thre_tr_dist:
+        #if min_tr_dist < thre_tr_dist and min_ro_dist < thre_ro_dist:
+        if min_tr_dist < thre_tr_dist:
             if not keep_gt:
                 gt_RT.pop(min_idx)
             result_flg.append(1)

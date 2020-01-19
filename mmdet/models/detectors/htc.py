@@ -45,7 +45,7 @@ class HybridTaskCascade(CascadeRCNN):
         self.with_translation = with_translation
 
         # Bayesian learning of the weight
-        if self.bayesian_weight_learning:
+        if self.bayesian_weight_learning and self.train_cfg is not None:
             self.fc_car_cls_weight = nn.Linear(in_features=1, out_features=1, bias=False)
             self.fc_rot_weight = nn.Linear(in_features=1, out_features=1, bias=False)
             self.fc_translation_weight = nn.Linear(in_features=1, out_features=1, bias=False)
@@ -132,9 +132,9 @@ class HybridTaskCascade(CascadeRCNN):
 
         loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
                                                  car_cls_score_target, quaternion_target)
-        return loss_car_cls_rot, car_cls_rot_feat
+        return loss_car_cls_rot, car_cls_rot_feat, car_cls_score_target
 
-    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta):
+    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta, car_cls_score_target):
         pos_bboxes = [res.pos_bboxes for res in sampling_results]
         # TODO: this is a dangerous hack: we assume only one image per batch
         if len(pos_bboxes) > 1:
@@ -148,9 +148,21 @@ class HybridTaskCascade(CascadeRCNN):
             else:
                 pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
             trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
-            pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
 
-            loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
+            valid_update_mask = car_cls_score_target != -1
+            if valid_update_mask.sum() == 0:
+                loss_translation = dict()
+                # We still need to devide loss by the car number in an image
+            else:
+                if self.translation_head.translation_bboxes_regression:
+                    loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
+                                                                                  pos_bboxes[im_idx], scale_factor[im_idx],
+                                                                                  device_id, car_cls_score_target)
+                else:
+                    pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+                    trans_pred = trans_pred[valid_update_mask]
+                    pos_gt_assigned_translations = pos_gt_assigned_translations[valid_update_mask]
+                    loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
 
         return loss_translation
 
@@ -278,7 +290,10 @@ class HybridTaskCascade(CascadeRCNN):
         else:
             pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes, scale_factor, device_id)
         trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
-        trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
+        if self.translation_head.translation_bboxes_regression:
+            trans_pred_world = self.translation_head.pred_to_world_coord_SSD(trans_pred, pos_bboxes, scale_factor, device_id)
+        else:
+            trans_pred_world = self.translation_head.pred_to_world_coord(trans_pred)
         trans_pred_world = trans_pred_world.cpu().numpy()
 
         return trans_pred_world
@@ -460,7 +475,7 @@ class HybridTaskCascade(CascadeRCNN):
 
             if self.with_car_cls_rot:
 
-                loss_car_cls_rot, car_cls_rot_feat = self._carcls_rot_forward_train(i, x, sampling_results,
+                loss_car_cls_rot, car_cls_rot_feat, car_cls_score_target = self._carcls_rot_forward_train(i, x, sampling_results,
                                                                  carlabels, quaternion_semispheres,
                                                                  rcnn_train_cfg, semantic_feat)
                 for name, value in loss_car_cls_rot.items():
@@ -475,7 +490,7 @@ class HybridTaskCascade(CascadeRCNN):
 
         # for translation, we don't have interleave or cascading for the moment
         if self.with_translation:
-            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat, img_meta)
+            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat, img_meta, car_cls_score_target)
             for name, value in loss_translation.items():
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 
@@ -493,15 +508,15 @@ class HybridTaskCascade(CascadeRCNN):
             losses[new_key] = losses[key]
             del losses[key]
         for key in kaggle_keys:
-            new_key = 'kaggle/' + key
-            losses[new_key] = losses[key]
-            del losses[key]
+            if key in losses.keys():
+                new_key = 'kaggle/' + key
+                losses[new_key] = losses[key]
+                del losses[key]
 
         # if we use bayesian weight learning scheme as in:
         # Geometric loss functions for camera pose regression with deep learning
         # s = log (sigma) **2
         if self.bayesian_weight_learning:
-
             for key in losses.keys():
                 if 'car_cls_ce_loss' in key:
                     losses[key] = self.fc_car_cls_weight(losses[key].expand(1)).squeeze()

@@ -1,12 +1,14 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import os.path as osp
 import shutil
 import tempfile
 import pandas as pd
 import numpy as np
+import random
+import glob 
 
 import mmcv
 import torch
@@ -24,8 +26,7 @@ from tqdm import tqdm
 from tools.evaluations.map_calculation import map_main
 from multiprocessing import Pool
 
-#from finetune_RT_NMR import finetune_RT
-from finetune_RT_NMR_img import finetune_RT
+from finetune_RT_NMR import finetune_RT
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -113,7 +114,7 @@ def collect_results(result_part, size, tmpdir=None):
 
 
 def write_submission(outputs, args, dataset,
-                     conf_thresh=0.15,
+                     conf_thresh=0.1,
                      filter_mask=False,
                      horizontal_flip=False):
     img_prefix = dataset.img_prefix
@@ -126,7 +127,7 @@ def write_submission(outputs, args, dataset,
         submission += '_filter_mask.csv'
     elif horizontal_flip:
         submission += '_horizontal_flip'
-    submission += '_refined_test_cwx114_10_0.05.csv'
+    submission += '_merged.csv'
     predictions = {}
 
     CAR_IDX = 2  # this is the coco car class
@@ -224,28 +225,56 @@ def coords2str(coords):
     return ' '.join(s)
 
 
+
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan13-09-27/epoch_132.pth', help='checkpoint file')
+    # parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_adam_pre_apollo_30_60_80_Dec07-22-48-28/epoch_58.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint',
+                        default='/nfsc/vcdata/cyh/epoch_147.pth',
+                        help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
                         choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
                         help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
-    parser.add_argument('--tmpdir', help='tmp dir for writing some results')
-    parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
-    parser.add_argument('--local_rank', type=int, default=0)
+    parser.add_argument('--local_rank', help='show results')
+    parser.add_argument('--tmpdir', default="./results/", help='tmp dir for writing some results')
+    parser.add_argument('--clear', default=False, help='tmp dir for writing some results')
     parser.add_argument('--horizontal_flip',  default=False, action='store_true')
-    parser.add_argument('--world_size', default=8)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
     return args
 
+
+def output_sorted(outputs):
+    j = len(outputs)
+
+    new_outputs = [[] for _ in range(j)]
+    for output in outputs[0]:
+        file_name = output[2]['file_name']
+        new_outputs[0].append(output)
+
+        for i in range(1, j):
+            for output_i in outputs[i]:
+                if file_name == output_i[2]['file_name']:
+                    new_outputs[i].append(output_i)
+                    break
+
+    return new_outputs
+
+def create_lock(file_name):
+    f = open(file_name, mode="w", encoding="utf-8")
+    f.close()
+
+def remove_lock(file_name):
+    os.remove(file_name)
 
 def main():
     args = parse_args()
@@ -259,11 +288,10 @@ def main():
         args.out = os.path.join(cfg.work_dir,
                                 cfg.data.test.img_prefix.split('/')[-2].replace('_images', '_') +
                                 args.checkpoint.split('/')[-1][:-4] + '_horizontal_flip.pkl')
-        print('horizontal_flip activated')
     else:
         args.out = os.path.join(cfg.work_dir,
                                 cfg.data.test.img_prefix.split('/')[-2].replace('_images', '_') +
-                                args.checkpoint.split('/')[-2] + '.pkl')
+                                args.checkpoint.split('/')[-1][:-4] + '.pkl')
 
         # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -271,125 +299,44 @@ def main():
     cfg.model.pretrained = None
     cfg.data.test.test_mode = True
 
-    # init distributed env first, since logger depends on the dist info.
-    if args.launcher == 'none':
-        distributed = False
-    else:
-        distributed = True
-        init_dist(args.launcher, **cfg.dist_params)
-
-    # build the dataloader
     dataset = build_dataset(cfg.data.test)
-    if not os.path.exists(args.out):
-        data_loader = build_dataloader(
-            dataset,
-            imgs_per_gpu=1,
-            workers_per_gpu=cfg.data.workers_per_gpu,
-            dist=distributed,
-            shuffle=False)
 
-        # build the model and load checkpoint
-        model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
-        fp16_cfg = cfg.get('fp16', None)
-        if fp16_cfg is not None:
-            wrap_fp16_model(model)
-        checkpoint = load_checkpoint(model, args.checkpoint, map_location='cpu')
-        # old versions did not save class info in checkpoints, this walkaround is
-        # for backward compatibility
-        if 'CLASSES' in checkpoint['meta']:
-            model.CLASSES = checkpoint['meta']['CLASSES']
-        else:
-            model.CLASSES = dataset.CLASSES
+    outputs_1 = mmcv.load('/data/Kaggle/cwx_data/all_cwxe99_3070100flip05resumme72Dec27-09-40-17/all_cwxe99_3070100flip05resumme72Dec27-09-40-17ep73.pkl')
+    outputs_2 = mmcv.load('/data/Kaggle/cwx_data/all_cwxe99_3070100flip05resumme72Dec27-09-40-17/all_cwxe99_3070100flip05resumme72Dec27-09-40-17ep85.pkl')
+    outputs_3 = mmcv.load('/data/Kaggle/cwx_data/all_cwxe99_3070100flip05resumme72Dec27-09-40-17/all_cwxe99_3070100flip05resumme72Dec27-09-40-17ep85.pkl')
+    
+    random.shuffle(outputs_1)
+    outputs = output_sorted([outputs_1, outputs_2, outputs_3])
+    
+    for i in range(len(outputs[0])):
+        output = outputs[0][i]
+        lock_file = os.path.join(args.tmpdir, os.path.basename(output[2]['file_name']).replace(".jpg", ".lock"))
+        pkl_file = os.path.join(args.tmpdir, os.path.basename(output[2]['file_name']).replace(".jpg", ".pkl"))
 
-        if not distributed:
-            model = MMDataParallel(model, device_ids=[0])
-            outputs = single_gpu_test(model, data_loader, args.show)
-        else:
-            model = MMDistributedDataParallel(model.cuda())
-            outputs = multi_gpu_test(model, data_loader, args.tmpdir)
-        mmcv.dump(outputs, args.out)
+        if os.path.exists(lock_file) or os.path.exists(pkl_file):
+            continue
 
-    else:
-        outputs = mmcv.load(args.out)
+        create_lock(lock_file)
+        print(pkl_file)
+        dataset.distributed_visualise_pred_merge_postprocessing(i, outputs, args, tmp_dir=args.tmpdir, vote=2)
+        remove_lock(lock_file)
 
-    if distributed:
-        rank, _ = get_dist_info()
-        if rank != 0:
-            return
+    pkl_list = glob.glob(os.path.join(args.tmpdir, "*.pkl"))
 
-    if False:   # If set to True, we will collect unfinished .pkl files
-        pkl_files = [x.replace('.pkl', '') for x in os.listdir('/data/Kaggle/wudi_data/tmp_output')]
-        all_files = [x[2]['file_name'].split('/')[-1].replace('.jpg', '') for x in outputs]
-        not_finished = [item for item in all_files if item not in pkl_files]
-        print('Unfinished :%d' % len(not_finished))
-        not_finished_idx = []
-        for i in range(len(all_files)):
-            if all_files[i] in not_finished:
-                not_finished_idx.append(i)
-        outputs = [outputs[index] for index in not_finished_idx]
+    if len(pkl_list) == len(outputs[0]):
+        outputs_merged = []
+        for pkl in pkl_list:
+            output = mmcv.load(pkl)
+            outputs_merged.append(output)
 
-        idx = 5
-        bs = 10
-
-        print("output star idx: %d" % (int(idx * bs)))
-        # outputs = outputs[idx*bs: (idx+1)*bs]
-
-    # we use Neural Mesh Renderer to further finetune the result
-    # for idx, output in enumerate(outputs):
-    #     if output[2]['file_name'].split('/')[-1].replace('.jpg', '') == 'ID_2e24dd0ea':
-    #         print(idx)
-    #         break
-    outputs = [outputs[0]]
-
-    #outputs = outputs[args.start: args.end]
-    local_rank = args.local_rank
-    world_size = args.world_size
-    for idx, output in enumerate(outputs):
-        if idx % world_size == local_rank:
-            finetune_RT([output], dataset,
-                        draw_flag=True,
-                        num_epochs=20,
-                        iou_threshold=0.95,
-                        lr=0.05,
-                        fix_rot=False,
-                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
-
-
-    if False:  # This will collect all the NMR output
-        outputs = []
-        output_dir = '/data/Kaggle/wudi_data/tmp_output'
-        for f in os.listdir(output_dir):
-            output_tmp = mmcv.load(os.path.join(output_dir, f))
-            outputs.append(output_tmp)
-        args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
-
-    if False:
-        # submission = write_submission(outputs, args, dataset,
-        #                               conf_thresh=0.1,
-        #                               filter_mask=False,
-        #                               horizontal_flip=args.horizontal_flip)
-
-        print("Writing submission using the filter by mesh, this will take 2 sec per image")
-        print("You can also kill the program the uncomment the first line with filter_mask=False")
-        # submission = write_submission_pool(outputs, args, dataset,
-        #                                    conf_thresh=0.0,
-        #                                    horizontal_flip=args.horizontal_flip)
-
-        # Visualise the prediction, this will take 5 sec..
-        dataset.visualise_pred(outputs, args)
-
-
-        ## the following function apply visualisation and post processing toghther
-        outputs_refined = dataset.visualise_pred_postprocessing(outputs, args)
-        mmcv.dump(outputs_refined, '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/test_cwx114_10_0.05.pkl')
-        submission = write_submission(outputs_refined, args, dataset,
-                                      conf_thresh=0.15,
+        print("Writing pkl file to: {}".format(args.out))
+        mmcv.dump(outputs_merged, args.out)
+        
+        submission = write_submission(outputs_merged, args, dataset,
+                                      conf_thresh=0.8,
                                       filter_mask=False,
                                       horizontal_flip=args.horizontal_flip)
-        # evaluate mAP
-        print("Start to eval mAP")
-        map_main(submission, flip_model=args.horizontal_flip)
-
+        
 
 if __name__ == '__main__':
     main()

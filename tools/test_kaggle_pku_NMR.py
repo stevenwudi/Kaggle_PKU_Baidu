@@ -229,7 +229,10 @@ def parse_args():
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan13-09-27/epoch_132.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1/epoch_100.pth', help='checkpoint file')
+    # parser.add_argument('--checkpoint',
+    #                     default='/nfsc/vcdata/cyh/epoch_147.pth',
+    #                     help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
@@ -263,7 +266,7 @@ def main():
     else:
         args.out = os.path.join(cfg.work_dir,
                                 cfg.data.test.img_prefix.split('/')[-2].replace('_images', '_') +
-                                args.checkpoint.split('/')[-2] + '.pkl')
+                                args.checkpoint.split('/')[-2][:-4] + '.pkl')
 
         # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -279,7 +282,9 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     # build the dataloader
+    # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
+    args.out = '/data/Kaggle/wudi_data/work_dirs/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1.pkl'
     if not os.path.exists(args.out):
         data_loader = build_dataloader(
             dataset,
@@ -317,31 +322,7 @@ def main():
         if rank != 0:
             return
 
-    if False:   # If set to True, we will collect unfinished .pkl files
-        pkl_files = [x.replace('.pkl', '') for x in os.listdir('/data/Kaggle/wudi_data/tmp_output')]
-        all_files = [x[2]['file_name'].split('/')[-1].replace('.jpg', '') for x in outputs]
-        not_finished = [item for item in all_files if item not in pkl_files]
-        print('Unfinished :%d' % len(not_finished))
-        not_finished_idx = []
-        for i in range(len(all_files)):
-            if all_files[i] in not_finished:
-                not_finished_idx.append(i)
-        outputs = [outputs[index] for index in not_finished_idx]
-
-        idx = 5
-        bs = 10
-
-        print("output star idx: %d" % (int(idx * bs)))
-        # outputs = outputs[idx*bs: (idx+1)*bs]
-
-    # we use Neural Mesh Renderer to further finetune the result
-    # for idx, output in enumerate(outputs):
-    #     if output[2]['file_name'].split('/')[-1].replace('.jpg', '') == 'ID_2e24dd0ea':
-    #         print(idx)
-    #         break
-    outputs = [outputs[0]]
-
-    #outputs = outputs[args.start: args.end]
+    outputs = [outputs[2]]
     local_rank = args.local_rank
     world_size = args.world_size
     for idx, output in enumerate(outputs):
@@ -349,46 +330,13 @@ def main():
             finetune_RT([output], dataset,
                         draw_flag=True,
                         num_epochs=20,
-                        iou_threshold=0.95,
+                        loss_grayscale_light=0.01,
+                        loss_grayscale_RT=0.05,
+                        loss_IoU=0.95,
                         lr=0.05,
-                        fix_rot=False,
+                        conf_thresh=0.8,
+                        fix_rot=True,
                         tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
-
-
-    if False:  # This will collect all the NMR output
-        outputs = []
-        output_dir = '/data/Kaggle/wudi_data/tmp_output'
-        for f in os.listdir(output_dir):
-            output_tmp = mmcv.load(os.path.join(output_dir, f))
-            outputs.append(output_tmp)
-        args.out = '/data/Kaggle/wudi_data/work_dirs/206_NMR.pkl'
-
-    if False:
-        # submission = write_submission(outputs, args, dataset,
-        #                               conf_thresh=0.1,
-        #                               filter_mask=False,
-        #                               horizontal_flip=args.horizontal_flip)
-
-        print("Writing submission using the filter by mesh, this will take 2 sec per image")
-        print("You can also kill the program the uncomment the first line with filter_mask=False")
-        # submission = write_submission_pool(outputs, args, dataset,
-        #                                    conf_thresh=0.0,
-        #                                    horizontal_flip=args.horizontal_flip)
-
-        # Visualise the prediction, this will take 5 sec..
-        dataset.visualise_pred(outputs, args)
-
-
-        ## the following function apply visualisation and post processing toghther
-        outputs_refined = dataset.visualise_pred_postprocessing(outputs, args)
-        mmcv.dump(outputs_refined, '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/test_cwx114_10_0.05.pkl')
-        submission = write_submission(outputs_refined, args, dataset,
-                                      conf_thresh=0.15,
-                                      filter_mask=False,
-                                      horizontal_flip=args.horizontal_flip)
-        # evaluate mAP
-        print("Start to eval mAP")
-        map_main(submission, flip_model=args.horizontal_flip)
 
 
 if __name__ == '__main__':
