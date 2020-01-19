@@ -151,11 +151,11 @@ class HybridTaskCascade(CascadeRCNN):
 
             valid_update_mask = car_cls_score_target != -1
             if valid_update_mask.sum() == 0:
-                losses = dict()
+                loss_translation = dict()
                 # We still need to devide loss by the car number in an image
-                losses['loss_translation'] = 0
-                losses['translation_distance'] = 0
-                losses['translation_distance_relative'] = 0
+                loss_translation['loss_translation'] = 0
+                loss_translation['translation_distance'] = 0
+                loss_translation['translation_distance_relative'] = 0
             else:
                 if self.translation_head.translation_bboxes_regression:
                     loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
