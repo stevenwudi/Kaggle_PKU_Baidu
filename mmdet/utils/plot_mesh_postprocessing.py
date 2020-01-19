@@ -17,11 +17,16 @@ from demo.visualisation_utils import draw_box_mesh_kaggle_pku, refine_yaw_and_ro
 
 class Plot_Mesh_Postprocessing:
     def __init__(self,
-                 outdir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data',
-                 test_folder='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/test_images/'):
-
+                 car_model_json_dir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data',
+                 test_image_folder='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/test_images/'):
+        """
+        YYJ post processing script --> using Z to modify x, y
+        Args:
+            car_model_json_dir: car json file directory
+            test_image_folder:  test image folder
+        """
         # some hard coded parameters
-        self.outdir = outdir
+        self.car_model_json_dir = car_model_json_dir
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480  # this
         self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
@@ -38,7 +43,7 @@ class Plot_Mesh_Postprocessing:
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
         self.car_id2name = car_id2name
-        self.test_folder = test_folder
+        self.test_image_folder = test_image_folder
 
     def _str2coords(self, s, names=('id', 'yaw', 'pitch', 'roll', 'x', 'y', 'z')):
         """
@@ -56,10 +61,10 @@ class Plot_Mesh_Postprocessing:
         return coords
 
     def load_car_models(self):
-        car_model_dir = os.path.join(self.outdir, 'car_models_json')
+        car_model_dir = os.path.join(self.car_model_json_dir, 'car_models_json')
         car_model_dict = {}
         for car_name in tqdm(os.listdir(car_model_dir)):
-            with open(os.path.join(self.outdir, 'car_models_json', car_name)) as json_file:
+            with open(os.path.join(self.car_model_json_dir, 'car_models_json', car_name)) as json_file:
                 car_model_dict[car_name[:-5]] = json.load(json_file)
 
         return car_model_dict
@@ -83,7 +88,7 @@ class Plot_Mesh_Postprocessing:
     def restore_xyz_withIOU_single(self, idx, output_origin, car_cls_coco=2):
         output = copy.deepcopy(output_origin)
         print('idx', idx)
-        img_name = os.path.join(self.test_folder, os.path.basename(output[2]['file_name']))
+        img_name = os.path.join(self.test_image_folder, os.path.basename(output[2]['file_name']))
         image = imread(img_name)
         bboxes, segms, six_dof = output[0], output[1], output[2]
         car_cls_score_pred = six_dof['car_cls_score_pred']
