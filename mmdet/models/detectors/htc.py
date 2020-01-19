@@ -132,9 +132,9 @@ class HybridTaskCascade(CascadeRCNN):
 
         loss_car_cls_rot = car_cls_rot_head.loss(car_cls_score_pred, quaternion_pred,
                                                  car_cls_score_target, quaternion_target)
-        return loss_car_cls_rot, car_cls_rot_feat
+        return loss_car_cls_rot, car_cls_rot_feat, car_cls_score_target
 
-    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta):
+    def _translation_forward_train(self, sampling_results, scale_factor, car_cls_rot_feat, img_meta, car_cls_score_target):
         pos_bboxes = [res.pos_bboxes for res in sampling_results]
         # TODO: this is a dangerous hack: we assume only one image per batch
         if len(pos_bboxes) > 1:
@@ -150,9 +150,15 @@ class HybridTaskCascade(CascadeRCNN):
             trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
 
             if self.translation_head.translation_bboxes_regression:
-                loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred, pos_bboxes[im_idx], scale_factor[im_idx], device_id)
+                loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
+                                                                              pos_bboxes[im_idx], scale_factor[im_idx],
+                                                                              device_id, car_cls_score_target)
             else:
                 pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+
+                valid_update_mask = car_cls_score_target != -1
+                trans_pred = trans_pred[valid_update_mask]
+                pos_gt_assigned_translations = pos_gt_assigned_translations[valid_update_mask]
                 loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
 
         return loss_translation
@@ -466,7 +472,7 @@ class HybridTaskCascade(CascadeRCNN):
 
             if self.with_car_cls_rot:
 
-                loss_car_cls_rot, car_cls_rot_feat = self._carcls_rot_forward_train(i, x, sampling_results,
+                loss_car_cls_rot, car_cls_rot_feat, car_cls_score_target = self._carcls_rot_forward_train(i, x, sampling_results,
                                                                  carlabels, quaternion_semispheres,
                                                                  rcnn_train_cfg, semantic_feat)
                 for name, value in loss_car_cls_rot.items():
@@ -481,7 +487,7 @@ class HybridTaskCascade(CascadeRCNN):
 
         # for translation, we don't have interleave or cascading for the moment
         if self.with_translation:
-            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat, img_meta)
+            loss_translation = self._translation_forward_train(sampling_results, scale_factor, car_cls_rot_feat, img_meta, car_cls_score_target)
             for name, value in loss_translation.items():
                 losses['s{}.{}'.format(i, name)] = (value * lw if 'loss' in name else value)
 

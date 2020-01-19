@@ -224,6 +224,13 @@ class ConvFCCarClsRotHead(BBoxHead):
              quaternion_target):
         losses = dict()
 
+        valid_update_mask = car_cls_score_target != -1
+
+        car_cls_score_pred = car_cls_score_pred[valid_update_mask]
+        car_cls_score_target = car_cls_score_target[valid_update_mask]
+        quaternion_pred = quaternion_pred[valid_update_mask, :]
+        quaternion_target = quaternion_target[valid_update_mask]
+
         losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
         losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
 
