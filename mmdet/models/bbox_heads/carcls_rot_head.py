@@ -225,17 +225,23 @@ class ConvFCCarClsRotHead(BBoxHead):
         losses = dict()
 
         valid_update_mask = car_cls_score_target != -1
+        if valid_update_mask.sum() == 0:
+            losses['car_cls_ce_loss'] = 0
+            losses['car_cls_acc'] = 1
+            losses['loss_quaternion'] = 0
+            losses['rotation_distance'] = 0
 
-        car_cls_score_pred = car_cls_score_pred[valid_update_mask]
-        car_cls_score_target = car_cls_score_target[valid_update_mask]
-        quaternion_pred = quaternion_pred[valid_update_mask, :]
-        quaternion_target = quaternion_target[valid_update_mask]
+        else:
+            car_cls_score_pred = car_cls_score_pred[valid_update_mask]
+            car_cls_score_target = car_cls_score_target[valid_update_mask]
+            quaternion_pred = quaternion_pred[valid_update_mask, :]
+            quaternion_target = quaternion_target[valid_update_mask]
 
-        losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
-        losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
+            losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
+            losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
 
-        losses['loss_quaternion'] = self.loss_quaternion(quaternion_pred, quaternion_target)
-        losses['rotation_distance'] = self.rotation_similiarity(quaternion_pred, quaternion_target)
+            losses['loss_quaternion'] = self.loss_quaternion(quaternion_pred, quaternion_target)
+            losses['rotation_distance'] = self.rotation_similiarity(quaternion_pred, quaternion_target)
 
         return losses
 
