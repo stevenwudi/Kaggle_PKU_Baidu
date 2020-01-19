@@ -156,10 +156,6 @@ class HybridTaskCascade(CascadeRCNN):
                 losses['loss_translation'] = 0
                 losses['translation_distance'] = 0
                 losses['translation_distance_relative'] = 0
-                # The metrics are detached from backpropagation
-                losses['translation_distance'] = losses['translation_distance'].detach()
-                losses['translation_distance_relative'] = losses['translation_distance_relative'].detach()
-
             else:
                 if self.translation_head.translation_bboxes_regression:
                     loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
