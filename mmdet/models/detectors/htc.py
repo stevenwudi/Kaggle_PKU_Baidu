@@ -149,17 +149,27 @@ class HybridTaskCascade(CascadeRCNN):
                 pred_boxes = self.translation_head.bbox_transform_pytorch(pos_bboxes[im_idx], scale_factor[im_idx], device_id)
             trans_pred = self.translation_head(pred_boxes, car_cls_rot_feat)
 
-            if self.translation_head.translation_bboxes_regression:
-                loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
-                                                                              pos_bboxes[im_idx], scale_factor[im_idx],
-                                                                              device_id, car_cls_score_target)
-            else:
-                pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+            valid_update_mask = car_cls_score_target != -1
+            if valid_update_mask.sum() == 0:
+                losses = dict()
+                # We still need to devide loss by the car number in an image
+                losses['loss_translation'] = 0
+                losses['translation_distance'] = 0
+                losses['translation_distance_relative'] = 0
+                # The metrics are detached from backpropagation
+                losses['translation_distance'] = losses['translation_distance'].detach()
+                losses['translation_distance_relative'] = losses['translation_distance_relative'].detach()
 
-                valid_update_mask = car_cls_score_target != -1
-                trans_pred = trans_pred[valid_update_mask]
-                pos_gt_assigned_translations = pos_gt_assigned_translations[valid_update_mask]
-                loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
+            else:
+                if self.translation_head.translation_bboxes_regression:
+                    loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
+                                                                                  pos_bboxes[im_idx], scale_factor[im_idx],
+                                                                                  device_id, car_cls_score_target)
+                else:
+                    pos_gt_assigned_translations = self.translation_head.get_target(sampling_results)
+                    trans_pred = trans_pred[valid_update_mask]
+                    pos_gt_assigned_translations = pos_gt_assigned_translations[valid_update_mask]
+                    loss_translation = self.translation_head.loss(trans_pred, pos_gt_assigned_translations)
 
         return loss_translation
 
