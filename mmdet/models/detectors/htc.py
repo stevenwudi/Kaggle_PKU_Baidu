@@ -153,9 +153,6 @@ class HybridTaskCascade(CascadeRCNN):
             if valid_update_mask.sum() == 0:
                 loss_translation = dict()
                 # We still need to devide loss by the car number in an image
-                loss_translation['loss_translation'] = 0
-                loss_translation['translation_distance'] = 0
-                loss_translation['translation_distance_relative'] = 0
             else:
                 if self.translation_head.translation_bboxes_regression:
                     loss_translation = self.translation_head.get_target_trans_box(sampling_results, trans_pred,
@@ -511,15 +508,15 @@ class HybridTaskCascade(CascadeRCNN):
             losses[new_key] = losses[key]
             del losses[key]
         for key in kaggle_keys:
-            new_key = 'kaggle/' + key
-            losses[new_key] = losses[key]
-            del losses[key]
+            if key in losses.keys():
+                new_key = 'kaggle/' + key
+                losses[new_key] = losses[key]
+                del losses[key]
 
         # if we use bayesian weight learning scheme as in:
         # Geometric loss functions for camera pose regression with deep learning
         # s = log (sigma) **2
         if self.bayesian_weight_learning:
-
             for key in losses.keys():
                 if 'car_cls_ce_loss' in key:
                     losses[key] = self.fc_car_cls_weight(losses[key].expand(1)).squeeze()
