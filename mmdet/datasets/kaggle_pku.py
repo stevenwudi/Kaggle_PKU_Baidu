@@ -7,6 +7,7 @@ import cv2
 from mmcv.image import imread, imwrite
 import mmcv
 from pycocotools import mask as maskUtils
+from multiprocessing import Pool
 
 from .custom import CustomDataset
 from .registry import DATASETS
@@ -1121,8 +1122,12 @@ class KagglePKUDataset(CustomDataset):
             else:
                 gt_bboxes.append(bbox)
 
-                # There are only 34 car in this training dataset:
-                gt_label = self.cat2label[ann_info['labels'][i]]
+                if ann_info['labels'][i] == -1:
+                    # In test set, we ignore this
+                    gt_label = -1
+                else:
+                    # There are only 34 car in this training dataset:
+                    gt_label = self.cat2label[ann_info['labels'][i]]
                 gt_labels.append(gt_label)
                 gt_class_labels.append(3)  # coco 3 is "car" class
                 mask = maskUtils.decode(ann_info['rles'][i])
@@ -1159,3 +1164,56 @@ class KagglePKUDataset(CustomDataset):
             translations=translations)
 
         return ann
+
+    def visualise_pred(self, outputs, args):
+        car_cls_coco = 2
+
+        for idx in tqdm(range(len(self.annotations))):
+            ann = self.annotations[idx]
+            img_name = ann['filename']
+            if not os.path.isfile(img_name):
+                assert "Image file does not exist!"
+            else:
+                image = imread(img_name)
+                output = outputs[idx]
+                # output is a tuple of three elements
+                bboxes, segms, six_dof = output[0], output[1], output[2]
+                car_cls_score_pred = six_dof['car_cls_score_pred']
+                quaternion_pred = six_dof['quaternion_pred']
+                trans_pred_world = six_dof['trans_pred_world']
+                euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+                car_labels = np.argmax(car_cls_score_pred, axis=1)
+                kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
+                car_names = np.array([car_id2name[x].name for x in kaggle_car_labels])
+
+                assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
+                       == len(trans_pred_world) == len(euler_angle) == len(car_names)
+                # now we start to plot the image from kaggle
+                im_combime, iou_flag = self.visualise_box_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,trans_pred_world)
+                imwrite(im_combime, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
+
+    def visualise_pred_single_node(self, idx, outputs, args):
+        car_cls_coco = 2
+
+        ann = self.annotations[idx]
+        img_name = ann['filename']
+        if not os.path.isfile(img_name):
+            assert "Image file does not exist!"
+        else:
+            image = imread(img_name)
+            output = outputs[idx]
+            # output is a tuple of three elements
+            bboxes, segms, six_dof = output[0], output[1], output[2]
+            car_cls_score_pred = six_dof['car_cls_score_pred']
+            quaternion_pred = six_dof['quaternion_pred']
+            trans_pred_world = six_dof['trans_pred_world']
+            euler_angle = np.array([quaternion_to_euler_angle(x) for x in quaternion_pred])
+            car_labels = np.argmax(car_cls_score_pred, axis=1)
+            kaggle_car_labels = [self.unique_car_mode[x] for x in car_labels]
+            car_names = np.array([car_id2name[x].name for x in kaggle_car_labels])
+
+            assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
+                   == len(trans_pred_world) == len(euler_angle) == len(car_names)
+            # now we start to plot the image from kaggle
+            im_combime, iou_flag = self.visualise_box_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,trans_pred_world)
+            imwrite(im_combime, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
