@@ -178,9 +178,9 @@ class FCTranslationHead(nn.Module):
                 losses['translation_distance_relative'] += translation_world_relative
 
         # We still need to devide loss by the car number in an image
-        losses['loss_translation'] /= trans_pred.shape[0]
-        losses['translation_distance'] /= trans_pred.shape[0]
-        losses['translation_distance_relative'] /= trans_pred.shape[0]
+        losses['loss_translation'] /= (car_cls_score_target != -1).sum()
+        losses['translation_distance'] /= (car_cls_score_target != -1).sum()
+        losses['translation_distance_relative'] /= (car_cls_score_target != -1).sum()
         # The metrics are detached from backpropagation
         losses['translation_distance'] = losses['translation_distance'].detach()
         losses['translation_distance_relative'] = losses['translation_distance_relative'].detach()

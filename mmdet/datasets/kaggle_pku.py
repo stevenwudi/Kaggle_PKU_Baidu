@@ -567,7 +567,8 @@ class KagglePKUDataset(CustomDataset):
 
         return outputs
 
-    def distributed_visualise_pred_merge_postprocessing(self, img_id, outputs, args, vote=2, tmp_dir="./results/", draw_flag=False):
+    def distributed_visualise_pred_merge_postprocessing(self, img_id, outputs, args, vote=2, tmp_dir="./results/",
+                                                        draw_flag=False):
         car_cls_coco = 2
 
         bboxes_list = []
@@ -598,9 +599,9 @@ class KagglePKUDataset(CustomDataset):
             six_dof_list.append(six_dof)
 
             bboxes_with_IOU = get_IOU(image, bboxes[car_cls_coco], segms[car_cls_coco], six_dof,
-                                            car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
+                                      car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
 
-            new_bboxes_with_IOU = np.zeros((bboxes_with_IOU.shape[0], bboxes_with_IOU.shape[1]+1))
+            new_bboxes_with_IOU = np.zeros((bboxes_with_IOU.shape[0], bboxes_with_IOU.shape[1] + 1))
             for bbox_idx in range(bboxes_with_IOU.shape[0]):
                 new_bboxes_with_IOU[bbox_idx] = np.append(bboxes_with_IOU[bbox_idx], float(i))
 
@@ -635,13 +636,12 @@ class KagglePKUDataset(CustomDataset):
             quaternion_pred_concat.append(six_dof['quaternion_pred'][ids])
             trans_pred_world_concat.append(six_dof['trans_pred_world'][ids])
 
-
         bboxes_merge[car_cls_coco] = np.concatenate(bboxes_merge_concat, axis=0)
         segms_merge[car_cls_coco] = np.concatenate(segms_merge_concat, axis=0)
         six_dof_merge['car_cls_score_pred'] = np.concatenate(car_cls_score_pred_concat, axis=0)
         six_dof_merge['quaternion_pred'] = np.concatenate(quaternion_pred_concat, axis=0)
         six_dof_merge['trans_pred_world'] = np.concatenate(trans_pred_world_concat, axis=0)
-        
+
         output_model_merge = (bboxes_merge, segms_merge, six_dof_merge)
 
         if draw_flag:
@@ -659,13 +659,13 @@ class KagglePKUDataset(CustomDataset):
             imwrite(img_box_mesh_refined,
                     os.path.join(args.out[:-4] + '_mes_box_vis_merged/' + img_name.split('/')[-1])[
                     :-4] + '_merged.jpg')
-        
+
         tmp_file = os.path.join(tmp_dir, "{}.pkl".format(last_name[:-4]))
         mmcv.dump(output_model_merge, tmp_file)
         return output_model_merge
 
-
-    def distributed_visualise_pred_merge_postprocessing_by_mean(self, img_id, outputs, args, vote=2, tmp_dir="./results/", draw_flag=False):
+    def distributed_visualise_pred_merge_postprocessing_by_mean(self, img_id, outputs, args, vote=2,
+                                                                tmp_dir="./results/", draw_flag=False):
         car_cls_coco = 2
 
         bboxes_list = []
@@ -696,21 +696,22 @@ class KagglePKUDataset(CustomDataset):
             six_dof_list.append(six_dof)
 
             bboxes_with_IOU = get_IOU(image, bboxes[car_cls_coco], segms[car_cls_coco], six_dof,
-                                            car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
+                                      car_id2name, self.car_model_dict, self.unique_car_mode, self.camera_matrix)
 
-            new_bboxes_with_IOU = np.zeros((bboxes_with_IOU.shape[0], bboxes_with_IOU.shape[1]+1))
+            new_bboxes_with_IOU = np.zeros((bboxes_with_IOU.shape[0], bboxes_with_IOU.shape[1] + 1))
             for bbox_idx in range(bboxes_with_IOU.shape[0]):
                 new_bboxes_with_IOU[bbox_idx] = np.append(bboxes_with_IOU[bbox_idx], float(i))
 
             bboxes_with_IOU_list.append(new_bboxes_with_IOU)
 
         bboxes_with_IOU = np.concatenate(bboxes_with_IOU_list, axis=0)
-        inds_index = nms_with_IOU_and_vote_index(bboxes_with_IOU, vote=vote)  ## IOU nms filter out processing return output indices
+        inds_index = nms_with_IOU_and_vote_index(bboxes_with_IOU,
+                                                 vote=vote)  ## IOU nms filter out processing return output indices
         inds = np.array(list(inds_index.keys()))
 
-        car_cls_score_pred = np.concatenate([ sd["car_cls_score_pred"] for sd in six_dof_list], axis=0)
-        quaternion_pred = np.concatenate([ sd["quaternion_pred"] for sd in six_dof_list], axis=0)
-        trans_pred_world = np.concatenate([ sd["trans_pred_world"] for sd in six_dof_list], axis=0)
+        car_cls_score_pred = np.concatenate([sd["car_cls_score_pred"] for sd in six_dof_list], axis=0)
+        quaternion_pred = np.concatenate([sd["quaternion_pred"] for sd in six_dof_list], axis=0)
+        trans_pred_world = np.concatenate([sd["trans_pred_world"] for sd in six_dof_list], axis=0)
 
         for ii in inds_index:
             car_cls_score_pred[ii] = np.mean(car_cls_score_pred[inds_index[ii]], axis=0)
@@ -749,13 +750,12 @@ class KagglePKUDataset(CustomDataset):
             quaternion_pred_concat.append(six_dof['quaternion_pred'][ids])
             trans_pred_world_concat.append(six_dof['trans_pred_world'][ids])
 
-
         bboxes_merge[car_cls_coco] = np.concatenate(bboxes_merge_concat, axis=0)
         segms_merge[car_cls_coco] = np.concatenate(segms_merge_concat, axis=0)
         six_dof_merge['car_cls_score_pred'] = np.concatenate(car_cls_score_pred_concat, axis=0)
         six_dof_merge['quaternion_pred'] = np.concatenate(quaternion_pred_concat, axis=0)
         six_dof_merge['trans_pred_world'] = np.concatenate(trans_pred_world_concat, axis=0)
-        
+
         output_model_merge = (bboxes_merge, segms_merge, six_dof_merge)
 
         if draw_flag:
@@ -773,11 +773,10 @@ class KagglePKUDataset(CustomDataset):
             imwrite(img_box_mesh_refined,
                     os.path.join(args.out[:-4] + '_mes_box_vis_merged/' + img_name.split('/')[-1])[
                     :-4] + '_merged.jpg')
-        
+
         tmp_file = os.path.join(tmp_dir, "{}.pkl".format(last_name[:-4]))
         mmcv.dump(output_model_merge, tmp_file)
         return output_model_merge
-
 
     def visualise_pred_merge_postprocessing(self, outputs, args, conf_thred=0.8):
         car_cls_coco = 2
@@ -1238,6 +1237,7 @@ class KagglePKUDataset(CustomDataset):
                 gt_bboxes.append(bbox)
 
                 if ann_info['labels'][i] == -1:
+                #if np.random.uniform(0, 1) > 0.2:  # TODO： Comment this lINE!!!!!!!!!!!
                     # In test set, we ignore this
                     gt_label = -1
                 else:
@@ -1304,7 +1304,8 @@ class KagglePKUDataset(CustomDataset):
                 assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
                        == len(trans_pred_world) == len(euler_angle) == len(car_names)
                 # now we start to plot the image from kaggle
-                im_combime, iou_flag = self.visualise_box_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,trans_pred_world)
+                im_combime, iou_flag = self.visualise_box_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco],
+                                                               car_names, euler_angle, trans_pred_world)
                 imwrite(im_combime, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
 
     def visualise_pred_single_node(self, idx, outputs, args):
@@ -1330,5 +1331,6 @@ class KagglePKUDataset(CustomDataset):
             assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
                    == len(trans_pred_world) == len(euler_angle) == len(car_names)
             # now we start to plot the image from kaggle
-            im_combime, iou_flag = self.visualise_box_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names, euler_angle,trans_pred_world)
+            im_combime, iou_flag = self.visualise_box_mesh(image, bboxes[car_cls_coco], segms[car_cls_coco], car_names,
+                                                           euler_angle, trans_pred_world)
             imwrite(im_combime, os.path.join(args.out[:-4] + '_mes_vis/' + img_name.split('/')[-1]))
