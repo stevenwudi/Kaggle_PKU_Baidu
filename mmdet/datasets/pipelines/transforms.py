@@ -1,5 +1,5 @@
 import inspect
-
+import cv2
 import albumentations
 import mmcv
 import numpy as np
@@ -354,6 +354,48 @@ class CropBottom(object):
 
         # filter out the gt bboxes that are completely cropped
 
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(bottom_half={})'.format(
+            self.bottom_half)
+
+
+@PIPELINES.register_module
+class CropCentreResize(object):
+    """
+    Crop the image to centre and resize to its original size
+    CropCentre operation will not modify any annotations.
+    The usage is just to test how networks will predict the 6DoF
+    information if the image centre is cropped.
+    """
+
+    def __init__(self, top, bottom, left, right):
+        """
+        How much to crop
+        Args:
+            top:
+            bottom:
+            left:
+            right:
+        """
+        self.top = top
+        self.bottom = bottom
+        self.left = left
+        self.right = right
+
+    def __call__(self, results):
+        img = results['img']
+        img_shape = img.shape
+        results['img'] = img
+        results['img_shape'] = img_shape
+        results['ori_shape'] = img_shape
+        # crop the image
+        img_crop = img[self.top:-self.bottom, self.left:-self.right, :]
+
+        resized_img = cv2.resize(img_crop, (img_shape[1], img_shape[0]), interpolation=cv2.INTER_NEAREST)
+
+        results['img'] = resized_img
         return results
 
     def __repr__(self):

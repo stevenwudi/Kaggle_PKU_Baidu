@@ -1,7 +1,6 @@
 import os
 import json
 
-
 import cv2
 import copy
 from mmcv.image import imread, imwrite
@@ -11,16 +10,23 @@ from tqdm import tqdm
 import multiprocessing
 
 from mmdet.datasets.car_models import car_id2name
-from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, \
-    quaternion_upper_hemispher, euler_angles_to_rotation_matrix, quaternion_to_euler_angle, draw_line, draw_points, \
-    euler_to_Rot_apollo, euler_to_Rot_YPR, rotation_matrix_to_euler_angles
-from demo.visualisation_utils import draw_result_kaggle_pku,draw_box_mesh_kaggle_pku,refine_yaw_and_roll, \
-    restore_x_y_from_z_withIOU_mutual,restore_x_y_from_z_withIOU, get_IOU, nms_with_IOU
-class Plot_Mesh_Postprocessing:
-    def __init__(self, outdir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data'):
+from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, quaternion_upper_hemispher, \
+    quaternion_to_euler_angle
+from demo.visualisation_utils import draw_box_mesh_kaggle_pku, refine_yaw_and_roll, restore_x_y_from_z_withIOU
 
+
+class Plot_Mesh_Postprocessing:
+    def __init__(self,
+                 car_model_json_dir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data',
+                 test_image_folder='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/test_images/'):
+        """
+        YYJ post processing script --> using Z to modify x, y
+        Args:
+            car_model_json_dir: car json file directory
+            test_image_folder:  test image folder
+        """
         # some hard coded parameters
-        self.outdir = outdir
+        self.car_model_json_dir = car_model_json_dir
         self.image_shape = (2710, 3384)  # this is generally the case
         self.bottom_half = 1480  # this
         self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
@@ -37,7 +43,7 @@ class Plot_Mesh_Postprocessing:
         print("Loading Car model files...")
         self.car_model_dict = self.load_car_models()
         self.car_id2name = car_id2name
-        self.test_folder = '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/test_images/'
+        self.test_image_folder = test_image_folder
 
     def _str2coords(self, s, names=('id', 'yaw', 'pitch', 'roll', 'x', 'y', 'z')):
         """
@@ -53,16 +59,17 @@ class Plot_Mesh_Postprocessing:
             if 'id' in coords[-1]:
                 coords[-1]['id'] = int(coords[-1]['id'])
         return coords
+
     def load_car_models(self):
-        car_model_dir = os.path.join(self.outdir, 'car_models_json')
+        car_model_dir = os.path.join(self.car_model_json_dir, 'car_models_json')
         car_model_dict = {}
         for car_name in tqdm(os.listdir(car_model_dir)):
-            with open(os.path.join(self.outdir, 'car_models_json', car_name)) as json_file:
+            with open(os.path.join(self.car_model_json_dir, 'car_models_json', car_name)) as json_file:
                 car_model_dict[car_name[:-5]] = json.load(json_file)
 
         return car_model_dict
 
-    def restore_pool(self,t):
+    def restore_pool(self, t):
         # print('t',t)
         return self.restore_xyz_withIOU_single(*t)
 
@@ -72,16 +79,16 @@ class Plot_Mesh_Postprocessing:
 
         outputs_refined = []
 
-        for output_refined in pool.imap(self.restore_pool,[(idx,output) for idx,output in enumerate(outputs)]):
+        for output_refined in pool.imap(self.restore_pool, [(idx, output) for idx, output in enumerate(outputs)]):
             # print('output_refined',output_refined)
             outputs_refined.append(output_refined)
 
         return outputs_refined
 
-    def restore_xyz_withIOU_single(self,idx,output_origin,car_cls_coco=2):
+    def restore_xyz_withIOU_single(self, idx, output_origin, car_cls_coco=2):
         output = copy.deepcopy(output_origin)
-        print('idx',idx)
-        img_name = os.path.join(self.test_folder, os.path.basename(output[2]['file_name']))
+        print('idx', idx)
+        img_name = os.path.join(self.test_image_folder, os.path.basename(output[2]['file_name']))
         image = imread(img_name)
         bboxes, segms, six_dof = output[0], output[1], output[2]
         car_cls_score_pred = six_dof['car_cls_score_pred']
@@ -95,45 +102,39 @@ class Plot_Mesh_Postprocessing:
         assert len(bboxes[car_cls_coco]) == len(segms[car_cls_coco]) == len(kaggle_car_labels) \
                == len(trans_pred_world) == len(euler_angle) == len(car_names)
         # now we start to plot the image from kaggle
-
-        # img_box_mesh, iou_flag = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world)
-        # imwrite(img_box_mesh, os.path.join('/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output5/' + 'test_mes_box_vis_all_refined_IOU/' + img_name.split('/')[-1])[:-4]+'.jpg')
-
-        
-        quaternion_semisphere_refined,flag = refine_yaw_and_roll(image,bboxes[car_cls_coco],segms[car_cls_coco],car_names, euler_angle,quaternion_pred,trans_pred_world,
-                                    self.car_model_dict,
-                                    self.camera_matrix)
+        quaternion_semisphere_refined, flag = refine_yaw_and_roll(image, bboxes[car_cls_coco], segms[car_cls_coco],
+                                                                  car_names, euler_angle, quaternion_pred,
+                                                                  trans_pred_world,
+                                                                  self.car_model_dict,
+                                                                  self.camera_matrix)
         if flag:
             output[2]['quaternion_pred'] = quaternion_semisphere_refined
             euler_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
 
+        trans_pred_world_refined = restore_x_y_from_z_withIOU(image, bboxes[car_cls_coco], segms[car_cls_coco],
+                                                              car_names, euler_angle, trans_pred_world,
+                                                              self.car_model_dict,
+                                                              self.camera_matrix)
 
-        # trans_pred_world_refined = restore_x_y_from_z_withIOU_mutual(image,bboxes[car_cls_coco],segms[car_cls_coco],car_names, euler_angle,trans_pred_world,
-        #                             self.car_model_dict,
-        #                             self.camera_matrix)
-        trans_pred_world_refined = restore_x_y_from_z_withIOU(image,bboxes[car_cls_coco],segms[car_cls_coco],car_names, euler_angle,trans_pred_world,
-                                    self.car_model_dict,
-                                    self.camera_matrix)
-    
         # print('change ',trans_pred_world,trans_pred_world_refined)
         output[2]['trans_pred_world'] = trans_pred_world_refined
-        
-        # img_box_mesh_refined, iou_flag = self.visualise_box_mesh(image,bboxes[car_cls_coco], segms[car_cls_coco],car_names, euler_angle,trans_pred_world_refined3)
-        # imwrite(img_box_mesh_refined, os.path.join('/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output5/' + 'test_mes_box_vis_all_refined_IOU/' + img_name.split('/')[-1])[:-4]+'_refined3.jpg')
+
         return output
 
     def visualise_box_mesh(self, image, bboxes, segms, car_names, euler_angle, trans_pred_world):
         im_combime, iou_flag = draw_box_mesh_kaggle_pku(image,
-                                            bboxes,
-                                            segms,
-                                            car_names,
-                                            self.car_model_dict,
-                                            self.camera_matrix,
-                                            trans_pred_world,
-                                            euler_angle)
+                                                        bboxes,
+                                                        segms,
+                                                        car_names,
+                                                        self.car_model_dict,
+                                                        self.camera_matrix,
+                                                        trans_pred_world,
+                                                        euler_angle)
 
         return im_combime, iou_flag
-    def load_anno_idx(self, idx, img_concat, train,  draw_dir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/crop_visualization/crop_mesh'):
+
+    def load_anno_idx(self, idx, img_concat, train,
+                      draw_dir='/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/crop_visualization/crop_mesh'):
 
         bboxes = []
         img1, img2, img3 = img_concat
@@ -199,35 +200,30 @@ class Plot_Mesh_Postprocessing:
 
             mask_all += mask_seg
 
-
-
         # if False:
         mask_all = mask_all * 255 / mask_all.max()
         cv2.addWeighted(img1.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image1)
         cv2.addWeighted(img2.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image2)
         cv2.addWeighted(img3.astype(np.uint8), 1.0, mask_all.astype(np.uint8), alpha, 0, merged_image3)
 
-        # for box in bboxes:
-        #     cv2.rectangle(merged_image, (int(box[0]), int(box[1])), (int(box[2]), int(box[3])), (0, 0, 255),
-        #                   thickness=5)
-
         imwrite(merged_image1, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '_1.jpg'))
         imwrite(merged_image2, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '_2.jpg'))
         imwrite(merged_image3, os.path.join(draw_dir, train['ImageId'].iloc[idx] + '_3.jpg'))
 
+
 if __name__ == '__main__':
     test_folder = '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/crop_visualization'
-    ImageId = ['ID_00ac30455','ID_00cfeca4c','ID_00f8d4e89','ID_0a1eb2c76']
+    ImageId = ['ID_00ac30455', 'ID_00cfeca4c', 'ID_00f8d4e89', 'ID_0a1eb2c76']
     train = pd.read_csv('/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/data/pku_data/train.csv')
 
-    plot_mesh = Plot_Mesh()
+    plot_mesh = Plot_Mesh_Postprocessing()
     for idx in range(len(train)):
         filename = train['ImageId'].iloc[idx]
         if filename not in ImageId:
             continue
-        filename = os.path.join(test_folder,filename)
-        img1 = cv2.imread(filename+'.jpg')
-        img2 = cv2.imread(filename+'_1.jpg')
-        img3 = cv2.imread(filename+'_2.jpg')
-        img_concat = [img1,img2,img3]
-        plot_mesh.load_anno_idx(idx,img_concat,train)
+        filename = os.path.join(test_folder, filename)
+        img1 = cv2.imread(filename + '.jpg')
+        img2 = cv2.imread(filename + '_1.jpg')
+        img3 = cv2.imread(filename + '_2.jpg')
+        img_concat = [img1, img2, img3]
+        plot_mesh.load_anno_idx(idx, img_concat, train)
