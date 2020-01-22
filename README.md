@@ -9,14 +9,16 @@ is indispensable in this competition.
 
 ## Approach 
 
-The overall pipeline is built upon our previous project 6D-VNet[[1]](#references) where we were won the first place in the [ApolloScape 3D Car Instance challenge track](http://apolloscape.auto/car_instance.html).
-(We reckon we are the very few teams that didn't use CenterNet as the main network).
+The overall pipeline is largely improved on previous method 6D-VNet[[1]](#references).
+We reckon we are the very few teams that didn't use CenterNet as the main network).
 The system pipeline is as follows (the red color denotes the modules we added for this task):
 
 ![](./figures/system_pipeline_kaggle.PNG)
 
-What has been incorporated are (1) better detector and conv backbone structure,
-(2) post-processing with both mask and mesh information (3) ensemble of multiple models and
+The three major improvement consists of
+(1) better detector and conv backbone structure,
+(2) post-processing with both mask and mesh information both geometrically and  via a Neural Mesh Renderer (NMR)[[4]](#references) method.
+(3) novel way of ensembling of multiple models and
 weighted average of multiple predictions. We specify the implementation details as follows:
 
 
