@@ -9,8 +9,7 @@ is indispensable in this competition.
 
 ## Approach 
 
-The overall pipeline is built upon our previous project 6D-VNet[[1]](###references) where we were won the first place in the [ApolloScape 3D Car Instance challenge track](http://apolloscape.auto/car_instance.html).
-The overall pipeline is built upon our previous project 6D-VNet[[1]](###references) where we were won the first place in the [ApolloScape 3D Car Instance challenge track](http://apolloscape.auto/car_instance.html).
+The overall pipeline is built upon our previous project 6D-VNet[[1]](#references) where we were won the first place in the [ApolloScape 3D Car Instance challenge track](http://apolloscape.auto/car_instance.html).
 (We reckon we are the very few teams that didn't use CenterNet as the main network).
 The system pipeline is as follows (the red color denotes the modules we added for this task):
 
@@ -26,8 +25,8 @@ We build our framework based upon the open source project
 [MMDetection](https://github.com/open-mmlab/mmdetection]). This is an excellent framework that can help us to modulised the code.
 Pixel-level transform for image augmentation is called from the [Albumentations](https://github.com/albumentations-team/albumentations) library.
 
-The detector is a 3-stage Hybrid Task Cascade (HTC) [[2]](###references) and the backbone is ImageNet pretrained 
-High-resolution networks (HRNets) [[3]](###references). 
+The detector is a 3-stage Hybrid Task Cascade (HTC) [[2]](#references) and the backbone is ImageNet pretrained 
+High-resolution networks (HRNets) [[3]](#references). 
 We design two specific task heads for this challenge: one head taking ROIAligh feature
 for car class classification + quaternion regression and one head taking bounding box information (centre location, height and width)
 for translation regression.
@@ -91,7 +90,7 @@ validation images. The interactive 3d rendering technique allows us to examine
 the correctly predicted cars in the valid set. 
 
 ### Neural Mesh Renderer (NMR)
-Neural 3D Mesh Renderer [[4]](###references) is a very cool research which generates an approximate gradient
+Neural 3D Mesh Renderer [[4]](#references) is a very cool research which generates an approximate gradient
 for rasterization that enables the integration of rendering into neural networks.
 After releasing of the final private LB, we found out  using NMR actually gives
 a small improvement of the overall mAP. 
@@ -100,13 +99,13 @@ a small improvement of the overall mAP.
 
 ### What we haven't tried but think it has decent potential
 
-- Almost all the top winning solution adopted the CenterNet [[5]](###references), it's very likely that the model ensemble with
+- Almost all the top winning solution adopted the CenterNet [[5]](#references), it's very likely that the model ensemble with
 CentreNet will further boost the overall performance. We realise the universal
 adoptation of CenterNet in this challenge. We might be too comfortable sitting
 in our existing framework and the migration to fine-tune CenterNet seems a bit hassle
 which in return might ultimately causes us the top prize. 
 
-- Allocentric vs. Egocentric [[6]](###references). 
+- Allocentric vs. Egocentric [[6]](#references). 
 Allocentric representation is equivariant w.r.t. to RoI Image appearance, and is
 better-suited for learning. As also discussed [here](https://www.kaggle.com/c/pku-autonomous-driving/discussion/127052),
 the modification of orientation id done by rotation matrix that moves camera
