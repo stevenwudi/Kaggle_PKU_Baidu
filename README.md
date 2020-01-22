@@ -69,16 +69,16 @@ Below is the aforementioned progress we have achieved in a tabular form:
 
 
 
-Method              | private LB             |  public LB
-:------------------: | :-------:|:-------------------------:
-HTC + HRNet + quaternion + translation | 0.094  | 0.102
-+ ApolloScape dataset      | 0.105          | 0.110
-+ z-> x,y (postprocessing) | 0.122          | 0.128
-+ NMR                      | 0.127          | 0.132
-conf (0.1 -> 0.8)          | 0.130          | 0.136
-+ 3 models ensemble (max)  | 0.133          | 0.142
-+ filter test ignore mask  | 0.136          | 0.145
-+ 6 models ensemble(weighted average)| 0.140 | 0.151
+|Method              | private LB             |  public LB|
+|:------------------: | :-------:|:-------------------------:|
+|HTC + HRNet + quaternion + translation | 0.094  | 0.102|
+|+ ApolloScape dataset      | 0.105          | 0.110|
+|+ z-> x,y (postprocessing) | 0.122          | 0.128|
+|+ NMR                      | 0.127          | 0.132|
+|conf (0.1 -> 0.8)          | 0.130          | 0.136|
+|+ 3 models ensemble (max)  | 0.133          | 0.142|
+|+ filter test ignore mask  | 0.136          | 0.145|
+|+ 6 models ensemble(weighted average)| 0.140 | 0.151|
   
   
 ## Other bolts and nuts
