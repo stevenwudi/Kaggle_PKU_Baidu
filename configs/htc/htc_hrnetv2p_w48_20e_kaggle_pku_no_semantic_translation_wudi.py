@@ -275,7 +275,7 @@ train_pipeline = [
          with_carcls_rot=True, with_translation=True),
     dict(type='CropBottom', bottom_half=1480),
     dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
-    dict(type='RandomFlip', flip_ratio=0.5),
+    dict(type='RandomFlip', flip_ratio=0.),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     # dict(
