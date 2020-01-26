@@ -25,7 +25,9 @@ from tools.evaluations.map_calculation import map_main
 from multiprocessing import Pool
 
 #from finetune_RT_NMR import finetune_RT
-from finetune_RT_NMR_img import finetune_RT
+#from finetune_RT_NMR_img import finetune_RT
+from finetune_RT_NMR_iou import finetune_RT
+from finetune_RT_NMR_grayscale import finetune_RT
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -284,7 +286,7 @@ def main():
     # build the dataloader
     # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
-    args.out = '/data/Kaggle/wudi_data/work_dirs/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1.pkl'
+    args.out = '/data/Kaggle/wudi_data/validation_Jan16-09-20.pkl'
     if not os.path.exists(args.out):
         data_loader = build_dataloader(
             dataset,
@@ -322,21 +324,22 @@ def main():
         if rank != 0:
             return
 
-    outputs = [outputs[2]]
+    outputs = outputs
     local_rank = args.local_rank
     world_size = args.world_size
     for idx, output in enumerate(outputs):
-        if idx % world_size == local_rank:
-            finetune_RT([output], dataset,
+        #if idx % world_size == local_rank:
+        if True:
+            finetune_RT(output, dataset,
                         draw_flag=True,
                         num_epochs=20,
-                        loss_grayscale_light=0.01,
-                        loss_grayscale_RT=0.05,
-                        loss_IoU=0.95,
+                        loss_grayscale_light=0.02,
+                        loss_grayscale_RT=0.02,
+                        loss_IoU=0.9,
                         lr=0.05,
                         conf_thresh=0.8,
                         fix_rot=True,
-                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
+                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output_grayscale')
 
 
 if __name__ == '__main__':

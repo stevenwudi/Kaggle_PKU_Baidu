@@ -412,7 +412,6 @@ def restore_x_y_from_z_withIOU(img_original, bboxes, segms, class_names, euler_a
             continue
 
         bbox = bboxes[bbox_idx]
-
         ## below is the predicted mask
         mask_all_pred = np.zeros(img.shape[:-1])  ## this is the background mask
         mask_all_mesh = np.zeros(img.shape[:-1])
@@ -430,31 +429,13 @@ def restore_x_y_from_z_withIOU(img_original, bboxes, segms, class_names, euler_a
                                                               mask_all_pred, mask_all_mesh, mask_all_pred_area,
                                                               euler_angle, t_refined)
         if t[2] > refined_threshold2:
-            # print('t1',t[2])
-            # score_iou_mask_before,score_iou_before = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t)
-            # score_iou_mask_after,score_iou_after = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t_refined)
-            # if score_iou_after < score_iou_before:
-            #     continue
             trans_pred_world_refined[bbox_idx] = t_refined
         elif t[2] < refined_threshold1:
             if score_iou_before < IOU_threshold:
                 print('score_iou_before', score_iou_before)
                 continue
-            # print('t2',t[2])
         else:
-            # print('t3',t[2])
-            # score_iou_mask_before,score_iou_before = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t)
-            # score_iou_mask_after,score_iou_after = get_iou_score(bbox_idx,car_model_dict,camera_matrix,class_names,mask_all_pred,mask_all_mesh,mask_all_pred_area,euler_angle,t_refined)
-
-            # if score_before > score_after:
-            # print('score bad',score_before,score_after)
-            # if score_before < 0.8 and score_after - score_before > 0.1:
-            # if score_iou_before < 0.9 and score_iou_after - score_iou_after > 0.1:
-            # if score_iou_after - score_iou_before > 0.2:
-            # if score_iou_after - score_iou_before > 0:
             if score_iou_after - score_iou_before > 0.05:
-                # if score_before < 0.8 and score_after - score_before > 0.07:
-                # if score_before < 0.85 and score_after - score_before > 0.05:
                 print('score good', score_iou_before, score_iou_after)
                 trans_pred_world_refined[bbox_idx] = t_refined
         if score_iou_after < IOU_threshold:

@@ -14,7 +14,7 @@ def filter_output_pool(t):
 def main():
 
     pkl_file = '/data/Kaggle/wudi_data/test_Jan18-19-45_epoch_116.pkl'
-    outputs = mmcv.load(pkl_file)
+    outputs = mmcv .load(pkl_file)
     plot_mesh = Plot_Mesh_Postprocessing(outdir='/data/Kaggle/pku-autonomous-driving',
                                          test_folder='/data/Kaggle/pku-autonomous-driving/test_images')
     outputs_refined = plot_mesh.visualise_pred_postprocessing_multiprocessing(outputs)

@@ -1236,13 +1236,7 @@ class KagglePKUDataset(CustomDataset):
             else:
                 gt_bboxes.append(bbox)
 
-                if ann_info['labels'][i] == -1:
-                #if np.random.uniform(0, 1) > 0.2:  # TODO： Comment this lINE!!!!!!!!!!!
-                    # In test set, we ignore this
-                    gt_label = -1
-                else:
-                    # There are only 34 car in this training dataset:
-                    gt_label = self.cat2label[ann_info['labels'][i]]
+                gt_label = self.cat2label[ann_info['labels'][i]]
                 gt_labels.append(gt_label)
                 gt_class_labels.append(3)  # coco 3 is "car" class
                 mask = maskUtils.decode(ann_info['rles'][i])
