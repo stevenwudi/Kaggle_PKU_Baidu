@@ -106,7 +106,6 @@ class FCTranslationHead(nn.Module):
                              rois_resize,
                              scale_factor,
                              device_id,
-                             car_cls_score_target,
                              iou_thresh=0.5,
                              beta=0.1,):
         # ground truth
@@ -137,50 +136,49 @@ class FCTranslationHead(nn.Module):
         losses['translation_distance'] = 0
         losses['translation_distance_relative'] = 0
         for i, roi in enumerate(rois):
-            if car_cls_score_target[i] != -1:
-                area_roi = (roi[2] - roi[0] + 1) * (roi[3] - roi[1] + 1)
-                xx1 = np.maximum(roi[0], x1)
-                xx2 = np.minimum(roi[2], x2)
-                yy1 = np.maximum(roi[1], y1)
-                yy2 = np.minimum(roi[3], y2)
-                # compute the width and height of the bounding box
-                w = np.maximum(0, xx2 - xx1 + 1)
-                h = np.maximum(0, yy2 - yy1 + 1)
+            area_roi = (roi[2] - roi[0] + 1) * (roi[3] - roi[1] + 1)
+            xx1 = np.maximum(roi[0], x1)
+            xx2 = np.minimum(roi[2], x2)
+            yy1 = np.maximum(roi[1], y1)
+            yy2 = np.minimum(roi[3], y2)
+            # compute the width and height of the bounding box
+            w = np.maximum(0, xx2 - xx1 + 1)
+            h = np.maximum(0, yy2 - yy1 + 1)
 
-                overlap = (w * h) / (area + area_roi - w * h)
-                idx_overlap = overlap > iou_thresh
-                # We follow SSD, find the max and other criterion
-                idx_max = np.argmax(overlap)
-                idx_overlap[idx_max] = True
+            overlap = (w * h) / (area + area_roi - w * h)
+            idx_overlap = overlap > iou_thresh
+            # We follow SSD, find the max and other criterion
+            idx_max = np.argmax(overlap)
+            idx_overlap[idx_max] = True
 
-                matched_idx = torch.Tensor(idx_overlap) == True
-                matched_expand = matched_idx[:, None].expand(matched_idx.shape[0], 3).contiguous().view(-1)
-                matched_expand = matched_expand.float().cuda(device_id)
-                # calculate the reference g as in SSD paper eq. (2)
-                g = (pos_gt_assigned_translations[i] - boxes_world_xyz) / distance[:, None]
+            matched_idx = torch.Tensor(idx_overlap) == True
+            matched_expand = matched_idx[:, None].expand(matched_idx.shape[0], 3).contiguous().view(-1)
+            matched_expand = matched_expand.float().cuda(device_id)
+            # calculate the reference g as in SSD paper eq. (2)
+            g = (pos_gt_assigned_translations[i] - boxes_world_xyz) / distance[:, None]
 
-                target_translations = g.view(-1) * matched_expand
-                trans_pred[i] = trans_pred[i] * matched_expand
+            target_translations = g.view(-1) * matched_expand
+            trans_pred[i] = trans_pred[i] * matched_expand
 
-                # We still have smooth L1 loss with beta=0.1, because the translation threshold starts from 0.1
-                diff = torch.abs(trans_pred[i] - target_translations)
-                loss = torch.where(diff < beta, 0.5 * diff * diff / beta, diff - 0.5 * beta)
-                losses['loss_translation'] += loss.sum() / matched_expand.sum()
+            # We still have smooth L1 loss with beta=0.1, because the translation threshold starts from 0.1
+            diff = torch.abs(trans_pred[i] - target_translations)
+            loss = torch.where(diff < beta, 0.5 * diff * diff / beta, diff - 0.5 * beta)
+            losses['loss_translation'] += loss.sum() / matched_expand.sum()
 
-                # Get the world coordinate and distance
-                translation_pred = self.get_trans_by_SSD_regression(trans_pred[i], boxes_world_xyz, distance, idx_max)
-                translation_target = pos_gt_assigned_translations[i]
-                diff_distance = translation_pred - translation_target
-                distance_i = torch.sqrt(torch.sum(translation_target ** 2))
-                translation_world = torch.sqrt(torch.sum(diff_distance ** 2))
-                translation_world_relative = translation_world / distance_i
-                losses['translation_distance'] += translation_world
-                losses['translation_distance_relative'] += translation_world_relative
+            # Get the world coordinate and distance
+            translation_pred = self.get_trans_by_SSD_regression(trans_pred[i], boxes_world_xyz, distance, idx_max)
+            translation_target = pos_gt_assigned_translations[i]
+            diff_distance = translation_pred - translation_target
+            distance_i = torch.sqrt(torch.sum(translation_target ** 2))
+            translation_world = torch.sqrt(torch.sum(diff_distance ** 2))
+            translation_world_relative = translation_world / distance_i
+            losses['translation_distance'] += translation_world
+            losses['translation_distance_relative'] += translation_world_relative
 
         # We still need to devide loss by the car number in an image
-        losses['loss_translation'] /= (car_cls_score_target != -1).sum()
-        losses['translation_distance'] /= (car_cls_score_target != -1).sum()
-        losses['translation_distance_relative'] /= (car_cls_score_target != -1).sum()
+        losses['loss_translation'] /= len(rois)
+        losses['translation_distance'] /= len(rois)
+        losses['translation_distance_relative'] /= len(rois)
         # The metrics are detached from backpropagation
         losses['translation_distance'] = losses['translation_distance'].detach()
         losses['translation_distance_relative'] = losses['translation_distance_relative'].detach()

@@ -5,14 +5,14 @@ Image per batch --> this is not likely to work!!!
 import mmcv
 from mmcv import imwrite, imread
 from skimage import color
+import shutil
+import glob
 import os
 import torch
 import torch.nn as nn
 import numpy as np
 from skimage.io import imsave
-import tqdm
 import pycocotools.mask as maskUtils
-from scipy.spatial.transform import Rotation as R
 import neural_renderer as nr
 
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, euler_to_Rot, rot2eul
@@ -20,15 +20,6 @@ from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, euler_to_
 from mmdet.datasets.car_models import car_id2name
 from mmdet.utils import RotationDistance, TranslationDistance
 import imageio
-import glob
-
-
-def make_gif(filename):
-    with imageio.get_writer(filename, mode='I') as writer:
-        for filename in sorted(glob.glob('/tmp/_tmp_*.png')):
-            writer.append_data(imageio.imread(filename))
-            os.remove(filename)
-    writer.close()
 
 
 class Model(nn.Module):
@@ -71,7 +62,7 @@ class Model(nn.Module):
         # we set the loss threshold to stop perturbation
         self.mask_full_size = mask_full_size
         self.mask_sum = self.mask_full_size.sum()
-        self.loss_thresh = loss_thresh
+        self.loss_thresh = -loss_thresh
 
         image_ref = torch.from_numpy(mask_full_size.astype(np.float32))
         self.register_buffer('image_ref', image_ref)
@@ -117,11 +108,25 @@ class Model(nn.Module):
 
     def forward(self):
         image_rgb = self.renderer(self.vertices, self.faces, self.textures, mode='rgb')
-        #print("Rendered RGB max: %.4f" % torch.max(image_rgb))
         image_gray = image_rgb.sum(dim=0).sum(dim=0)
         image_gray = image_gray /image_gray.max()
         loss = torch.sum((image_gray - self.masked_grayscale_img) ** 2)
+        loss /= self.mask_sum
         return loss, image_rgb
+
+        # interception = torch.sum(torch.abs(image * self.image_ref[None, :, :]))
+        # union = torch.sum(image) + torch.sum(self.image_ref) - interception
+        # loss = - interception / union
+        # return loss, image_rgb
+
+
+def make_gif(filename, dir_tmp, remove_png=False):
+    with imageio.get_writer(filename, mode='I') as writer:
+        for filename in sorted(glob.glob(os.path.join(dir_tmp, '_tmp_*.png'))):
+            writer.append_data(imageio.imread(filename))
+            if remove_png:
+                os.remove(filename)
+    writer.close()
 
 
 def make_reference_image(filename_ref, filename_obj):
@@ -133,74 +138,6 @@ def make_reference_image(filename_ref, filename_obj):
     imsave(filename_ref, image)
 
 
-def get_updated_lighting(vertices,
-                         faces,
-                         Rotation_Matrix,
-                         T,
-                         euler_angle,
-                         mask_full_size,
-                         masked_grayscale_img,
-                         camera_matrix,
-                         image_size,
-                         loss_thresh=0.01,
-                         num_epochs=50,
-                         draw_flag=False,
-                         output_gif=None,
-                         lr=0.05,
-                         fix_rot=True,
-                         fix_trans=True,
-                         fix_light_source=False):
-    model = Model(vertices,
-                  faces,
-                  Rotation_Matrix,
-                  T,
-                  euler_angle,
-                  mask_full_size,
-                  masked_grayscale_img,
-                  camera_matrix,
-                  image_size=image_size,
-                  loss_thresh=loss_thresh,
-                  fix_rot=fix_rot,
-                  fix_trans=fix_trans,
-                  fix_light_source=fix_light_source)
-    if draw_flag:
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                print(name, param.data)
-    model.cuda()
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-    for i in range(num_epochs):
-        optimizer.zero_grad()
-        loss, image_rgb = model()
-        loss.backward()
-        optimizer.step()
-        if draw_flag:  # We don't save the images
-            image = image_rgb.detach().cpu().numpy()
-            imsave('/tmp/_tmp_%04d.png' % i, image.sum(0).sum(0))  ### we print some updates
-            print('Optimizing (loss %.4f)' % (loss.data / model.mask_sum))
-            # renderer.light_intensity_directional = 0.5
-            # renderer.light_intensity_ambient = 0.5
-            # renderer.light_direction = [0, -1, 0]
-            light_intensity_directional = model.renderer.light_intensity_directional.detach().cpu().numpy()
-            light_intensity_ambient = model.renderer.light_intensity_ambient.detach().cpu().numpy()
-            light_direction = model.renderer.light_direction.detach().cpu().numpy()
-            print('light_intensity_directional: %.3f, light_intensity_ambient: %.3f, light_direction: %s.'
-                  % (light_intensity_directional, light_intensity_ambient, light_direction))
-
-        if loss.item() / model.mask_sum < model.loss_thresh:
-            break
-
-    light_intensity_directional = model.renderer.light_intensity_directional.detach().cpu().numpy()
-    light_intensity_ambient = model.renderer.light_intensity_ambient.detach().cpu().numpy()
-    light_direction = model.renderer.light_direction.detach().cpu().numpy()
-    if draw_flag:
-        make_gif(output_gif)
-
-    return light_intensity_directional, light_intensity_ambient, light_direction
-
-
 def get_updated_RT(vertices,
                    faces,
                    Rotation_Matrix,
@@ -210,9 +147,6 @@ def get_updated_RT(vertices,
                    masked_grayscale_img,
                    camera_matrix,
                    image_size,
-                   light_intensity_directional,
-                   light_intensity_ambient,
-                   light_direction,
                    loss_RT=0.1,  # Greyscale difference
                    num_epochs=50,
                    draw_flag=False,
@@ -233,10 +167,7 @@ def get_updated_RT(vertices,
                   loss_thresh=loss_RT,
                   fix_rot=fix_rot,
                   fix_trans=fix_trans,
-                  fix_light_source=fix_light_source,
-                  light_intensity_directional=light_intensity_directional,
-                  light_intensity_ambient=light_intensity_ambient,
-                  light_direction=light_direction
+                  fix_light_source=fix_light_source
                   )
     if draw_flag:
         for name, param in model.named_parameters():
@@ -244,50 +175,60 @@ def get_updated_RT(vertices,
                 print(name, param.data)
     model.cuda()
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 
     # optimizer_trans = torch.optim.Adam(model.renderer.t, lr=lr)
     # optimizer_eular_angle = torch.optim.Adam(model.renderer.R, lr=lr*lr_angle_ratio)
+
+    if draw_flag:  # We don't save the images
+        if not os.path.isdir(output_gif[:-4]):
+            os.mkdir(output_gif[:-4])
+        else:
+            # remove old files and create new empty dir
+            shutil.rmtree(output_gif[:-4])
+            os.mkdir(output_gif[:-4])
+
+    # We only keep the best max IoU Result
+    min_loss = 1.0
 
     for i in range(num_epochs):
         optimizer.zero_grad()
         loss, image = model()
         loss.backward()
         optimizer.step()
+
+        if loss.item() < min_loss:
+            best_translation = model.renderer.t.detach().cpu().numpy()[0]
+            best_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+            min_loss = loss.item()
+
         if draw_flag:  # We don't save the images
             image = image.detach().cpu().numpy()[0].transpose(1, 2, 0)
             image = image / image.max()
             image[:, :, 1] += model.image_ref.detach().cpu().numpy()[0] * 0.5
-            imsave('/tmp/_tmp_%04d.png' % i, image)
+            imsave(os.path.join(output_gif[:-4], '_tmp_%04d.png' % i), image)
             ### we print some updates
-            if False:
-                image_ref = model.masked_grayscale_img.detach().cpu().numpy()
-                imwrite(image_ref * 255, '/data/Kaggle/wudi_data/NMR_images/ref.jpg')
-                imwrite(image * 255, '/data/Kaggle/wudi_data/NMR_images/r1.jpg')
-
-            print('Optimizing (loss %.4f)' % (loss.data / model.mask_sum))
+            print('Optimizing (loss %.4f)' % loss.data)
             updated_translation = model.renderer.t.detach().cpu().numpy()[0]
             original_translation = model.translation_original
             changed_dis = TranslationDistance(original_translation, updated_translation, abs_dist=False)
             print('Origin translation: %s - > updated tranlsation: %s. Changed distance: %.4f' % (
                 np.array2string(np.array(original_translation)), np.array2string(updated_translation), changed_dis))
             if not fix_rot:
-                updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
-                updated_euler_angle = rot2eul(updated_rot_matrix, model.euler_original)
+                rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
+                updated_euler_angle = rot2eul(rot_matrix, model.euler_original)
                 changed_rot = RotationDistance(model.euler_original, updated_euler_angle)
                 print('Origin eular angle: %s - > updated eular angle: %s. Changed rot: %.4f'
                       % (np.array2string(np.array(model.euler_original)), np.array2string(updated_euler_angle),
                          changed_rot))
 
-        if loss.item() / model.mask_sum < model.loss_thresh:
+        if loss.item() < model.loss_thresh:
             break
 
-    updated_translation = model.renderer.t.detach().cpu().numpy()[0]
-    updated_rot_matrix = model.renderer.R.detach().cpu().numpy()[0]
     if draw_flag:
-        make_gif(output_gif)
+        make_gif(output_gif, output_gif[:-4])
 
-    return updated_translation, rot2eul(updated_rot_matrix, model.euler_original)
+    return best_translation, rot2eul(best_rot_matrix, model.euler_original)
 
 
 def finetune_RT(output,
@@ -412,6 +353,7 @@ def finetune_RT(output,
     if draw_flag:
         output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.gif'
 
+    # Lighting fine-tuning
     light_intensity_directional, light_intensity_ambient, light_direction = get_updated_lighting(
         vertices=vertices_img_all[idx_conf],
         faces=faces_img_all[idx_conf],
@@ -438,25 +380,26 @@ def finetune_RT(output,
                 output_gif = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '_' + str(i) + '.gif'
             # Now we consider only one masked grayscale car
             masked_grayscale_car = mask_img[i] * grayscale_image[1480:, :]
-            #masked_grayscale_car = masked_grayscale_car / masked_grayscale_car.max()
+            # masked_grayscale_car = masked_grayscale_car / masked_grayscale_car.max()
             T_update, ea_update = get_updated_RT(vertices=vertices_img_all[None, i],
-                                  faces=faces_img_all[None, i],
-                                  Rotation_Matrix=Rotation_Matrix_img[None, i],
-                                  T=T_img[None, i],
-                                  euler_angle=euler_angles_img[i],
-                                  mask_full_size=mask_img[None, i],
-                                  masked_grayscale_img=masked_grayscale_car,
-                                  camera_matrix=camera_matrix,
-                                  image_size=(3384, 2710 - 1480),
-                                  loss_RT=loss_grayscale_RT,
-                                  num_epochs=num_epochs,
-                                  draw_flag=draw_flag,
-                                  output_gif=output_gif,
-                                  lr=lr,
-                                  fix_rot=fix_rot,
-                                  light_intensity_directional=light_intensity_directional,
-                                  light_intensity_ambient=light_intensity_ambient,
-                                  light_direction=light_direction)
+                                                 faces=faces_img_all[None, i],
+                                                 Rotation_Matrix=Rotation_Matrix_img[None, i],
+                                                 T=T_img[None, i],
+                                                 euler_angle=euler_angles_img[i],
+                                                 mask_full_size=mask_img[None, i],
+                                                 masked_grayscale_img=masked_grayscale_car,
+                                                 camera_matrix=camera_matrix,
+                                                 image_size=(3384, 2710 - 1480),
+                                                 loss_RT=loss_grayscale_RT,
+                                                 num_epochs=num_epochs,
+                                                 draw_flag=draw_flag,
+                                                 output_gif=output_gif,
+                                                 lr=lr,
+                                                 fix_rot=fix_rot,
+                                                 light_intensity_directional=light_intensity_directional,
+                                                 light_intensity_ambient=light_intensity_ambient,
+                                                 light_direction=light_direction
+                                                 )
 
             if fix_rot:
                 # we don't change the euler angle here
@@ -477,4 +420,3 @@ def finetune_RT(output,
         output_name = tmp_save_dir + '/' + output[2]['file_name'].split('/')[-1][:-4] + '.pkl'
         mmcv.dump(outputs_update[0], output_name)
     return
-

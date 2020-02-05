@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import os.path as osp
 import shutil
@@ -229,7 +229,7 @@ def parse_args():
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan13-09-27/epoch_132.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan18-19-45/epoch_136.pth', help='checkpoint file')
     parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
@@ -262,8 +262,8 @@ def main():
         print('horizontal_flip activated')
     else:
         args.out = os.path.join(cfg.work_dir,
-                                cfg.data.test.img_prefix.split('/')[-2].replace('_images', '_') +
-                                args.checkpoint.split('/')[-2] + '.pkl')
+                                cfg.data.test.img_prefix.split('/')[-1].replace('_images', '_') +
+                                args.checkpoint.split('/')[-2] + '_' + args.checkpoint.split('/')[-1][:-4] + '.pkl')
 
         # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -339,21 +339,20 @@ def main():
     #     if output[2]['file_name'].split('/')[-1].replace('.jpg', '') == 'ID_2e24dd0ea':
     #         print(idx)
     #         break
-    outputs = [outputs[0]]
+        outputs = [outputs[0]]
 
-    #outputs = outputs[args.start: args.end]
-    local_rank = args.local_rank
-    world_size = args.world_size
-    for idx, output in enumerate(outputs):
-        if idx % world_size == local_rank:
-            finetune_RT([output], dataset,
-                        draw_flag=True,
-                        num_epochs=20,
-                        iou_threshold=0.95,
-                        lr=0.05,
-                        fix_rot=False,
-                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
-
+        #outputs = outputs[args.start: args.end]
+        local_rank = args.local_rank
+        world_size = args.world_size
+        for idx, output in enumerate(outputs):
+            if idx % world_size == local_rank:
+                finetune_RT([output], dataset,
+                            draw_flag=True,
+                            num_epochs=20,
+                            iou_threshold=0.95,
+                            lr=0.05,
+                            fix_rot=False,
+                            tmp_save_dir='/data/Kaggle/wudi_data/tmp_output')
 
     if False:  # This will collect all the NMR output
         outputs = []
@@ -369,26 +368,28 @@ def main():
         #                               filter_mask=False,
         #                               horizontal_flip=args.horizontal_flip)
 
-        print("Writing submission using the filter by mesh, this will take 2 sec per image")
-        print("You can also kill the program the uncomment the first line with filter_mask=False")
-        # submission = write_submission_pool(outputs, args, dataset,
+        #print("Writing submission using the filter by mesh, this will take 2 sec per image")
+        #print("You can also kill the program the uncomment the first line with filter_mask=False")
+        #submission = write_submission_pool(outputs, args, dataset,
         #                                    conf_thresh=0.0,
         #                                    horizontal_flip=args.horizontal_flip)
 
         # Visualise the prediction, this will take 5 sec..
         dataset.visualise_pred(outputs, args)
 
+        #p = Pool(processes=20)
+        #p.imap(dataset.visualise_pred_single_node, [(idx, outputs, args) for idx in range(len(outputs))])
 
         ## the following function apply visualisation and post processing toghther
         outputs_refined = dataset.visualise_pred_postprocessing(outputs, args)
-        mmcv.dump(outputs_refined, '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/test_cwx114_10_0.05.pkl')
-        submission = write_submission(outputs_refined, args, dataset,
-                                      conf_thresh=0.15,
-                                      filter_mask=False,
-                                      horizontal_flip=args.horizontal_flip)
+        # mmcv.dump(outputs_refined, '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/test_cwx114_10_0.05.pkl')
+        # submission = write_submission(outputs, args, dataset,
+        #                               conf_thresh=0.8,
+        #                               filter_mask=False,
+        #                               horizontal_flip=args.horizontal_flip)
         # evaluate mAP
-        print("Start to eval mAP")
-        map_main(submission, flip_model=args.horizontal_flip)
+        # print("Start to eval mAP")
+        #map_main(submission, flip_model=args.horizontal_flip)
 
 
 if __name__ == '__main__':

@@ -85,7 +85,7 @@ class ConvFCCarClsRotHead(BBoxHead):
             self.fc_cls = nn.Linear(self.cls_last_dim, self.num_classes)
         if self.with_reg:
             out_dim_reg = (4 if self.reg_class_agnostic else 4 *
-                           self.num_classes)
+                                                             self.num_classes)
             self.fc_reg = nn.Linear(self.reg_last_dim, out_dim_reg)
 
         # Di Wu add build loss here overriding bbox_head
@@ -126,7 +126,7 @@ class ConvFCCarClsRotHead(BBoxHead):
             # for shared branch, only consider self.with_avg_pool
             # for separated branches, also consider self.num_shared_fcs
             if (is_shared
-                    or self.num_shared_fcs == 0) and not self.with_avg_pool:
+                or self.num_shared_fcs == 0) and not self.with_avg_pool:
                 last_layer_dim *= self.roi_feat_area
             for i in range(num_branch_fcs):
                 fc_in_channels = (
@@ -200,7 +200,7 @@ class ConvFCCarClsRotHead(BBoxHead):
             outs.append(quaternion_pred)
         if return_feat:
             raise NotImplementedError
-            #outs.append(res_feat)
+            # outs.append(res_feat)
         if return_last:
             outs.append(last_feat)
         return outs if len(outs) > 1 else outs[0]
@@ -209,8 +209,9 @@ class ConvFCCarClsRotHead(BBoxHead):
                    rcnn_train_cfg):
 
         pos_carlabels = [res.pos_gt_carlabels for res in sampling_results]
-        pos_gt_assigned_quaternion_semispheres = [res.pos_gt_assigned_quaternion_semispheres for res in sampling_results]
-        #pog_gt_assigned_translations = [res.pog_gt_assigned_translations for res in sampling_results]
+        pos_gt_assigned_quaternion_semispheres = [res.pos_gt_assigned_quaternion_semispheres for res in
+                                                  sampling_results]
+        # pog_gt_assigned_translations = [res.pog_gt_assigned_translations for res in sampling_results]
         pos_carlabels = torch.cat(pos_carlabels, 0)
         pos_gt_assigned_quaternion_semispheres = torch.cat(pos_gt_assigned_quaternion_semispheres, 0)
 
@@ -224,26 +225,16 @@ class ConvFCCarClsRotHead(BBoxHead):
              quaternion_target):
         losses = dict()
 
-        valid_update_mask = car_cls_score_target != -1
-        if valid_update_mask.sum() == 0:
-            return losses
+        losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
+        losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
 
-        else:
-            car_cls_score_pred = car_cls_score_pred[valid_update_mask]
-            car_cls_score_target = car_cls_score_target[valid_update_mask]
-            quaternion_pred = quaternion_pred[valid_update_mask, :]
-            quaternion_target = quaternion_target[valid_update_mask]
-
-            losses['car_cls_ce_loss'] = self.loss_car_cls(car_cls_score_pred, car_cls_score_target)
-            losses['car_cls_acc'] = accuracy(car_cls_score_pred, car_cls_score_target)
-
-            losses['loss_quaternion'] = self.loss_quaternion(quaternion_pred, quaternion_target)
-            losses['rotation_distance'] = self.rotation_similiarity(quaternion_pred, quaternion_target)
+        losses['loss_quaternion'] = self.loss_quaternion(quaternion_pred, quaternion_target)
+        losses['rotation_distance'] = self.rotation_similiarity(quaternion_pred, quaternion_target)
 
         return losses
 
     def rotation_similiarity(self, quaternion_pred, quaternion_target):
-        diff = torch.abs(torch.sum(quaternion_pred*quaternion_target, dim=1))
+        diff = torch.abs(torch.sum(quaternion_pred * quaternion_target, dim=1))
         dis_rot = torch.mean(2 * torch.acos(diff) * 180 / np.pi)
         return dis_rot.detach()
 

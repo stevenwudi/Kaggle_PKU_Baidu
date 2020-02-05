@@ -99,6 +99,23 @@ def get_road_surface_xyz(xmin, xmax, ymin, ymax, zmin, zmax):
 def get_open3d_mesh(euler_angle, trans_pred_world, car_model,
                     xmin, xmax, ymin, ymax, zmin, zmax,
                     difficulty_idx):
+    """
+
+    Args:
+        euler_angle:
+        trans_pred_world:
+        car_model:
+        xmin:
+        xmax:
+        ymin:
+        ymax:
+        zmin:
+        zmax:
+        difficulty_idx:
+
+    Returns:
+
+    """
     yaw, pitch, roll = euler_angle
     yaw, pitch, roll = -pitch, -yaw, -roll
     R = euler_to_Rot(yaw, pitch, roll).T
@@ -137,7 +154,12 @@ def get_open3d_mesh(euler_angle, trans_pred_world, car_model,
     return mesh_car, xmin, xmax, ymin, ymax, zmin, zmax
 
 
-def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_dir):
+def open_3d_vis(start_vis_index,
+                valid_pred,
+                train_df,
+                train_img_dir,
+                car_model_dir,
+                conf_thresh=0.8):
     """
     http://www.open3d.org/docs/tutorial/Basic/visualization.html
     -- Mouse view control --
@@ -200,7 +222,7 @@ def open_3d_vis(start_vis_index, valid_pred, train_df, train_img_dir, car_model_
         # We also save road surface
         xmin, xmax, ymin, ymax, zmin, zmax = np.inf, -np.inf, np.inf, -np.inf, np.inf, -np.inf
         for car_idx in range(trans_pred_world.shape[0]):
-            if bboxes[car_cls_coco][car_idx, -1] > 0.1:
+            if bboxes[car_cls_coco][car_idx, -1] > conf_thresh:
 
                 car_model = car_models[car_names[car_idx]]
                 # Now we check whether this car belongs to a TP:
@@ -257,10 +279,10 @@ def parse_args():
 
 if __name__ == '__main__':
     car_model_dir = 'E:\DATASET\pku-autonomous-driving\car_models_json'
-    valid_pred_file = r'E:\DATASET\pku-autonomous-driving\cwx_data\validation_all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1.pkl'
-    #valid_pred_file = r'E:\DATASET\pku-autonomous-driving\wudi_data\tmp_output\tmp_outputoutput_0000.pkl'
+    valid_pred_file = r'E:\DATASET\pku-autonomous-driving\wudi_data\validation_Jan18-19-45_epoch_116.pkl'
+    #valid_pred_file = r'E:\DATASET\pku-autonomous-driving\wudi_data\validation_Jan16-09-20.pkl'
 
-    train_img_dir = r'E:\DATASET\pku-autonomous-driving\cwx_data\all_yihao069e100s5070_resume55Dec23-09-14-266141a3d1_valid_ep64_mes_vis'
+    train_img_dir = r'E:\DATASET\pku-autonomous-driving\wudi_data\validation_Jan18-19-45_epoch_116_mes_vis'
     train_df = pd.read_csv(r'E:\DATASET\pku-autonomous-driving/train.csv')
 
     valid_pred = pkl.load(open(valid_pred_file, "rb"))

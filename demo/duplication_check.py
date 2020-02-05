@@ -5,7 +5,7 @@ PHash:  http://www.hackerfactor.com/blog/index.php?/archives/432-Looks-Like-It.h
 """
 import os
 import matplotlib.pylab as plt
-import imagededup
+import imagededupSt
 from imagededup.methods import PHash
 from imagededup.utils import plot_duplicates
 
