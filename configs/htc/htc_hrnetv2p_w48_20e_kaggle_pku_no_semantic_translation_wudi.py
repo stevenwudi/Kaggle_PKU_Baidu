@@ -382,6 +382,6 @@ load_from = None
 #load_from = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48_trimmed_translation.pth'
 #load_from = '/data/Kaggle/wudi_data/Jan18-19-45/epoch_116.pth'
 #resume_from = '/data/Kaggle/wudi_data/Jan08-09-54-32/epoch_2.pth'
-resume_from = '/data/Kaggle/wudi_data/Jan21-10-15/epoch_148.pth'
+resume_from = '/data/Kaggle/wudi_data/Jan26-13-27/epoch_198.pth'
 #resume_from = None
 workflow = [('train', 1)]
