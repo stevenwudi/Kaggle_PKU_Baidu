@@ -4,6 +4,7 @@ import json
 import os
 from tqdm import tqdm
 import cv2
+from math import sin, cos
 from mmcv.image import imread, imwrite
 import mmcv
 from pycocotools import mask as maskUtils
@@ -182,7 +183,6 @@ class KagglePKUDataset(CustomDataset):
             gt = self._str2coords(train['PredictionString'].iloc[idx])
             for gt_pred in gt:
                 eular_angle = np.array([gt_pred['yaw'], gt_pred['pitch'], gt_pred['roll']])
-
                 translation = np.array([gt_pred['x'], gt_pred['y'], gt_pred['z']])
                 quaternion = euler_angles_to_quaternions(eular_angle)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
@@ -1215,6 +1215,18 @@ class KagglePKUDataset(CustomDataset):
         eular_angles = []
         quaternion_semispheres = []
         translations = []
+        if self.rotation_augmenation:
+            # We follow the camera rotation augmentation as in
+            # https://www.kaggle.com/outrunner/rotation-augmentation
+            # It's put in here (instead of dataset.pipeline.transform is because
+            # we need car model json
+            alpha = ((np.random.random()**0.5)*8-5.65)*np.pi/180.
+            beta = (np.random.random() * 50 - 25) * np.pi / 180.
+            gamma = (np.random.random() * 6 - 3) * np.pi / 180. + beta / 3
+
+            Mat, Rot = self.rotateImage(alpha, beta, gamma)
+        else:
+            Mat, Rot = self.rotateImage(0, 0, 0)
 
         for i in range(len(ann_info['bboxes'])):
             x1, y1, x2, y2 = ann_info['bboxes'][i]
@@ -1234,17 +1246,55 @@ class KagglePKUDataset(CustomDataset):
             if ann_info.get('iscrowd', False):  # TODO: train mask need to include
                 gt_bboxes_ignore.append(bbox)
             else:
-                gt_bboxes.append(bbox)
+                if not self.rotation_augmenation:
 
-                gt_label = self.cat2label[ann_info['labels'][i]]
-                gt_labels.append(gt_label)
-                gt_class_labels.append(3)  # coco 3 is "car" class
-                mask = maskUtils.decode(ann_info['rles'][i])
-                gt_masks_ann.append(mask)
+                    gt_bboxes.append(bbox)
+                    gt_label = self.cat2label[ann_info['labels'][i]]
+                    gt_labels.append(gt_label)
+                    gt_class_labels.append(3)  # coco 3 is "car" class
+                    mask = maskUtils.decode(ann_info['rles'][i])
+                    gt_masks_ann.append(mask)
 
-                eular_angles.append(ann_info['eular_angles'][i])
-                quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
-                translations.append(translation)
+                    eular_angles.append(ann_info['eular_angles'][i])
+                    quaternion_semispheres.append(ann_info['quaternion_semispheres'][i])
+                    translations.append(translation)
+                else:
+
+                    yaw, pitch, roll = ann_info['eular_angles'][i]
+                    r1 = R.from_euler('xyz', [-pitch, -yaw, -roll], degrees=False)
+                    r2 = R.from_euler('xyz', [beta, -alpha, -gamma], degrees=False)
+
+                    pitch_rot, yaw_rot, roll_rot = (r2 * r1).as_euler('xyz') * (-1)
+                    eular_angle_rot = np.array([yaw_rot, pitch_rot, roll_rot])
+                    quaternion_rot = euler_angles_to_quaternions(eular_angle_rot)
+                    quaternion_semisphere_rot = quaternion_upper_hemispher(quaternion_rot)
+                    quaternion_semisphere_rot = np.array(quaternion_semisphere_rot, dtype=np.float32)
+
+                    x, y, z = translation
+                    x_rot, y_rot, z_rot, _ = np.dot(Rot, [x, y, z, 1])
+                    translation_rot = np.array([x_rot, y_rot, z_rot])
+
+                    car_name = car_id2name[ann_info['labels'][i]].name
+                    vertices = np.array(self.car_model_dict[car_name]['vertices'])
+                    vertices[:, 1] = -vertices[:, 1]
+                    triangles = np.array(self.car_model_dict[car_name]['faces']) - 1
+
+                    bbox_rot, mask_rot = self.get_box_and_mask(eular_angle_rot, translation_rot, vertices, triangles)
+                    # Some rotated bbox might be out of the image
+                    if bbox_rot[2] < 0 or bbox_rot[3] < 0 or \
+                            bbox_rot[0] > self.image_shape[0] or bbox_rot[1] > self.image_shape[1]-self.bottom_half:
+                        continue
+
+                    gt_label = self.cat2label[ann_info['labels'][i]]
+
+                    gt_bboxes.append(bbox_rot)
+                    gt_labels.append(gt_label)
+                    gt_class_labels.append(3)  # coco 3 is "car" class
+                    gt_masks_ann.append(mask_rot)
+
+                    eular_angles.append(eular_angle_rot)
+                    quaternion_semispheres.append(quaternion_semisphere_rot)
+                    translations.append(translation_rot)
 
         if gt_bboxes:
             gt_bboxes = np.array(gt_bboxes, dtype=np.float32)
@@ -1270,9 +1320,97 @@ class KagglePKUDataset(CustomDataset):
 
             eular_angles=eular_angles,
             quaternion_semispheres=quaternion_semispheres,
-            translations=translations)
+            translations=translations,
+            Mat=Mat)
 
         return ann
+
+    def rotateImage(self, alpha=0, beta=0, gamma=0):
+
+        fx, dx = self.camera_matrix[0, 0], self.camera_matrix[0, 2]
+        fy, dy = self.camera_matrix[1, 1], self.camera_matrix[1, 2]
+
+        # Projection 2D -> 3D matrix
+        A1 = np.array([[1 / fx, 0, -dx / fx],
+                       [0, 1 / fx, -dy / fx],
+                       [0, 0, 1],
+                       [0, 0, 1]])
+
+        # Rotation matrices around the X, Y, and Z axis
+        RX = np.array([[1, 0, 0, 0],
+                       [0, cos(alpha), -sin(alpha), 0],
+                       [0, sin(alpha), cos(alpha), 0],
+                       [0, 0, 0, 1]])
+
+        RY = np.array([[cos(beta), 0, -sin(beta), 0],
+                       [0, 1, 0, 0],
+                       [sin(beta), 0, cos(beta), 0],
+                       [0, 0, 0, 1]])
+        RZ = np.array([[cos(gamma), -sin(gamma), 0, 0],
+                       [sin(gamma), cos(gamma), 0, 0],
+                       [0, 0, 1, 0],
+                       [0, 0, 0, 1]])
+        # Composed rotation matrix with (RX, RY, RZ)
+        R = np.dot(RZ, np.dot(RX, RY))
+
+        # 3D -> 2D matrix
+        A2 = np.array([[fx, 0, dx, 0],
+                       [0, fy, dy, 0],
+                       [0, 0, 1, 0]])
+        # Final transformation matrix
+        trans = np.dot(A2, np.dot(R, A1))
+        # Apply matrix transformation
+        return trans, R
+
+    def get_box_and_mask(self, eular_angle, translation, vertices, triangles):
+        # project 3D points to 2d image plane
+        yaw, pitch, roll = eular_angle
+        # I think the pitch and yaw should be exchanged
+        yaw, pitch, roll = -pitch, -yaw, -roll
+        Rt = np.eye(4)
+        t = translation
+        Rt[:3, 3] = t
+        Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+        Rt = Rt[:3, :]
+        P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+        P[:, :-1] = vertices
+        P = P.T
+
+        img_cor_points = np.dot(self.camera_matrix, np.dot(Rt, P))
+        img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        # project 3D points to 2d image plane
+        x1, y1, x2, y2 = img_cor_points[:, 0].min(), img_cor_points[:, 1].min(), \
+                         img_cor_points[:, 0].max(), img_cor_points[:, 1].max()
+        bbox = np.array([x1, y1, x2, y2])
+        if self.bottom_half:
+            # we only take bottom half image
+            bbox = [x1, y1 - self.bottom_half, x2, y2 - self.bottom_half]
+        #### Now draw the mask
+        # project 3D points to 2d image plane
+        mask_seg = np.zeros(self.image_shape, dtype=np.uint8)
+        mask_seg_mesh = np.zeros(self.image_shape, dtype=np.uint8)
+        for t in triangles:
+            coord = np.array([img_cor_points[t[0]][:2], img_cor_points[t[1]][:2], img_cor_points[t[2]][:2]],
+                             dtype=np.int32)
+            # This will draw the mask for segmenation
+            cv2.drawContours(mask_seg, np.int32([coord]), 0, (255, 255, 255), -1)
+            cv2.polylines(mask_seg_mesh, np.int32([coord]), 1, (0, 255, 0))
+
+        ground_truth_binary_mask = np.zeros(mask_seg.shape, dtype=np.uint8)
+        ground_truth_binary_mask[mask_seg == 255] = 1
+        if self.bottom_half > 0:  # this indicate w
+            ground_truth_binary_mask = ground_truth_binary_mask[int(self.bottom_half):, :]
+
+        kernel_size = int(((y2 - y1) / 2 + (x2 - x1) / 2) / 10)
+        kernel = np.ones((kernel_size, kernel_size), np.uint8)
+        # Following is the code to find mask
+
+        ground_truth_binary_mask = cv2.dilate(ground_truth_binary_mask, kernel, iterations=1)
+        ground_truth_binary_mask = cv2.erode(ground_truth_binary_mask, kernel, iterations=1)
+        return bbox, ground_truth_binary_mask
 
     def visualise_pred(self, outputs, args):
         car_cls_coco = 2

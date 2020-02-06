@@ -45,7 +45,8 @@ class LoadAnnotations(object):
                  poly2mask=True,
                  skip_img_without_anno=True,
                  with_carcls_rot=False,
-                 with_translation=False):
+                 with_translation=False,
+                 with_camera_rot=False):
         self.with_bbox = with_bbox
         self.with_label = with_label
         self.with_mask = with_mask
@@ -54,6 +55,7 @@ class LoadAnnotations(object):
         self.skip_img_without_anno = skip_img_without_anno
         self.with_carcls_rot = with_carcls_rot
         self.with_translation = with_translation
+        self.with_camera_rot = with_camera_rot
 
     def _load_bboxes(self, results):
         ann_info = results['ann_info']
@@ -119,6 +121,10 @@ class LoadAnnotations(object):
         results['translations'] = np.array(results['ann_info']['translations'])
         return results
 
+    def _load_camera_rot(self, results):
+        results['Mat'] = np.array(results['ann_info']['Mat'])
+        return results
+
     def __call__(self, results):
         if self.with_bbox:
             results = self._load_bboxes(results)
@@ -137,6 +143,9 @@ class LoadAnnotations(object):
 
         if self.with_translation:
             results = self._load_translations(results)
+
+        if self.with_camera_rot:
+            results = self._load_camera_rot(results)
 
         return results
 

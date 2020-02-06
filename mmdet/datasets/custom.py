@@ -40,14 +40,15 @@ class CustomDataset(Dataset):
                  img_prefix='',
                  seg_prefix=None,
                  proposal_file=None,
-                 test_mode=False):
+                 test_mode=False,
+                 rotation_augmenation=False,):
         self.ann_file = ann_file
         self.data_root = data_root
         self.img_prefix = img_prefix
         self.seg_prefix = seg_prefix
         self.proposal_file = proposal_file
         self.test_mode = test_mode
-
+        self.rotation_augmenation=rotation_augmenation  # This only target to Kallge PKU dataset
         # join paths if data_root is specified
         if self.data_root is not None:
             if not osp.isabs(self.ann_file):
@@ -140,7 +141,6 @@ class CustomDataset(Dataset):
         if self.proposals is not None:
             results['proposals'] = self.proposals[idx]
         self.pre_pipeline(results)
- 
 
         return self.pipeline(results)
 

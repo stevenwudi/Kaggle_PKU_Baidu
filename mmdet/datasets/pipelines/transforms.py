@@ -223,7 +223,6 @@ class RandomFlip(object):
 
                 eular_angle_flip = np.array([yaw_inverse, pitch_inverse, roll_inverse])
 
-
                 quaternion = euler_angles_to_quaternions(eular_angle_flip)
                 quaternion_semisphere = quaternion_upper_hemispher(quaternion)
                 quaternion_semisphere = np.array(quaternion_semisphere, dtype=np.float32)
@@ -401,6 +400,26 @@ class CropCentreResize(object):
     def __repr__(self):
         return self.__class__.__name__ + '(bottom_half={})'.format(
             self.bottom_half)
+
+
+@PIPELINES.register_module
+class CameraRotation(object):
+    """
+    Camera Rotation transform, alpha, beta, gamma are in degrees as input
+    but the saved alpha, beta, gamma are in
+    """
+
+    def __init__(self, alpha=0, beta=0, gamma=0):
+        self.alpha = alpha * np.pi / 180
+        self.beta = beta * np.pi / 180
+        self.gamma = gamma * np.pi / 180
+
+    def __call__(self, results):
+        img = results['img']
+        trans = results['Mat']
+        h, w = img.shape[:2]
+        results['img'] = cv2.warpPerspective(img, trans, (w, h), flags=cv2.INTER_LANCZOS4)
+        return results
 
 
 @PIPELINES.register_module
