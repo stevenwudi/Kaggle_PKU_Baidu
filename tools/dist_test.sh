@@ -14,3 +14,5 @@ CUDA_VISIBLE_DEVICES=0,2,3,4,5,7 python -m torch.distributed.launch --nproc_per_
 
 
 CUDA_VISIBLE_DEVICES=0,6,7 python -m torch.distributed.launch --nproc_per_node=3 test_kaggle_pku.py --launcher pytorch
+
+python -m torch.distributed.launch --nproc_per_node=8 test_kaggle_pku.py --launcher pytorch
