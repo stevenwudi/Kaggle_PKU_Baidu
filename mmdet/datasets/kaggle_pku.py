@@ -1404,12 +1404,11 @@ class KagglePKUDataset(CustomDataset):
         if self.bottom_half > 0:  # this indicate w
             ground_truth_binary_mask = ground_truth_binary_mask[int(self.bottom_half):, :]
 
-        kernel_size = int(((y2 - y1) / 2 + (x2 - x1) / 2) / 10)
-        kernel = np.ones((kernel_size, kernel_size), np.uint8)
-        # Following is the code to find mask
-
-        ground_truth_binary_mask = cv2.dilate(ground_truth_binary_mask, kernel, iterations=1)
-        ground_truth_binary_mask = cv2.erode(ground_truth_binary_mask, kernel, iterations=1)
+        # kernel_size = int(((y2 - y1) / 2 + (x2 - x1) / 2) / 10)
+        # kernel = np.ones((kernel_size, kernel_size), np.uint8)
+        # # Following is the code to find mask
+        # ground_truth_binary_mask = cv2.dilate(ground_truth_binary_mask, kernel, iterations=1)
+        # ground_truth_binary_mask = cv2.erode(ground_truth_binary_mask, kernel, iterations=1)
         return bbox, ground_truth_binary_mask
 
     def visualise_pred(self, outputs, args):

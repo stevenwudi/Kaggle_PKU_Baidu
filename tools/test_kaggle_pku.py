@@ -230,7 +230,7 @@ def parse_args():
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Feb07-11-08/epoch_10.pth', help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
@@ -331,7 +331,7 @@ def main():
         #                                    horizontal_flip=args.horizontal_flip)
 
         # Visualise the prediction, this will take 5 sec..
-        #dataset.visualise_pred(outputs, args)
+        dataset.visualise_pred(outputs, args)
 
         #p = Pool(processes=20)
         #p.imap(dataset.visualise_pred_single_node, [(idx, outputs, args) for idx in range(len(outputs))])
