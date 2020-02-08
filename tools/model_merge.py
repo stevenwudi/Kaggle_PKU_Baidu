@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 import os.path as osp
 import shutil
@@ -247,6 +247,7 @@ def parse_args():
     parser.add_argument('--tmpdir', default="./results/", help='tmp dir for writing some results')
     parser.add_argument('--clear', default=False, help='tmp dir for writing some results')
     parser.add_argument('--horizontal_flip',  default=False, action='store_true')
+    parser.add_argument('--vote', default=3, help='')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -318,7 +319,7 @@ def main():
 
         create_lock(lock_file)
         print(pkl_file)
-        dataset.distributed_visualise_pred_merge_postprocessing(i, outputs, args, tmp_dir=args.tmpdir, vote=2)
+        dataset.distributed_visualise_pred_merge_postprocessing_weight_merge(i, outputs, args, tmp_dir=args.tmpdir, vote=args.vote)
         remove_lock(lock_file)
 
     pkl_list = glob.glob(os.path.join(args.tmpdir, "*.pkl"))
