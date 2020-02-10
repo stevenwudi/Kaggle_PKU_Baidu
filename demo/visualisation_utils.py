@@ -73,8 +73,9 @@ def nms_with_IOU_and_vote(bboxes_with_IOU, thresh=0.55, vote=0):
         inds = np.where(ovr <= thresh)[0]
 
         if vote > 0:
-            delete_inds = np.where(ovr > thresh)[0]
-            if len(set(model_type[order[delete_inds + 1]])) >= vote:
+            remove_inds = np.where(ovr > thresh)[0]
+            vote_index = np.append(model_type[order[remove_inds + 1]], model_type[i])
+            if len(set(vote_index)) >= vote:
                 keep.append(i)
         else:
             keep.append(i)
@@ -84,7 +85,7 @@ def nms_with_IOU_and_vote(bboxes_with_IOU, thresh=0.55, vote=0):
     return keep
 
 
-def nms_with_IOU_and_vote_index(bboxes_with_IOU, thresh=0.55, vote=0):
+def nms_with_IOU_and_vote_return_index(bboxes_with_IOU, thresh=0.55, vote=0):
     x1 = bboxes_with_IOU[:, 0]
     y1 = bboxes_with_IOU[:, 1]
     x2 = bboxes_with_IOU[:, 2]
@@ -110,18 +111,18 @@ def nms_with_IOU_and_vote_index(bboxes_with_IOU, thresh=0.55, vote=0):
         ovr = inter / (areas[i] + areas[order[1:]] - inter)
 
         inds = np.where(ovr <= thresh)[0]
-        delete_inds = np.where(ovr > thresh)[0]
+        remove_inds = np.where(ovr > thresh)[0]
 
         if vote > 0:
-            if len(set(model_type[order[delete_inds + 1]])) < vote:
+            vote_index = np.append(model_type[order[remove_inds + 1]], model_type[i])
+            if len(set(vote_index)) < vote:
                 order = order[inds + 1]
                 continue
-
-        keep[i] = np.append(order[delete_inds + 1], i)
-
+        
+        keep[i] = np.append(order[remove_inds + 1], i)
         order = order[inds + 1]
-
     return keep
+
 
 
 def get_xy_from_z(boxes, t):
