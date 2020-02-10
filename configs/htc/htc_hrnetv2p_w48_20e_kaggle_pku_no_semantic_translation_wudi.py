@@ -341,12 +341,15 @@ data = dict(
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomContrast',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_HueSaturationValue',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
-        img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
 
-        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images',
+        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images',
         #img_prefix='/data/Kaggle/ApolloScape_3D_car/3d-car-understanding-test/test/images',
         pipeline=test_pipeline))
 
+pkl_postprocessing_restore_xyz = True  # Use YYJ post processing
+write_submission = True
+valid_eval = False    # evaluate validation set at the end
 evaluation = dict(
     conf_thresh=0.1,
     interval=1,
@@ -378,12 +381,12 @@ dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
 
 log_level = 'INFO'
 work_dir = '/data/Kaggle/wudi_data/'
-# load_from = None
+load_from = None
 #load_from = '/data/Kaggle/mmdet_pretrained_weights/trimmed_htc_hrnetv2p_w48_20e_kaggle_pku.pth'
 #load_from = '/data/Kaggle/wudi_data/Jan07-20-00-59/epoch_5.pth'
 #load_from = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48_trimmed_translation.pth'
 #load_from = '/data/Kaggle/wudi_data/Jan18-19-45/epoch_116.pth'
-#resume_from = '/data/Kaggle/wudi_data/Jan08-09-54-32/epoch_2.pth'
-load_from = '/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth'
-resume_from = None
+resume_from = '/data/Kaggle/wudi_data/Feb07-11-08/epoch_52.pth'
+#load_from = '/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth'
+#resume_from = None
 workflow = [('train', 1)]

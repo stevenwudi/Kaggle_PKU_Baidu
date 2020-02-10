@@ -1,6 +1,6 @@
 import argparse
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import os.path as osp
 import shutil
@@ -24,7 +24,7 @@ from tqdm import tqdm
 from tools.evaluations.map_calculation import map_main
 from multiprocessing import Pool
 
-#from finetune_RT_NMR import finetune_RT
+# from finetune_RT_NMR import finetune_RT
 from finetune_RT_NMR_img import finetune_RT
 
 
@@ -141,15 +141,15 @@ def write_submission(outputs, args, dataset,
             idx_conf = conf > conf_thresh
             if filter_mask:
                 # this filtering step will takes 2 second per iterations
-                #idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
                 idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
 
                 # the final id should require both
                 idx = idx_conf * idx_keep_mask
             else:
                 idx = idx_conf
-            #if 'euler_angle' in output[2].keys():
-            if False:   #NMR has problem saving 'euler angle' Its
+            # if 'euler_angle' in output[2].keys():
+            if False:  # NMR has problem saving 'euler angle' Its
                 eular_angle = output[2]['euler_angle']
             else:
                 eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
@@ -178,9 +178,9 @@ def filter_output_pool(t):
 
 
 def write_submission_pool(outputs, args, dataset,
-                     conf_thresh=0.1,
-                     horizontal_flip=False,
-                     max_workers=20):
+                          conf_thresh=0.1,
+                          horizontal_flip=False,
+                          max_workers=20):
     """
     For accelerating filter image
     :param outputs:
@@ -203,7 +203,8 @@ def write_submission_pool(outputs, args, dataset,
     predictions = {}
 
     p = Pool(processes=max_workers)
-    for coords_str, ImageId in p.imap(filter_output_pool, [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
+    for coords_str, ImageId in p.imap(filter_output_pool,
+                                      [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
         predictions[ImageId] = coords_str
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
@@ -230,7 +231,8 @@ def parse_args():
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Feb07-11-08/epoch_10.pth', help='checkpoint file')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth',
+                        help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
@@ -240,7 +242,7 @@ def parse_args():
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
-    parser.add_argument('--horizontal_flip',  default=False, action='store_true')
+    parser.add_argument('--horizontal_flip', default=False, action='store_true')
     parser.add_argument('--world_size', default=8)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
@@ -318,34 +320,17 @@ def main():
         if rank != 0:
             return
 
-    if True:
+    if cfg.pkl_postprocessing_restore_xyz:
+        outputs = dataset.pkl_postprocessing_restore_xyz_multiprocessing(outputs)
+        mmcv.dump(outputs, args.out[:-4] + '_refined.pkl')
+    if cfg.write_submission:
         submission = write_submission(outputs, args, dataset,
-                                      conf_thresh=0.9,
-                                      filter_mask=False,
-                                      horizontal_flip=args.horizontal_flip)
+                         conf_thresh=0.9,
+                         filter_mask=False,
+                         horizontal_flip=args.horizontal_flip)
 
-        #print("Writing submission using the filter by mesh, this will take 2 sec per image")
-        #print("You can also kill the program the uncomment the first line with filter_mask=False")
-        #submission = write_submission_pool(outputs, args, dataset,
-        #                                    conf_thresh=0.0,
-        #                                    horizontal_flip=args.horizontal_flip)
-
-        # Visualise the prediction, this will take 5 sec..
-        dataset.visualise_pred(outputs, args)
-
-        #p = Pool(processes=20)
-        #p.imap(dataset.visualise_pred_single_node, [(idx, outputs, args) for idx in range(len(outputs))])
-
-        ## the following function apply visualisation and post processing toghther
-        #outputs_refined = dataset.visualise_pred_postprocessing(outputs, args)
-        # mmcv.dump(outputs_refined, '/data/home/yyj/code/kaggle/new_code/Kaggle_PKU_Baidu/output2/test_cwx114_10_0.05.pkl')
-        # submission = write_submission(outputs, args, dataset,
-        #                               conf_thresh=0.8,
-        #                               filter_mask=False,
-        #                               horizontal_flip=args.horizontal_flip)
-        # evaluate mAP
-        # print("Start to eval mAP")
-        #map_main(submission, flip_model=args.horizontal_flip)
+    if cfg.valid_eval:
+        map_main(submission, flip_model=args.horizontal_flip)
 
 
 if __name__ == '__main__':
