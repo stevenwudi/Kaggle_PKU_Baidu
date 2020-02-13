@@ -1,62 +1,65 @@
-Hello!
+# 2nd Place for Kaggle_PKU_Baidu Solution
 
-Below you can find a outline of how to reproduce my solution for the <Competition Name> competition.
-If you run into any trouble with the setup/code or have any questions please contact me at <email>
+Below you can find a outline of how to reproduce my solution for the
+[Peking University/Baidu - Autonomous Driving](https://www.kaggle.com/c/pku-autonomous-driving/) competition.
 
-#ARCHIVE CONTENTS
-kaggle_model.tgz          : original kaggle model upload - contains original code, additional training examples, corrected labels, etc
-comp_etc                     : contains ancillary information for prediction - clustering of training/test examples
-comp_mdl                     : model binaries used in generating solution
-comp_preds                   : model predictions
-train_code                  : code to rebuild models from scratch
-predict_code                : code to generate predictions from model binaries
+The solution is detailed in [Solution](README_solution).
 
-#HARDWARE: (The following specs were used to create the original solution)
-Ubuntu 16.04 LTS (512 GB boot disk)
-n1-standard-16 (16 vCPUs, 60 GB memory)
-1 x NVIDIA Tesla P100
+### ARCHIVE CONTENTS
 
-#SOFTWARE (python packages are detailed separately in `requirements.txt`):
-Python 3.5.1
-CUDA 8.0
-cuddn 7.1.4.18
-nvidia drivers v.384
--- Equivalent Dockerfile for the GPU installs: https://gitlab.com/nvidia/cuda/blob/ubuntu16.04/8.0/runtime/cudnn7/Dockerfile
+One trained model can be found at [Google Drive](https://drive.google.com/open?id=0BzicoAl6Jud9U1hMUEw0N1R4VlRHeUpwdll4VTBqMnAxT29z).
 
-#DATA SETUP (assumes the [Kaggle API](https://github.com/Kaggle/kaggle-api) is installed)
-# below are the shell commands used in each step, as run from the top level directory
-mkdir -p data/stage1/
-cd data/stage1/
-kaggle competitions download -c <competition name> -f train.csv
-kaggle competitions download -c <competition name> -f test_stage_1.csv
 
-mkdir -p data/stage2/
-cd ../data/stage1/
-kaggle competitions download -c <competition name> -f test_stage_2.csv
-cd ..
+## Installation
+### Requirements
 
-#DATA PROCESSING
-# The train/predict code will also call this script if it has not already been run on the relevant data.
-python ./train_code/prepare_data.py --data_dir=data/stage1/ --output_dir=data/stage1_cleaned
 
-#MODEL BUILD: There are three options to produce the solution.
-1) very fast prediction
-    a) runs in a few minutes
-    b) uses precomputed neural network predictions
-2) ordinary prediction
-    a) expect this to run for 1-2 days
-    b) uses binary model files
-3) retrain models
-    a) expect this to run about a week
-    b) trains all models from scratch
-    c) follow this with (2) to produce entire solution from scratch
+We have tested the following versions of OS and softwares:
+- OS: Ubuntu 16.04 LTS 
+- nvidia drivers v.384.130
+- 4 x NVIDIA GeForce GTX 1080
 
-shell command to run each build is below
-#1) very fast prediction (overwrites comp_preds/sub1.csv and comp_preds/sub2.csv)
-python ./predict_code/calibrate_model.py
+- Python 3.6.9
+- CUDA 9.0
+- cuddn 7.4
+- GCC(G++): 4.9/5.3/5.4/7.3
+- mmdet: 1.0.rc0+d3ca926
 
-#2) ordinary prediction (overwrites predictions in comp_preds directory)
-sh ./predict_code/predict_models.sh
+### Configurations
+ All the data and network configurations are in the .config file:
+ ` ./configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py ` 
 
-#3) retrain models (overwrites models in comp_model directory)
-sh ./train_code/train_models.sh
+
+#### Dataset setup
+
+Download the dataset from Kaggle and modify the config file to where you download the data
+`data_root = '/data/Kaggle/pku-autonomous-driving/'`
+
+The newly added dataloader from `mmdet/datasets/kaggle_pku.py`
+will generate a corresponding annotation json file.
+
+### Running the code
+
+#### training
+In the tools folder, we provide the scripts for training:
+
+- single gpu training: `python train_kaggle_pku.py `: currently single gpu training does not support validation evaluation. It
+is recommended to  use the below
+
+- multi-gpu training:  `CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python -m torch.distributed.launch --nproc_per_node=6 train_kaggle_pku.py --launcher pytorch`
+
+It is also recommended to load some pretrained model from mmdet.
+
+#### Inference 
+
+- single model inference:  the inference time is around 3 fps. `python test_kaggle_pku.py` and it will generate a single model .csv file.
+post processing
+
+#### Model merging
+
+`python tools/model_merge.py`  in this script, you need to set the corresponding generated predicted pickle file.
+
+
+## Contact
+
+This repo is currently maintained by Di Wu ([@stevenwudi](http://github.com/stevenwudi)).

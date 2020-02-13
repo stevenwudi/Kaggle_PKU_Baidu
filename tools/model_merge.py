@@ -8,7 +8,7 @@ import tempfile
 import pandas as pd
 import numpy as np
 import random
-import glob 
+import glob
 
 import mmcv
 import torch
@@ -141,15 +141,15 @@ def write_submission(outputs, args, dataset,
             idx_conf = conf > conf_thresh
             if filter_mask:
                 # this filtering step will takes 2 second per iterations
-                #idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
                 idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
 
                 # the final id should require both
                 idx = idx_conf * idx_keep_mask
             else:
                 idx = idx_conf
-            #if 'euler_angle' in output[2].keys():
-            if False:   #NMR has problem saving 'euler angle' Its
+            # if 'euler_angle' in output[2].keys():
+            if False:  # NMR has problem saving 'euler angle' Its
                 eular_angle = output[2]['euler_angle']
             else:
                 eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
@@ -178,9 +178,9 @@ def filter_output_pool(t):
 
 
 def write_submission_pool(outputs, args, dataset,
-                     conf_thresh=0.1,
-                     horizontal_flip=False,
-                     max_workers=20):
+                          conf_thresh=0.1,
+                          horizontal_flip=False,
+                          max_workers=20):
     """
     For accelerating filter image
     :param outputs:
@@ -203,7 +203,8 @@ def write_submission_pool(outputs, args, dataset,
     predictions = {}
 
     p = Pool(processes=max_workers)
-    for coords_str, ImageId in p.imap(filter_output_pool, [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
+    for coords_str, ImageId in p.imap(filter_output_pool,
+                                      [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
         predictions[ImageId] = coords_str
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
@@ -225,9 +226,6 @@ def coords2str(coords):
     return ' '.join(s)
 
 
-
-
-
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config',
@@ -244,10 +242,10 @@ def parse_args():
                         help='eval types')
     parser.add_argument('--show', action='store_true', help='show results')
     parser.add_argument('--local_rank', help='show results')
-    parser.add_argument('--tmpdir', default="./results/", help='tmp dir for writing some results')
+    parser.add_argument('--tmpdir', default="/data/Kaggle/wudi_data/tmp_results/", help='tmp dir for writing some results')
     parser.add_argument('--clear', default=False, help='tmp dir for writing some results')
-    parser.add_argument('--horizontal_flip',  default=False, action='store_true')
-    parser.add_argument('--vote', default=3, help='')
+    parser.add_argument('--horizontal_flip', default=False, action='store_true')
+    parser.add_argument('--vote', default=0, help='How many models need to have the same prediction, if set=0, then vote=len(outpus)')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -270,12 +268,15 @@ def output_sorted(outputs):
 
     return new_outputs
 
+
 def create_lock(file_name):
     f = open(file_name, mode="w", encoding="utf-8")
     f.close()
 
+
 def remove_lock(file_name):
     os.remove(file_name)
+
 
 def main():
     args = parse_args()
@@ -302,13 +303,15 @@ def main():
 
     dataset = build_dataset(cfg.data.test)
 
-    outputs_1 = mmcv.load('/data/Kaggle/cwx_data/all_cwxe99_3070100flip05resumme72Dec27-09-40-17/all_cwxe99_3070100flip05resumme72Dec27-09-40-17ep73.pkl')
-    outputs_2 = mmcv.load('/data/Kaggle/cwx_data/all_cwxe99_3070100flip05resumme72Dec27-09-40-17/all_cwxe99_3070100flip05resumme72Dec27-09-40-17ep85.pkl')
-    outputs_3 = mmcv.load('/data/Kaggle/cwx_data/all_cwxe99_3070100flip05resumme72Dec27-09-40-17/all_cwxe99_3070100flip05resumme72Dec27-09-40-17ep85.pkl')
-    
+    outputs_1 = mmcv.load(
+        '/data/Kaggle/wudi_data/test_all_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_refined.pkl')
+    outputs_2 = mmcv.load('/data/Kaggle/wudi_data/test_all_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100.pkl')
+    # outputs_3 = mmcv.load('/data/Kaggle/wudi_data/all_cwxe99_3070100flip05resumme72Dec27-09-40-17ep85.pkl')
+
     random.shuffle(outputs_1)
-    outputs = output_sorted([outputs_1, outputs_2, outputs_3])
-    
+    # outputs = output_sorted([outputs_1, outputs_2, outputs_3])
+    outputs = output_sorted([outputs_1, outputs_2, ])
+
     for i in range(len(outputs[0])):
         output = outputs[0][i]
         lock_file = os.path.join(args.tmpdir, os.path.basename(output[2]['file_name']).replace(".jpg", ".lock"))
@@ -319,7 +322,8 @@ def main():
 
         create_lock(lock_file)
         print(pkl_file)
-        dataset.distributed_visualise_pred_merge_postprocessing_weight_merge(i, outputs, args, tmp_dir=args.tmpdir, vote=args.vote)
+        dataset.distributed_visualise_pred_merge_postprocessing_weight_merge(i, outputs, args, tmp_dir=args.tmpdir,
+                                                                             vote=args.vote)
         remove_lock(lock_file)
 
     pkl_list = glob.glob(os.path.join(args.tmpdir, "*.pkl"))
@@ -332,12 +336,12 @@ def main():
 
         print("Writing pkl file to: {}".format(args.out))
         mmcv.dump(outputs_merged, args.out)
-        
+
         submission = write_submission(outputs_merged, args, dataset,
-                                      conf_thresh=0.8,
+                                      conf_thresh=0.9,
                                       filter_mask=False,
                                       horizontal_flip=args.horizontal_flip)
-        
+
 
 if __name__ == '__main__':
     main()
