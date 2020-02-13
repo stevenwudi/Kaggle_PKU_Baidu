@@ -231,7 +231,7 @@ def parse_args():
     parser.add_argument('--config',
                         default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
                         help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth',
+    parser.add_argument('--checkpoint', default='/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48/epoch_100.pth',
                         help='checkpoint file')
     parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
@@ -323,6 +323,7 @@ def main():
     if cfg.pkl_postprocessing_restore_xyz:
         outputs = dataset.pkl_postprocessing_restore_xyz_multiprocessing(outputs)
         mmcv.dump(outputs, args.out[:-4] + '_refined.pkl')
+
     if cfg.write_submission:
         submission = write_submission(outputs, args, dataset,
                          conf_thresh=0.9,

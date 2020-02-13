@@ -43,7 +43,8 @@ will generate a corresponding annotation json file.
 #### training
 In the tools folder, we provide the scripts for training:
 
-- single gpu training: `python train_kaggle_pku.py `
+- single gpu training: `python train_kaggle_pku.py `: currently single gpu training does not support validation evaluation. It
+is recommended to  use the below
 
 - multi-gpu training:  `CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python -m torch.distributed.launch --nproc_per_node=6 train_kaggle_pku.py --launcher pytorch`
 
@@ -53,6 +54,10 @@ It is also recommended to load some pretrained model from mmdet.
 
 - single model inference:  the inference time is around 3 fps. `python test_kaggle_pku.py` and it will generate a single model .csv file.
 post processing
+
+#### Model merging
+
+`python tools/model_merge.py`  in this script, you need to set the corresponding generated predicted pickle file.
 
 
 ## Contact

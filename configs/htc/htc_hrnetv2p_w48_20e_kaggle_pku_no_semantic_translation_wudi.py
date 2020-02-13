@@ -136,7 +136,7 @@ model = dict(
         fc_out_channels=100,
         num_translation_reg=3,
         bbox_relative=False,  # if bbox_relative=False, then it requires training/test input the same
-        translation_bboxes_regression=True,  # If set to True, we will have a SSD like offset regression
+        translation_bboxes_regression=False,  # If set to True, we will have a SSD like offset regression
         bboxes_regression=dict(type='maxIoU', iou_thresh=0.1),
         #bboxes_regression=dict(type='allIoU', iou_thresh=0.1),  # This is only effective during test
         loss_translation=dict(type='SmoothL1Loss', beta=1.0, loss_weight=1.0)),
@@ -347,9 +347,11 @@ data = dict(
         #img_prefix='/data/Kaggle/ApolloScape_3D_car/3d-car-understanding-test/test/images',
         pipeline=test_pipeline))
 
+# postprocessing flags here
 pkl_postprocessing_restore_xyz = True  # Use YYJ post processing
 write_submission = True
 valid_eval = False    # evaluate validation set at the end
+
 evaluation = dict(
     conf_thresh=0.1,
     interval=1,
@@ -364,7 +366,7 @@ lr_config = dict(
     warmup='linear',
     warmup_iters=500,
     warmup_ratio=1.0 / 3,
-    step=[40, 80])
+    step=[80, 180])
 checkpoint_config = dict(interval=1)
 # yapf:disable
 log_config = dict(
@@ -375,7 +377,7 @@ log_config = dict(
     ])
 # yapf:enable
 # runtime settings
-total_epochs = 100
+total_epochs = 200
 #dist_params = dict(backend='nccl')
 dist_params = dict(backend='nccl', init_method="tcp://127.0.0.1:8001")
 
@@ -386,7 +388,7 @@ load_from = None
 #load_from = '/data/Kaggle/wudi_data/Jan07-20-00-59/epoch_5.pth'
 #load_from = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48_trimmed_translation.pth'
 #load_from = '/data/Kaggle/wudi_data/Jan18-19-45/epoch_116.pth'
-resume_from = '/data/Kaggle/wudi_data/Feb07-11-08/epoch_52.pth'
+resume_from = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48/epoch_100.pth'
 #load_from = '/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth'
 #resume_from = None
 workflow = [('train', 1)]

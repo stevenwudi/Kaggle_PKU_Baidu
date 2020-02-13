@@ -118,11 +118,10 @@ def nms_with_IOU_and_vote_return_index(bboxes_with_IOU, thresh=0.55, vote=0):
             if len(set(vote_index)) < vote:
                 order = order[inds + 1]
                 continue
-        
+
         keep[i] = np.append(order[remove_inds + 1], i)
         order = order[inds + 1]
     return keep
-
 
 
 def get_xy_from_z(boxes, t):
