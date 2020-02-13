@@ -3,7 +3,7 @@
 Below you can find a outline of how to reproduce my solution for the
 [Peking University/Baidu - Autonomous Driving](https://www.kaggle.com/c/pku-autonomous-driving/) competition.
 
-The solution is detailed in [Solution](README_solution).
+The solution is detailed in [Solution](README_solution.md).
 
 ### ARCHIVE CONTENTS
 
