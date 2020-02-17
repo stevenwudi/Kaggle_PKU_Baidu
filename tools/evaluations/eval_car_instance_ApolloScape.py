@@ -580,8 +580,11 @@ class Params(object):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluation self 3d car detection.')
-    parser.add_argument('--test_dir', default='./test_eval_data/det3d_res/', help='the dir of results')
-    parser.add_argument('--gt_dir', default='./test_eval_data/det3d_gt/', help='the dir of ground truth')
+    #parser.add_argument('--test_dir', default='./test_eval_data/det3d_res/', help='the dir of results')
+    parser.add_argument('--test_dir', default='/data/Kaggle/wudi_data/ApolloScapes/imagesall_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_valid_200', help='the dir of results')
+    parser.add_argument('--gt_dir', default='/data/Kaggle/ApolloScape_3D_car/train/car_poses', help='the dir of ground truth')
+
+    #parser.add_argument('--gt_dir', default='./test_eval_data/det3d_gt/', help='the dir of ground truth')
     parser.add_argument('--res_file', default='./test_eval_data/res.txt', help='the dir of ground truth')
     parser.add_argument('--simType', default=None, help='the type of evalution metric, default 3dpose')
     args = parser.parse_args()
@@ -589,3 +592,51 @@ if __name__ == '__main__':
     det_3d_metric.evaluate()
     det_3d_metric.accumulate()
     det_3d_metric.summarize()
+
+"""
+ Average Precision  (AP) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.273
+ Average Precision  (AP) @[ Criteria=c0        | area=   all | maxDets=100 ] = 0.702
+ Average Precision  (AP) @[ Criteria=c3        | area=   all | maxDets=100 ] = 0.397
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.287
+ Average Precision  (AP) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.268
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.292
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=  1 ] = 0.095
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets= 10 ] = 0.395
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.395
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.372
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.391
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.425
+"""
+
+
+"""
+Average Precision  (AP) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.134
+ Average Precision  (AP) @[ Criteria=c0        | area=   all | maxDets=100 ] = 0.263
+ Average Precision  (AP) @[ Criteria=c3        | area=   all | maxDets=100 ] = 0.185
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.041
+ Average Precision  (AP) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.118
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.272
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=  1 ] = 0.024
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets= 10 ] = 0.349
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.349
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.041
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.344
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.649
+"""
+
+"""
+Refined
+Average Precision  (AP) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.133
+ Average Precision  (AP) @[ Criteria=c0        | area=   all | maxDets=100 ] = 0.257
+ Average Precision  (AP) @[ Criteria=c3        | area=   all | maxDets=100 ] = 0.185
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.041
+ Average Precision  (AP) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.118
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.272
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=  1 ] = 0.024
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets= 10 ] = 0.348
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.348
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.041
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.342
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.647
+
+"""

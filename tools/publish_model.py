@@ -7,8 +7,8 @@ import torch
 def parse_args():
     parser = argparse.ArgumentParser(
         description='Process a checkpoint to be published')
-    parser.add_argument('--in_file', default='/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth', help='input checkpoint filename')
-    parser.add_argument('--out_file', default='/data/Kaggle/wudi_data/Jan29-00-02_epoch_261_serialized_ssd.pth', help='output checkpoint filename')
+    parser.add_argument('--in_file', default='/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48/epoch_100.pth', help='input checkpoint filename')
+    parser.add_argument('--out_file', default='/data/Kaggle/wudi_data/all_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100.pth', help='output checkpoint filename')
     args = parser.parse_args()
     return args
 

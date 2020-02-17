@@ -91,10 +91,20 @@ class KagglePKUDataset(CustomDataset):
             self.print_statistics_annotations(annotations)
 
         else:
-            for fn in os.listdir(self.img_prefix):
-                filename = os.path.join(self.img_prefix, fn)
-                info = {'filename': filename}
-                annotations.append(info)
+            if os.path.isfile(ann_file):  # This for evulating ApolloScape
+                # Using readlines()
+                file = open(ann_file, 'r')
+                lines = file.readlines()
+
+                for fn in lines:
+                    filename = os.path.join(self.img_prefix, fn.replace('\n', ''))
+                    info = {'filename': filename}
+                    annotations.append(info)
+            else:
+                for fn in os.listdir(self.img_prefix):
+                    filename = os.path.join(self.img_prefix, fn)
+                    info = {'filename': filename}
+                    annotations.append(info)
 
             # We also generate the albumentation enhances valid images
             # below is a hard coded list....

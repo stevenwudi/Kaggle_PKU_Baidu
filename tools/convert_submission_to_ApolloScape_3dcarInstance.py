@@ -15,7 +15,7 @@ unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
                    51, 54, 56, 60, 61, 66, 70, 71, 76]
 
 
-def write_pose_to_json(out_pkl, output_dir, thresh=0.9, ignored_mask_binary=None, iou_ignore_threshold=None):
+def write_pose_to_json(out_pkl, output_dir, thresh=0.1, ignored_mask_binary=None, iou_ignore_threshold=None):
     """
     Args:
         im_name:
@@ -86,7 +86,7 @@ def write_pose_to_json(out_pkl, output_dir, thresh=0.9, ignored_mask_binary=None
 
 if __name__ == '__main__':
     #out_pkl ='/data/Kaggle/wudi_data/ApolloScape_1041_Jan18-19-45_epoch_136.pkl'
-    out_pkl = r'E:\DATASET\pku-autonomous-driving\wudi_data\ApolloScape_1041_Jan18-19-45_epoch_136.pkl'
+    out_pkl = '/data/Kaggle/wudi_data/ApolloScapes/imagesall_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_test_1041.pkl'
     output_dir = out_pkl[:-4]
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)

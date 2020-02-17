@@ -332,7 +332,8 @@ data = dict(
     test=dict(
         type=dataset_type,
         data_root=data_root,
-        ann_file=data_root + '',
+        ann_file="",
+        #ann_file='/data/Kaggle/ApolloScape_3D_car/train/split/validation-list.txt',
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RandomBrightnessContrast',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_RGBShift',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_JpegCompression',  # valid variation
@@ -343,14 +344,11 @@ data = dict(
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images_CLAHE',  # valid variation
         #img_prefix='/data/Kaggle/pku-autonomous-driving/validation_images',  # We create 400 validation images
 
-        img_prefix='/data/Kaggle/pku-autonomous-driving/test_images',
-        #img_prefix='/data/Kaggle/ApolloScape_3D_car/3d-car-understanding-test/test/images',
+        #img_prefix='/data/Kaggle/pku-autonomous-driving/test_images',
+        #img_prefix='/data/Kaggle/ApolloScape_3D_car/train/images',
+        img_prefix='/data/Kaggle/ApolloScape_3D_car/3d-car-understanding-test/test/images',
         pipeline=test_pipeline))
 
-# postprocessing flags here
-pkl_postprocessing_restore_xyz = True  # Use YYJ post processing
-write_submission = True
-valid_eval = False    # evaluate validation set at the end
 
 evaluation = dict(
     conf_thresh=0.1,
@@ -392,3 +390,8 @@ resume_from = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-1
 #load_from = '/data/Kaggle/wudi_data/Jan29-00-02/epoch_261.pth'
 #resume_from = None
 workflow = [('train', 1)]
+
+# postprocessing flags here
+pkl_postprocessing_restore_xyz = True  # Use YYJ post processing
+write_submission = True
+valid_eval = False    # evaluate validation set at the end
