@@ -54,8 +54,11 @@ is recommended to  use the below
 It is also recommended to load some pretrained model from mmdet.
 
 Note: `kaggle_apollo_combined_6691_origin.json` is the annotation file from the combination of ApolloScape and Kaggle (We also cleaned up the noisy images with mesh overlay visualisation).
-Alternatively, you can use train.json from the Kaggle file. 
+Alternatively, you can use `train.json` from the Kaggle file. 
 We have uploaded a json file `kaggle_apollo_combined_6691_origin.json` to google drive as:
+（We have encoded an absolute path, so to use the clean up data, you need to change the filepath
+according to your data location--> both for Kaggle and Apolloscape)
+
 https://drive.google.com/open?id=1gEK7aGvTSAi8o2Jq3PgFky_YYX-HpJDt
 
 #### Inference 
