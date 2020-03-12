@@ -80,6 +80,7 @@ def RotationDistance(p, g):
 
 
 thres_tr_list = [0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
+
 thres_ro_list = [50, 45, 40, 35, 30, 25, 20, 15, 10, 5]
 
 
@@ -120,7 +121,7 @@ def check_match(idx, train_df, valid_df):
     return result_flg, scores
 
 
-def check_match_single_car(R, T, train_dict):
+def check_match_single_car(R, T, train_dict, abs_dist):
     MAX_VAL = 10 ** 10
     # find nearest GT
     min_tr_dist = MAX_VAL
@@ -131,12 +132,17 @@ def check_match_single_car(R, T, train_dict):
     difficulty_idx = -1
     matched_id = -1
 
+    if abs_dist:
+        thres_tr_list = np.linspace(2.8, 0.1, np.round((2.8 - 0.1) / .3) + 1, endpoint=True)
+    else:
+        thres_tr_list = [0.1, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.03, 0.02, 0.01]
+
     for thres_idx in range(len(thres_ro_list)):
         thre_tr_dist = thres_tr_list[thres_idx]
         thre_ro_dist = thres_ro_list[thres_idx]
 
         for idx, gcar in enumerate(train_dict):
-            tr_dist = TranslationDistance(pcar, gcar)
+            tr_dist = TranslationDistance(pcar, gcar, abs_dist)
             if tr_dist < min_tr_dist:
                 min_tr_dist = tr_dist
                 min_ro_dist = RotationDistance(pcar, gcar)
@@ -148,6 +154,7 @@ def check_match_single_car(R, T, train_dict):
                 # if min_tr_dist < thre_tr_dist:
                 matched_id = min_idx
                 difficulty_idx = thres_idx
+                print(min_tr_dist)
             else:
                 if matched_id>-1:
                     difficulty_idx = thres_idx+10  # Rot makes it more difficult

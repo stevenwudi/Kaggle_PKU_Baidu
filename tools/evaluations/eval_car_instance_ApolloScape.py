@@ -529,10 +529,10 @@ class Detect3DEval(object):
             raise Exception('no givem simType %s' % simType)
         self.stats, metric_names = summarize()
 
-        f = open(self.args.res_file, 'w')
-        for name, value in zip(metric_names, self.stats):
-            f.write('%s %.4f\n' % (name, value))
-        f.close()
+        # f = open(self.args.res_file, 'w')
+        # for name, value in zip(metric_names, self.stats):
+        #     f.write('%s %.4f\n' % (name, value))
+        # f.close()
 
     def __str__(self):
         self.summarize()
@@ -582,10 +582,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluation self 3d car detection.')
     #parser.add_argument('--test_dir', default='./test_eval_data/det3d_res/', help='the dir of results')
     parser.add_argument('--test_dir', default='/data/Kaggle/wudi_data/ApolloScapes/imagesall_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_valid_200', help='the dir of results')
+    #parser.add_argument('--test_dir', default='/data/Kaggle/wudi_data/ApolloScapes/imagesall_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_valid_200_refined', help='the dir of results')
+
     parser.add_argument('--gt_dir', default='/data/Kaggle/ApolloScape_3D_car/train/car_poses', help='the dir of ground truth')
 
     #parser.add_argument('--gt_dir', default='./test_eval_data/det3d_gt/', help='the dir of ground truth')
-    parser.add_argument('--res_file', default='./test_eval_data/res.txt', help='the dir of ground truth')
+    #parser.add_argument('--res_file', default='./test_eval_data/res.txt', help='the dir of ground truth')
     parser.add_argument('--simType', default=None, help='the type of evalution metric, default 3dpose')
     args = parser.parse_args()
     det_3d_metric = Detect3DEval(args)
@@ -639,4 +641,22 @@ Average Precision  (AP) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.
  Average Recall     (AR) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.342
  Average Recall     (AR) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.647
 
+"""
+
+
+
+"""
+valid 200 refined
+ Average Precision  (AP) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.700
+ Average Precision  (AP) @[ Criteria=c0        | area=   all | maxDets=100 ] = 0.927
+ Average Precision  (AP) @[ Criteria=c3        | area=   all | maxDets=100 ] = 0.904
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.635
+ Average Precision  (AP) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.722
+ Average Precision  (AP) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.797
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=  1 ] = 0.074
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets= 10 ] = 0.586
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=   all | maxDets=100 ] = 0.742
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= small | maxDets=100 ] = 0.665
+ Average Recall     (AR) @[ Criteria=c0:c5     | area=medium | maxDets=100 ] = 0.763
+ Average Recall     (AR) @[ Criteria=c0:c5     | area= large | maxDets=100 ] = 0.835
 """

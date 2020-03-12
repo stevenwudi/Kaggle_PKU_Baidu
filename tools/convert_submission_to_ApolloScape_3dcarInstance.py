@@ -35,7 +35,8 @@ def write_pose_to_json(out_pkl, output_dir, thresh=0.1, ignored_mask_binary=None
         boxes = bboxes[CAR_IDX]
         im_name = six_dof['file_name'].split('/')[-1][:-4]
         json_file = os.path.join(output_dir, im_name + '.json')
-
+        # if os.path.exists(json_file):
+        #     continue
         car_cls_score_pred = six_dof['car_cls_score_pred']
         quaternion_pred = six_dof['quaternion_pred']
         trans_pred_world = six_dof['trans_pred_world']
@@ -86,8 +87,10 @@ def write_pose_to_json(out_pkl, output_dir, thresh=0.1, ignored_mask_binary=None
 
 if __name__ == '__main__':
     #out_pkl ='/data/Kaggle/wudi_data/ApolloScape_1041_Jan18-19-45_epoch_136.pkl'
-    out_pkl = '/data/Kaggle/wudi_data/ApolloScapes/imagesall_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_test_1041.pkl'
+    out_pkl = '/data/Kaggle/wudi_data/ApolloScapes/imagesall_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_valid_200.pkl'
+
+    #out_pkl = '/data/Kaggle/wudi_data/ApolloScapes/imagesall_cwxe99_3070100flip05resumme93Dec29-16-28-48_epoch_100_valid_200_refined.pkl'
     output_dir = out_pkl[:-4]
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
-    write_pose_to_json(out_pkl, output_dir)
+    write_pose_to_json(out_pkl, output_dir, thresh=0)

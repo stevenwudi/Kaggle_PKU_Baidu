@@ -136,7 +136,7 @@ def get_open3d_mesh(euler_angle, trans_pred_world, car_model,
     if difficulty_idx >= 0:
         if difficulty_idx <=9:
             print("Matched difficutl level: %d" % difficulty_idx)
-            red_color = (10 - difficulty_idx) / 10
+            red_color = (10 - difficulty_idx) / 5
             green_color = (difficulty_idx + 1) / 10
             mesh_car.paint_uniform_color([red_color, green_color, 0])
         elif difficulty_idx<=19:
@@ -159,6 +159,7 @@ def open_3d_vis(start_vis_index,
                 train_df,
                 train_img_dir,
                 car_model_dir,
+                abs_dist=False,
                 conf_thresh=0.8):
     """
     http://www.open3d.org/docs/tutorial/Basic/visualization.html
@@ -226,8 +227,7 @@ def open_3d_vis(start_vis_index,
 
                 car_model = car_models[car_names[car_idx]]
                 # Now we check whether this car belongs to a TP:
-                difficulty_idx, matched_id = check_match_single_car(euler_angle[car_idx], trans_pred_world[car_idx],
-                                                                    train_dict[img_name])
+                difficulty_idx, matched_id = check_match_single_car(euler_angle[car_idx], trans_pred_world[car_idx], train_dict[img_name], abs_dist)
                 if not keep_gt and matched_id != -1:
                     train_dict[img_name].pop(matched_id)
                 # now we draw mesh
@@ -287,10 +287,11 @@ if __name__ == '__main__':
 
     valid_pred = pkl.load(open(valid_pred_file, "rb"))
     args = parse_args()
-    start_vis_index = args.idx
+    start_vis_index = 150
 
     open_3d_vis(start_vis_index=start_vis_index,
                 valid_pred=valid_pred,
                 train_df=train_df,
                 train_img_dir=train_img_dir,
-                car_model_dir=car_model_dir)
+                car_model_dir=car_model_dir,
+                abs_dist=True)

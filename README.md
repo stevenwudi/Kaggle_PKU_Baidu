@@ -23,7 +23,7 @@ We have tested the following versions of OS and softwares:
 - CUDA 9.0
 - cuddn 7.4
 - GCC(G++): 4.9/5.3/5.4/7.3
-- mmdet: 1.0.rc0+d3ca926
+- mmdet: 1.0.rc0+d3ca926  (the uploa)
 
 ### Configurations
  All the data and network configurations are in the .config file:

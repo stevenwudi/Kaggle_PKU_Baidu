@@ -13,6 +13,7 @@ import torch.nn as nn
 import numpy as np
 from skimage.io import imsave
 import pycocotools.mask as maskUtils
+import cv2
 import neural_renderer as nr
 
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle, euler_to_Rot, rot2eul
@@ -203,7 +204,14 @@ def get_updated_RT(vertices,
             image = image.detach().cpu().numpy()[0].transpose(1, 2, 0)
             image = image / image.max()
             image[:, :, 1] += model.image_ref.detach().cpu().numpy()[0] * 0.5
-            imsave(os.path.join(output_gif[:-4], '_tmp_%04d.png' % i), image)
+            image_all = np.zeros((2710, 3384, 3))
+            image_all[1480:, :, :] = image
+            image_all *= 255
+            label_text = loss.detach().cpu().numpy()
+            image_all = cv2.putText(image_all, '%.3f' % -label_text, (500, 500), cv2.FONT_HERSHEY_SIMPLEX, fontScale=15,
+                                    color=(255,255,255), thickness=20)
+
+            imsave(os.path.join(output_gif[:-4], '_tmp_%04d.png' % i), image_all)
             ### we print some updates
             if False:
                 image_ref = model.masked_grayscale_img.detach().cpu().numpy()

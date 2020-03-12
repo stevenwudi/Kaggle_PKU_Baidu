@@ -1,6 +1,6 @@
 import argparse
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
 import os.path as osp
 import shutil
@@ -24,10 +24,8 @@ from tqdm import tqdm
 from tools.evaluations.map_calculation import map_main
 from multiprocessing import Pool
 
-#from finetune_RT_NMR import finetune_RT
-#from finetune_RT_NMR_img import finetune_RT
-from finetune_RT_NMR_iou import finetune_RT
-#from finetune_RT_NMR_grayscale import finetune_RT
+# from finetune_RT_NMR import finetune_RT
+from finetune_RT_NMR_img import finetune_RT
 
 
 def single_gpu_test(model, data_loader, show=False):
@@ -125,10 +123,11 @@ def write_submission(outputs, args, dataset,
     submission += '_conf_' + str(conf_thresh)
 
     if filter_mask:
-        submission += '_filter_mask.csv'
+        submission += '_filter_mask'
     elif horizontal_flip:
         submission += '_horizontal_flip'
-    submission += '_refined_test_cwx114_10_0.05.csv'
+
+    submission += '.csv'
     predictions = {}
 
     CAR_IDX = 2  # this is the coco car class
@@ -142,15 +141,15 @@ def write_submission(outputs, args, dataset,
             idx_conf = conf > conf_thresh
             if filter_mask:
                 # this filtering step will takes 2 second per iterations
-                #idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
+                # idx_keep_mask = filter_igore_masked_images(ImageId[idx_img], output[1][CAR_IDX], img_prefix)
                 idx_keep_mask = filter_igore_masked_using_RT(ImageId, output[2], img_prefix, dataset)
 
                 # the final id should require both
                 idx = idx_conf * idx_keep_mask
             else:
                 idx = idx_conf
-            #if 'euler_angle' in output[2].keys():
-            if False:   #NMR has problem saving 'euler angle' Its
+            # if 'euler_angle' in output[2].keys():
+            if False:  # NMR has problem saving 'euler angle' Its
                 eular_angle = output[2]['euler_angle']
             else:
                 eular_angle = np.array([quaternion_to_euler_angle(x) for x in output[2]['quaternion_pred']])
@@ -179,9 +178,9 @@ def filter_output_pool(t):
 
 
 def write_submission_pool(outputs, args, dataset,
-                     conf_thresh=0.1,
-                     horizontal_flip=False,
-                     max_workers=20):
+                          conf_thresh=0.1,
+                          horizontal_flip=False,
+                          max_workers=20):
     """
     For accelerating filter image
     :param outputs:
@@ -204,7 +203,8 @@ def write_submission_pool(outputs, args, dataset,
     predictions = {}
 
     p = Pool(processes=max_workers)
-    for coords_str, ImageId in p.imap(filter_output_pool, [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
+    for coords_str, ImageId in p.imap(filter_output_pool,
+                                      [(i, outputs, conf_thresh, img_prefix, dataset) for i in range(len(outputs))]):
         predictions[ImageId] = coords_str
 
     pred_dict = {'ImageId': [], 'PredictionString': []}
@@ -229,13 +229,10 @@ def coords2str(coords):
 def parse_args():
     parser = argparse.ArgumentParser(description='MMDet test detector')
     parser.add_argument('--config',
-                        default='../configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py',
-                        help='train config file path')
-    parser.add_argument('--checkpoint', default='/data/Kaggle/cwx_data/all_yihao069e100s5070_resume92Dec24-08-50-226141a3d1/epoch_100.pth', help='checkpoint file')
-    # parser.add_argument('--checkpoint',
-    #                     default='/nfsc/vcdata/cyh/epoch_147.pth',
-    #                     help='checkpoint file')
-    parser.add_argument('--conf', default=0.1, help='Confidence threshold for writing submission')
+                        default='../configs/6dvnet/6dvnet_htc_hrnetv2p_w48_20e_kitti3d.py', help='train config file path')
+    parser.add_argument('--checkpoint', default='/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48/epoch_100.pth',
+                        help='checkpoint file')
+    parser.add_argument('--conf', default=0.9, help='Confidence threshold for writing submission')
     parser.add_argument('--json_out', help='output result file name without extension', type=str)
     parser.add_argument('--eval', type=str, nargs='+',
                         choices=['proposal', 'proposal_fast', 'bbox', 'segm', 'keypoints', ' kaggle'],
@@ -244,7 +241,7 @@ def parse_args():
     parser.add_argument('--tmpdir', help='tmp dir for writing some results')
     parser.add_argument('--launcher', choices=['none', 'pytorch', 'slurm', 'mpi'], default='none', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
-    parser.add_argument('--horizontal_flip',  default=False, action='store_true')
+    parser.add_argument('--horizontal_flip', default=False, action='store_true')
     parser.add_argument('--world_size', default=8)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
@@ -255,20 +252,9 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if args.json_out is not None and args.json_out.endswith('.json'):
-        args.json_out = args.json_out[:-5]
-
     cfg = mmcv.Config.fromfile(args.config)
     # Wudi change the args.out directly related to the model checkpoint file data
-    if args.horizontal_flip:
-        args.out = os.path.join(cfg.work_dir,
-                                cfg.data.test.img_prefix.split('/')[-2].replace('_images', '_') +
-                                args.checkpoint.split('/')[-1][:-4] + '_horizontal_flip.pkl')
-        print('horizontal_flip activated')
-    else:
-        args.out = os.path.join(cfg.work_dir,
-                                cfg.data.test.img_prefix.split('/')[-2].replace('_images', '_') +
-                                args.checkpoint.split('/')[-2][:-4] + '.pkl')
+    args.out = os.path.join(cfg.work_dir, cfg.data.test.img_prefix.split('/')[-3] + args.checkpoint.split('/')[-2] + '_' + args.checkpoint.split('/')[-1][:-4] + '.pkl')
 
         # set cudnn_benchmark
     if cfg.get('cudnn_benchmark', False):
@@ -284,9 +270,7 @@ def main():
         init_dist(args.launcher, **cfg.dist_params)
 
     # build the dataloader
-    # TODO: support multiple images per gpu (only minor changes are needed)
     dataset = build_dataset(cfg.data.test)
-    args.out = '/data/Kaggle/wudi_data/validation_Jan16-09-20.pkl'
     if not os.path.exists(args.out):
         data_loader = build_dataloader(
             dataset,
@@ -324,23 +308,9 @@ def main():
         if rank != 0:
             return
 
-    outputs = outputs
-    local_rank = args.local_rank
-    world_size = args.world_size
-    for idx, output in enumerate(outputs):
-        #if idx % world_size == local_rank:
-        #if output[2]['file_name'].split('/')[-1] == 'ID_0cec00e6a.jpg':
-        if True:
-            finetune_RT(output, dataset,
-                        draw_flag=True,
-                        num_epochs=20,
-                        loss_grayscale_light=0.02,
-                        loss_grayscale_RT=0.02,
-                        loss_IoU=0.95,
-                        lr=0.05,
-                        conf_thresh=0.8,
-                        fix_rot=False,
-                        tmp_save_dir='/data/Kaggle/wudi_data/tmp_output_grayscale')
+    # Now we visualise the output here
+    dataset.visualise_pred(outputs, args)
+
 
 
 if __name__ == '__main__':
