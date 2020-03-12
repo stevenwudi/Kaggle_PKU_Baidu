@@ -1,13 +1,13 @@
 # 2nd Place for Kaggle_PKU_Baidu Solution
 
-Below you can find a outline of how to reproduce my solution for the
+Below you can find a outline of how to reproduce our solution for the
 [Peking University/Baidu - Autonomous Driving](https://www.kaggle.com/c/pku-autonomous-driving/) competition.
 
 The solution is detailed in [Solution](README_solution.md).
 
 ### ARCHIVE CONTENTS
 
-One trained model can be found at [Google Drive](https://drive.google.com/open?id=0BzicoAl6Jud9U1hMUEw0N1R4VlRHeUpwdll4VTBqMnAxT29z).
+One trained model can be found at [Google Drive](to be added).
 
 
 ## Installation
@@ -27,7 +27,7 @@ We have tested the following versions of OS and softwares:
 
 ### Configurations
  All the data and network configurations are in the .config file:
- ` ./configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi.py ` 
+ ` ./configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py ` 
 
 
 #### Dataset setup
