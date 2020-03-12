@@ -23,7 +23,10 @@ We have tested the following versions of OS and softwares:
 - CUDA 9.0
 - cuddn 7.4
 - GCC(G++): 4.9/5.3/5.4/7.3
-- mmdet: 1.0.rc0+d3ca926  (the uploa)
+- mmdet: 1.0.rc0+d3ca926  
+(Or you can install the mmdet from the uploaded files. The newest mmdet 1.4+ has different API in calling mmcv.
+Hence, we would recommend install the mmdet from the uploaded files using:
+`python setup.py install`)
 
 ### Configurations
  All the data and network configurations are in the .config file:
@@ -49,6 +52,11 @@ is recommended to  use the below
 - multi-gpu training:  `CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python -m torch.distributed.launch --nproc_per_node=6 train_kaggle_pku.py --launcher pytorch`
 
 It is also recommended to load some pretrained model from mmdet.
+
+Note: `kaggle_apollo_combined_6691_origin.json` is the annotation file from the combination of ApolloScape and Kaggle (We also cleaned up the noisy images with mesh overlay visualisation).
+Alternatively, you can use train.json from the Kaggle file. 
+We have uploaded a json file `kaggle_apollo_combined_6691_origin.json` to google drive as:
+https://drive.google.com/open?id=1gEK7aGvTSAi8o2Jq3PgFky_YYX-HpJDt
 
 #### Inference 
 
