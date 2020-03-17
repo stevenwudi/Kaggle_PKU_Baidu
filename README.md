@@ -75,4 +75,5 @@ post processing
 
 ## Contact
 
-This repo is currently maintained by Di Wu ([@stevenwudi](http://github.com/stevenwudi)).
+This repo is currently maintained by Di Wu ([@stevenwudi](http://github.com/stevenwudi)) and Yihao Chen ([@cyh1112](o0o@o0oo0o.cc)).
+
