@@ -23,6 +23,7 @@ We have tested the following versions of OS and softwares:
 - Python 3.6.9
 - CUDA 9.0
 - cuddn 7.4
+- pytorch 1.1 (or +)
 - GCC(G++): 4.9/5.3/5.4/7.3
 - mmdet: 1.0.rc0+d3ca926  
 (Or you can install the mmdet from the uploaded files. The newest mmdet 1.4+ has different API in calling mmcv.
