@@ -7,7 +7,8 @@ The solution is detailed in [Solution](README_solution.md).
 
 ### ARCHIVE CONTENTS
 
-One trained model can be found at [Google Drive](to be added).
+One trained model can be found at [Google Drive](https://drive.google.com/open?id=1IldUtfgoRly6Ili3C9h6Xncgfet4DXKC).
+It achieves 0.108/0.115 on (private/public Leaderboard).
 
 
 ## Installation
