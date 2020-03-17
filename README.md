@@ -51,6 +51,8 @@ is recommended to  use the below
 
 - multi-gpu training:  `CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python -m torch.distributed.launch --nproc_per_node=6 train_kaggle_pku.py --launcher pytorch`
 
+- validation is only written for distributed training. If you only have a single gpu, you can do something like:  `CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 train_kaggle_pku.py --launcher pytorch`
+
 It is also recommended to load some pretrained model from mmdet.
 
 Note: `kaggle_apollo_combined_6691_origin.json` is the annotation file from the combination of ApolloScape and Kaggle (We also cleaned up the noisy images with mesh overlay visualisation).
