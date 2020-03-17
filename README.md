@@ -8,7 +8,7 @@ The solution is detailed in [Solution](README_solution.md).
 ### ARCHIVE CONTENTS
 
 One trained model can be found at [Google Drive](https://drive.google.com/open?id=1IldUtfgoRly6Ili3C9h6Xncgfet4DXKC).
-It achieves 0.108/0.115 on (private/public Leaderboard).
+It achieves 0.112/0.118 on (private/public Leaderboard).
 
 
 ## Installation
@@ -73,6 +73,18 @@ post processing
 
 `python tools/model_merge.py`  in this script, you need to set the corresponding generated predicted pickle file.
 
+## Cite
+
+If you find this repo helpful, we would appreciate if you cite the following paper.
+
+```
+@article{NMR6D2020,
+  title   = {Neural Mesh Refiner for 6-DoF Pose Estimation},
+  author  = {Di Wu and Yihao Chen and Xianbiao Qi and Yuyong Jian and Weixuan Chen and Rong Xiao},
+  journal= {arXiv preprint arXiv:3083918},
+  year={2020}
+}
+```
 
 ## Contact
 
