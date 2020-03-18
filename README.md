@@ -82,7 +82,7 @@ If you find this repo helpful, we would appreciate if you cite the following pap
 @article{NMR6D2020,
   title   = {Neural Mesh Refiner for 6-DoF Pose Estimation},
   author  = {Di Wu and Yihao Chen and Xianbiao Qi and Yuyong Jian and Weixuan Chen and Rong Xiao},
-  journal= {arXiv preprint arXiv:3083918},
+  journal= {arXiv preprint 	arXiv:2003.07561},
   year={2020}
 }
 ```
