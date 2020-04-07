@@ -85,6 +85,14 @@ If you find this repo helpful, we would appreciate if you cite the following pap
   journal= {arXiv preprint 	arXiv:2003.07561},
   year={2020}
 }
+
+@InProceedings{Wu_2019_CVPR_Workshops,
+author = {Wu, Di and Zhuang, Zhaoyong and Xiang, Canqun and Zou, Wenbin and Li, Xia},
+title = {6D-VNet: End-to-End 6-DoF Vehicle Pose Estimation From Monocular RGB Images},
+booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
+month = {June},
+year = {2019}
+}
 ```
 
 ## Contact
