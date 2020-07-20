@@ -2,7 +2,7 @@ from __future__ import division
 import argparse
 import subprocess
 import os
-#os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 import torch
 from datetime import datetime
 

@@ -297,10 +297,10 @@ test_pipeline = [
     #dict(type='CropCentreResize', top=100, bottom=250, left=50, right=100),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(1664, 576),  # (576, 1600, 3)
+        img_scale=(640, 480),  # (576, 1600, 3)
         flip=False,  # test pipelines doest not need this
         transforms=[
-            dict(type='Resize', img_scale=(1664, 576), keep_ratio=True),
+            dict(type='Resize', img_scale=(640, 480), keep_ratio=True),
             dict(type='RandomFlip', flip_ratio=0.),   # We always want to have this flip_ratio=1.0 for test
             dict(type='Normalize', **img_norm_cfg),
             dict(type='Pad', size_divisor=32),
