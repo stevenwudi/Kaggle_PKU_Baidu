@@ -7,7 +7,8 @@ The solution is detailed in [Solution](README_solution.md).
 
 ### ARCHIVE CONTENTS
 
-One trained model can be found at [Google Drive](to be added).
+One trained model can be found at [Google Drive](https://drive.google.com/open?id=1IldUtfgoRly6Ili3C9h6Xncgfet4DXKC).
+It achieves 0.112/0.118 on (private/public Leaderboard).
 
 
 ## Installation
@@ -22,6 +23,7 @@ We have tested the following versions of OS and softwares:
 - Python 3.6.9
 - CUDA 9.0
 - cuddn 7.4
+- pytorch 1.1 (or +)
 - GCC(G++): 4.9/5.3/5.4/7.3
 - mmdet: 1.0.rc0+d3ca926  
 (Or you can install the mmdet from the uploaded files. The newest mmdet 1.4+ has different API in calling mmcv.
@@ -51,6 +53,8 @@ is recommended to  use the below
 
 - multi-gpu training:  `CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python -m torch.distributed.launch --nproc_per_node=6 train_kaggle_pku.py --launcher pytorch`
 
+- validation is only written for distributed training. If you only have a single gpu, you can do something like:  `CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 train_kaggle_pku.py --launcher pytorch`
+
 It is also recommended to load some pretrained model from mmdet.
 
 Note: `kaggle_apollo_combined_6691_origin.json` is the annotation file from the combination of ApolloScape and Kaggle (We also cleaned up the noisy images with mesh overlay visualisation).
@@ -70,7 +74,28 @@ post processing
 
 `python tools/model_merge.py`  in this script, you need to set the corresponding generated predicted pickle file.
 
+## Cite
+
+If you find this repo helpful, we would appreciate if you cite the following paper.
+
+```
+@article{NMR6D2020,
+  title   = {Neural Mesh Refiner for 6-DoF Pose Estimation},
+  author  = {Di Wu and Yihao Chen and Xianbiao Qi and Yongjian Yu and Weixuan Chen and Rong Xiao},
+  journal= {arXiv preprint 	arXiv:2003.07561},
+  year={2020}
+}
+
+@InProceedings{Wu_2019_CVPR_Workshops,
+author = {Wu, Di and Zhuang, Zhaoyong and Xiang, Canqun and Zou, Wenbin and Li, Xia},
+title = {6D-VNet: End-to-End 6-DoF Vehicle Pose Estimation From Monocular RGB Images},
+booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
+month = {June},
+year = {2019}
+}
+```
 
 ## Contact
 
-This repo is currently maintained by Di Wu ([@stevenwudi](http://github.com/stevenwudi)).
+This repo is currently maintained by Di Wu ([@stevenwudi](http://github.com/stevenwudi)) and Yihao Chen ([@cyh1112](o0o@o0oo0o.cc)).
+
