@@ -132,3 +132,5 @@ work_dirs/
 !/neural_renderer/examples/data/masked_grayscale_img.jpg
 
 !/neural_renderer/examples/data/ID_63fe3fe12_lighting_update.gif
+
+upload_imgs/

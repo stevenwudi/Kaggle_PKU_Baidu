@@ -1,4 +1,4 @@
-#CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface.py flask run -p 5003
+#CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface.py flask run -p 5002
 import os
 import random
 import base64

@@ -1,5 +1,4 @@
 import os
-import random
 import base64
 import io
 
@@ -16,6 +15,8 @@ from mmdet.models import build_detector
 from mmcv.parallel import collate
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
 from mmdet.datasets.pipelines import Compose
+
+from mmdet.utils.plot_mesh_postprocessing import Plot_Mesh_Postprocessing_Car_Insurance
 
 
 def init_model():
@@ -50,7 +51,6 @@ class LoadImage(object):
 def format_return_data(output):
     CAR_IDX = 2  # this is the coco car class
     file_name = os.path.basename(output[2]["file_name"])
-    ImageId = ".".join(file_name.split(".")[:-1])
 
     # Wudi change the conf to car prediction
     if len(output[0][CAR_IDX]):
@@ -90,41 +90,33 @@ def inference_detector(cfg, model, img):
     return result
 
 
-model, cfg = init_model()
-
-
-# img = './test_img/IMG_20200622_154753.jpg'
-
-# import glob
-# file_list = glob.glob("./test_img/*.jpg")
-# for img in file_list:
-#     result = inference_detector(cfg, model, img)
-
-#     data = format_return_data(result)
-#     print(data.shape)
-
-#     if data.shape[0] > 0:
-#         dataset = build_dataset(cfg.data.train)
-#         image = cv2.imread(img)
-
-#         left_top = (int(data[0, 0]), int(data[0, 1]))
-#         right_bottom = (int(data[0, 2]), int(data[0, 3]))
-#         cv2.rectangle(image, left_top, right_bottom, 255, thickness=1)
-
-#         cv2.imwrite("test.jpg", image)
-#         dataset.visualise_pred_single_image(img, result)
-
 def base64ToRGB(base64_string):
     imgdata = base64.b64decode(str(base64_string))
     image = Image.open(io.BytesIO(imgdata))
     return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
 
 
+def projective_distance_estimation(json,
+                                   image_path):
+    """
+    A projective distance estimation from the predicted data.
+    Args:
+        data:
+        car_name
+
+    Returns:
+
+    """
+    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance()
+    t_pred_x, t_pred_y, t_pred_z = plot_mesh.projectiveDistanceEstimation(json, image_path, precomputed=False, draw=True)
+    return t_pred_x, t_pred_y, t_pred_z
+
+
 def main():
-    image_path = "./upload_imgs/tmp_{}.jpg".format(73784)
+    image_path = "./upload_imgs/tmp_{}.jpg".format(23720)
+    model, cfg = init_model()
     result = inference_detector(cfg, model, image_path)
     data = format_return_data(result)
-    os.remove(image_path)
 
     if data.shape[0] > 0:
         data = data[0]
@@ -139,12 +131,19 @@ def main():
             rotation=list(data[5:8]),
             translation=list(data[8:]),
         )
+        # We obtain the car 3D information here
+        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path)
+        json['t_pred_x'] = t_pred_x
+        json['t_pred_y'] = t_pred_y
+        json['t_pred_z'] = t_pred_z
+
     else:
         json = dict(
             status=1,
             msg='NO CAR'
         )
-    return jsonify(json)
+
+    return json
 
 
 if __name__ == '__main__':
