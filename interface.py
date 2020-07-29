@@ -127,7 +127,6 @@ def base64ToRGB(base64_string):
 
 @app.route('/', methods=['POST'])
 def hello():
-    # img = request.files.get('file')
     image_base64 = request.form.get('file')
     # fx = request.form.get('fx')
     image = base64ToRGB(image_base64)

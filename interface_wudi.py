@@ -1,4 +1,4 @@
-#CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface.py flask run -p 5002
+# CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_wudi.py flask run -p 5002
 import os
 import random
 import base64
@@ -106,7 +106,8 @@ def base64ToRGB(base64_string):
 
 
 def projective_distance_estimation(json,
-                                   image_path):
+                                   image_path,
+                                   camera_matrix):
     """
     A projective distance estimation from the predicted data.
     Args:
@@ -116,7 +117,7 @@ def projective_distance_estimation(json,
     Returns:
 
     """
-    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance()
+    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance(camera_matrix)
     t_pred_x, t_pred_y, t_pred_z = plot_mesh.projectiveDistanceEstimation(json, image_path,
                                                                           precomputed=True,
                                                                           draw=False)
@@ -127,7 +128,18 @@ def projective_distance_estimation(json,
 def hello():
     # img = request.files.get('file')
     image_base64 = request.form.get('file')
-    # fx = request.form.get('fx')
+    fx = float(request.form.get('fx'))
+    fy = float(request.form.get('fy'))
+    cx = float(request.form.get('cx'))
+    cy = float(request.form.get('cy'))
+    imgSizeX = int(request.form.get('imgSizeX'))
+    imgSizeY = int(request.form.get('imgSizeY'))
+
+    # Get the camera intrinsics here
+    camera_matrix = np.array([[fx, 0, cx],
+                              [0, fy, cy],
+                              [0, 0, 1]], dtype=np.float32)
+
     image = base64ToRGB(image_base64)
 
     img_i = random.randint(1, 100000)
@@ -151,7 +163,7 @@ def hello():
             translation=list(data[8:]),
         )
         # We obtain the car 3D information here
-        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path)
+        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path, camera_matrix)
         json['translation'] = [t_pred_x, t_pred_y, t_pred_z]
 
     else:

@@ -227,6 +227,7 @@ camera_matrix_xiaomiMix3 = np.array([[481.28, 0, 321.06],
 
 class Plot_Mesh_Postprocessing_Car_Insurance:
     def __init__(self,
+                 camera_matrix,
                  car_model_name='aodi-Q7-SUV',
                  car_model_json_dir='/data/Kaggle/pku-autonomous-driving/car_models_json'):
         """
@@ -242,7 +243,7 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
         self.image_shape = (640, 480)  # this is generally the case
 
         # From camera --> this is wudi's Xiaomi 10
-        self.camera_matrix = camera_matrix_xiaomi10pro
+        self.camera_matrix = camera_matrix
 
         print("Loading Car model files...")
         self.car_model_name = car_model_name
