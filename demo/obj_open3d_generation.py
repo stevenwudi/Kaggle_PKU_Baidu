@@ -22,6 +22,8 @@ def convert_to_obj(car_model_dir, obj_output_dir):
         car_model = car_models[car_name]
         vertices = np.array(car_model['vertices'])
         vertices[:, 1] = -vertices[:, 1]
+        # Move the car to the positive plane
+        vertices[:, 1] -= vertices[:,1].min()
         faces = np.array(car_model['faces'])
 
         # calculate norm
@@ -62,5 +64,5 @@ def convert_to_obj(car_model_dir, obj_output_dir):
 
 if __name__ == '__main__':
     car_model_dir = 'E:\DATASET\pku-autonomous-driving\car_models_json'
-    obj_output_dir = r'E:\CarInsurance\car_models_obj'
+    obj_output_dir = r'E:\CarInsurance\car_models_json_y_positive'
     convert_to_obj(car_model_dir, obj_output_dir)

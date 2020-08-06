@@ -107,7 +107,9 @@ def base64ToRGB(base64_string):
 
 def projective_distance_estimation(json,
                                    image_path,
-                                   camera_matrix):
+                                   camera_matrix,
+                                   ZRENDER,
+                                   SCALE):
     """
     A projective distance estimation from the predicted data.
     Args:
@@ -117,7 +119,7 @@ def projective_distance_estimation(json,
     Returns:
 
     """
-    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance(camera_matrix)
+    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance(camera_matrix, ZRENDER=ZRENDER, SCALE=SCALE)
     t_pred_x, t_pred_y, t_pred_z = plot_mesh.projectiveDistanceEstimation(json, image_path,
                                                                           precomputed=True,
                                                                           draw=False)
@@ -134,6 +136,8 @@ def hello():
     cy = float(request.form.get('cy'))
     imgSizeX = int(request.form.get('imgSizeX'))
     imgSizeY = int(request.form.get('imgSizeY'))
+    ZRENDER = float(request.form.get('ZRENDER'))
+    SCALE = float(request.form.get('SCALE'))
 
     # Get the camera intrinsics here
     camera_matrix = np.array([[fx, 0, cx],
@@ -163,7 +167,7 @@ def hello():
             translation=list(data[8:]),
         )
         # We obtain the car 3D information here
-        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path, camera_matrix)
+        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path, camera_matrix, ZRENDER, SCALE)
         json['translation'] = [t_pred_x, t_pred_y, t_pred_z]
 
     else:

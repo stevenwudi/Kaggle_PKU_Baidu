@@ -1,4 +1,6 @@
+# CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_wudi.py flask run -p 5002
 import os
+import random
 import base64
 import io
 
@@ -16,7 +18,12 @@ from mmcv.parallel import collate
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
 from mmdet.datasets.pipelines import Compose
 
+from flask import Flask
+from flask import request, jsonify
+
 from mmdet.utils.plot_mesh_postprocessing import Plot_Mesh_Postprocessing_Car_Insurance
+
+app = Flask(__name__)
 
 
 def init_model():
@@ -76,7 +83,6 @@ def inference_detector(cfg, model, img):
         detection results directly.
     """
     # build the data pipeline
-    # We don't want to crop bottom
     test_pipeline = [LoadImage()] + cfg.data.test.pipeline[2:]
     test_pipeline = Compose(test_pipeline)
     # prepare data
@@ -90,6 +96,9 @@ def inference_detector(cfg, model, img):
     return result
 
 
+model, cfg = init_model()
+
+
 def base64ToRGB(base64_string):
     imgdata = base64.b64decode(str(base64_string))
     image = Image.open(io.BytesIO(imgdata))
@@ -97,7 +106,8 @@ def base64ToRGB(base64_string):
 
 
 def projective_distance_estimation(json,
-                                   image_path):
+                                   image_path,
+                                   camera_matrix):
     """
     A projective distance estimation from the predicted data.
     Args:
@@ -107,19 +117,37 @@ def projective_distance_estimation(json,
     Returns:
 
     """
-    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance()
-    t_pred_x, t_pred_y, t_pred_z = plot_mesh.projectiveDistanceEstimation(json,
-                                                                          image_path,
-                                                                          precomputed=False,
-                                                                          draw=True)
+    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance(camera_matrix, ZRENDER=5, SCALE=1)
+    t_pred_x, t_pred_y, t_pred_z = plot_mesh.projectiveDistanceEstimation(json, image_path,
+                                                                          precomputed=True,
+                                                                          draw=False)
     return t_pred_x, t_pred_y, t_pred_z
 
 
-def main():
-    image_path = "./upload_imgs/tmp_{}.jpg".format(23720)
-    model, cfg = init_model()
+@app.route('/', methods=['POST'])
+def hello():
+    # img = request.files.get('file')
+    image_base64 = request.form.get('file')
+    fx = float(request.form.get('fx'))
+    fy = float(request.form.get('fy'))
+    cx = float(request.form.get('cx'))
+    cy = float(request.form.get('cy'))
+    imgSizeX = int(request.form.get('imgSizeX'))
+    imgSizeY = int(request.form.get('imgSizeY'))
+
+    # Get the camera intrinsics here
+    camera_matrix = np.array([[fx, 0, cx],
+                              [0, fy, cy],
+                              [0, 0, 1]], dtype=np.float32)
+
+    image = base64ToRGB(image_base64)
+
+    img_i = random.randint(1, 100000)
+    image_path = "./upload_imgs/tmp_{}.jpg".format(img_i)
+    cv2.imwrite(image_path, image)
     result = inference_detector(cfg, model, image_path)
     data = format_return_data(result)
+    os.remove(image_path)
 
     if data.shape[0] > 0:
         data = data[0]
@@ -135,19 +163,12 @@ def main():
             translation=list(data[8:]),
         )
         # We obtain the car 3D information here
-        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path)
-        json['t_pred_x'] = t_pred_x
-        json['t_pred_y'] = t_pred_y
-        json['t_pred_z'] = t_pred_z
+        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path, camera_matrix)
+        json['translation'] = [t_pred_x, t_pred_y, t_pred_z]
 
     else:
         json = dict(
             status=1,
             msg='NO CAR'
         )
-
-    return json
-
-
-if __name__ == '__main__':
-    main()
+    return jsonify(json)
