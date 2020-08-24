@@ -9,11 +9,16 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import multiprocessing
+import torch
+from torchvision import transforms
+
 
 from mmdet.datasets.car_models import car_id2name
 from mmdet.datasets.kaggle_pku_utils import euler_to_Rot, euler_angles_to_quaternions, quaternion_upper_hemispher, \
     quaternion_to_euler_angle
 from demo.visualisation_utils import draw_box_mesh_kaggle_pku, refine_yaw_and_roll, restore_x_y_from_z_withIOU
+from AAE.aae import AugmentedAutoEncoder
+from AAE.knn import KNNClassifier
 
 
 class Plot_Mesh_Postprocessing:
@@ -271,6 +276,183 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
 
     def projectiveDistanceEstimation(self, output_origin, image_path, draw=False):
 
+        # Computing the diagonal length will take roughly 0.1 second per car
+        # import time
+        # start = time.time()
+        car_diagonal_rendered, bb_center_syn_x, bb_center_syn_y, img_cor_points, triangles, Rt, vertices = self.get_car_diagonal(output_origin)
+        # end = time.time()
+        # print(end - start)
+
+        car_diagonal_test = np.sqrt((output_origin['x2'] - output_origin['x1']) ** 2 +
+                                    (output_origin['y2'] - output_origin['y1']) ** 2)
+
+        t_pred_z = self.ZRENDER * car_diagonal_rendered / car_diagonal_test
+
+        bb_cent_test_x = (output_origin['x2'] + output_origin['x1']) / 2
+        bb_cent_test_y = (output_origin['y2'] + output_origin['y1']) / 2
+
+        t_pred_x = t_pred_z / self.camera_matrix[0, 0] * (bb_cent_test_x - bb_center_syn_x)
+        t_pred_y = t_pred_z / self.camera_matrix[1, 1] * (bb_cent_test_y - bb_center_syn_y)
+
+        if draw:
+            translation_vector = np.array([t_pred_x, t_pred_y, t_pred_z])
+            self.draw_rendered_image(image_path, Rt, translation_vector, vertices, triangles)
+        return t_pred_x, t_pred_y, t_pred_z
+
+    def draw_rendered_image(self, image_path, Rt, translation_vector, vertices, triangles):
+        img_origin = mmcv.imread(image_path)
+        # Draw the render mesh
+        color_ndarray = np.random.randint(0, 256, (1, 3), dtype=np.uint8)
+        color = tuple([int(i) for i in color_ndarray[0]])
+
+        Rt[:3, 3] = translation_vector
+        Rt = Rt[:3, :]
+
+        P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+        P[:, :-1] = vertices
+        P = P.T
+
+        img_cor_points = np.dot(self.camera_matrix, np.dot(Rt, P))
+        img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        for tri in triangles:
+            coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]], dtype=np.int32)
+            cv2.polylines(img_origin, np.int32([coord]), 1, color, thickness=1)
+
+        mmcv.imwrite(img_origin, image_path[:-4] + '_mesh.jpg')
+
+    def get_car_diagonal(self, output_origin, positive_y=True):
+        # Get all the vertices from the car mode
+        vertices = np.array(self.car_model_dict[self.car_model_name]['vertices'])
+        vertices[:, 1] = -vertices[:, 1]
+        if positive_y:
+            # Move the car to the positive plane
+            vertices[:, 1] -= vertices[:, 1].min()
+        vertices *= self.SCALE
+        triangles = np.array(self.car_model_dict[self.car_model_name]['faces']) - 1
+        ea = output_origin['rotation']
+        yaw, pitch, roll = ea[0], ea[1], ea[2]
+        yaw, pitch, roll = -pitch, -yaw, -roll
+
+        Rt = np.eye(4)
+        Rt[:3, 3] = self.TRANSLATION_RENDER
+        Rt[:3, :3] = euler_to_Rot(yaw, pitch, roll).T
+        Rt = Rt[:3, :]
+        P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+        P[:, :-1] = vertices
+        P = P.T
+
+        img_cor_points = np.dot(self.camera_matrix, np.dot(Rt, P))
+        img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        car_diagonal_rendered = np.sqrt((img_cor_points[:, 0].max() - img_cor_points[:, 0].min()) ** 2 +
+                                        (img_cor_points[:, 1].max() - img_cor_points[:, 1].min()) ** 2)
+
+        bb_center_syn_x = (img_cor_points[:, 0].max() + img_cor_points[:, 0].min()) / 2
+        bb_center_syn_y = (img_cor_points[:, 1].max() + img_cor_points[:, 1].min()) / 2
+
+        return car_diagonal_rendered, bb_center_syn_x, bb_center_syn_y, img_cor_points, triangles, Rt, vertices
+
+
+class Plot_Mesh_Postprocessing_Car_Insurance_AAE:
+    def __init__(self,
+                 camera_matrix=None,
+                 ZRENDER=0.2,
+                 SCALE=1 / 20,
+                 car_model_name='aodi-Q7-SUV',
+                 car_model_json_dir='/data/Kaggle/pku-autonomous-driving/car_models_json'):
+        """
+        We follow the paper to acquire the  Projective Distance Estimation
+        Eq.5 and Eq. 6 from
+        "Implicit 3D Orientation Learning for 6D Object Detection from RGB Images"
+        Args:
+            car_model_json_dir: car json file directory
+            test_image_folder:  test image folder
+        """
+        # some hard coded parameters
+        self.car_model_json_dir = car_model_json_dir
+        self.image_shape = (640, 480)  # this is generally the case
+
+        # From camera --> this is wudi's Xiaomi 10
+        self.camera_matrix = camera_matrix
+
+        print("Loading Car model files...")
+        self.car_model_name = car_model_name
+        self.car_model_dict = self.load_car_models_one_car(car_model_name)
+        self.unique_car_mode = [2, 6, 7, 8, 9, 12, 14, 16, 18,
+                                19, 20, 23, 25, 27, 28, 31, 32,
+                                35, 37, 40, 43, 46, 47, 48, 50,
+                                51, 54, 56, 60, 61, 66, 70, 71, 76]
+        self.cat2label = {car_model: i for i, car_model in enumerate(self.unique_car_mode)}
+
+        # Render configuration
+        # We render the synthetic rendering at 0.2 meteres
+        self.ZRENDER = ZRENDER
+        self.TRANSLATION_RENDER = np.array([0, 0, self.ZRENDER])
+        self.SCALE = SCALE
+
+    def load_car_models_one_car(self, car_name):
+        car_model_dict = {}
+        with open(os.path.join(self.car_model_json_dir, car_name + '.json')) as json_file:
+            car_model_dict[car_name] = json.load(json_file)
+
+        return car_model_dict
+
+    def projectiveDistanceEstimation(self, output_origin, image_path, draw=False):
+
+        # We first use AAE to modified the predicted image file
+        # loading data
+        AAE_root = "/home/wudi/code/AAE/checkpoint"
+        gt_tensor_path = os.path.join(AAE_root, "gt_implict_tensors.npy")
+        gt_label_path = os.path.join(AAE_root, "gt_labels.npy")
+        ckpt_path = os.path.join(AAE_root, "AAE_epoch1499_0818.pth")
+
+        gt_tensors = np.load(gt_tensor_path)
+        gt_labels = np.load(gt_label_path)
+
+        # 1. 先用高版本进行下面操作，保存新c的.pth
+        # model = torch.load(ckpt_path)
+        # torch.save(model.state_dict(), ckpt_path[:-4]+"_state_dict.pth")
+        # model = model.cuda()
+
+        # 2. 再用低版本load_state_dict
+        model = AugmentedAutoEncoder().cuda()
+        model.load_state_dict(torch.load(ckpt_path[:-4] + "_state_dict.pth"))
+
+        # knn classifier initialize
+        knn_classifier = KNNClassifier(k=15)
+        knn_classifier = knn_classifier.fit(gt_tensors, gt_labels)
+
+        # transforms
+        my_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+        # test images (cropped by detector)
+        img = cv2.imread(image_path)
+        img_car = img[int(output_origin['y1']):int(output_origin['y2']),
+                  int(output_origin['x1']): int(output_origin['x2']), :]
+
+        img_car = cv2.resize(img_car, (256, 256))
+        input_tensor = my_transforms(img_car)
+
+        # model inference
+        pred = model.encoder(input_tensor.unsqueeze(dim=0).cuda())
+        b, c, h, w = pred.size()
+        pred = pred.view(-1, c * h * w)
+        pred = model.fc1(pred)
+        cpu_pred = pred.cpu()
+
+        # knn classifier predict
+        pred_azimuth = knn_classifier.predict(cpu_pred.detach().numpy())
+
+        corrected_yaw = pred_azimuth * np.pi / 180
+        output_origin['rotation'][1] = corrected_yaw
         # Computing the diagonal length will take roughly 0.1 second per car
         # import time
         # start = time.time()

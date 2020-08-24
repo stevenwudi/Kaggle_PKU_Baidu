@@ -1,8 +1,8 @@
 import numpy as np
-from interface_utils import init_model, inference_detector, format_return_data, projective_distance_estimation
+from interface_utils import init_model, inference_detector, format_return_data, projective_distance_estimation_AAE
 import os
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+os.environ['CUDA_VISIBLE_DEVICES'] = '4'
 
 model, cfg = init_model()
 
@@ -33,8 +33,10 @@ def main():
                                   [0, 0, 1]], dtype=np.float32)
         ZRENDER = 0.2
         SCALE = 0.04
-        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path, camera_matrix, ZRENDER, SCALE,
-                                                                      draw=True)
+
+        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation_AAE(json, image_path, camera_matrix, ZRENDER,
+                                                                          SCALE,
+                                                                          draw=True)
         json['t_pred_x'] = t_pred_x
         json['t_pred_y'] = t_pred_y
         json['t_pred_z'] = t_pred_z

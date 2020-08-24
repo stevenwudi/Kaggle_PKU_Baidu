@@ -16,7 +16,7 @@ from mmcv.parallel import collate
 from mmdet.datasets.kaggle_pku_utils import quaternion_to_euler_angle
 from mmdet.datasets.pipelines import Compose
 
-from mmdet.utils.plot_mesh_postprocessing import Plot_Mesh_Postprocessing_Car_Insurance
+from mmdet.utils.plot_mesh_postprocessing import Plot_Mesh_Postprocessing_Car_Insurance, Plot_Mesh_Postprocessing_Car_Insurance_AAE
 
 
 def init_model():
@@ -117,3 +117,26 @@ def projective_distance_estimation(json,
     print("t_pred_x: {}, t_pred_y: {}, t_pred_z: {}".format(t_pred_x, t_pred_y, t_pred_z))
     return t_pred_x, t_pred_y, t_pred_z
 
+
+def projective_distance_estimation_AAE(json,
+                                       image_path,
+                                       camera_matrix,
+                                       ZRENDER,
+                                       SCALE,
+                                       draw=False):
+    """
+    A projective distance estimation from the predicted data.
+    Augmented AutoEncoder
+    Args:
+        data:
+        car_name
+
+    Returns:
+
+    """
+    plot_mesh = Plot_Mesh_Postprocessing_Car_Insurance_AAE(camera_matrix, ZRENDER=ZRENDER, SCALE=SCALE)
+    t_pred_x, t_pred_y, t_pred_z = plot_mesh.projectiveDistanceEstimation(json,
+                                                                          image_path,
+                                                                          draw=draw)
+    print("t_pred_x: {}, t_pred_y: {}, t_pred_z: {}".format(t_pred_x, t_pred_y, t_pred_z))
+    return t_pred_x, t_pred_y, t_pred_z
