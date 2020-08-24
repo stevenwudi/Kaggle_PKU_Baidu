@@ -23,7 +23,7 @@ def convert_to_obj(car_model_dir, obj_output_dir):
         vertices = np.array(car_model['vertices'])
         vertices[:, 1] = -vertices[:, 1]
         # Move the car to the positive plane
-        vertices[:, 1] -= vertices[:,1].min()
+        vertices[:, 1] -= vertices[:, 1].min()
         faces = np.array(car_model['faces'])
 
         # calculate norm

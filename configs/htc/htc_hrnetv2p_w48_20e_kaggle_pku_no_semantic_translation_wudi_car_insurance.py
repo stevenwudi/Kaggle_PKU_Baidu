@@ -292,9 +292,6 @@ train_pipeline = [
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='CropBottom', bottom_half=1480),
-    #dict(type='CropCentreResize', top=50, bottom=100, left=25, right=50),
-    #dict(type='CropCentreResize', top=100, bottom=250, left=50, right=100),
     dict(
         type='MultiScaleFlipAug',
         img_scale=(640, 480),  # (576, 1600, 3)

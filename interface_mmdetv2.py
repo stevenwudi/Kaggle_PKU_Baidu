@@ -1,15 +1,21 @@
 import numpy as np
-from interface_utils import init_model, inference_detector, format_return_data, projective_distance_estimation
+import torch
+import mmcv
 import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 
-model, cfg = init_model()
+from interface_utils import inference_detector, format_return_data, projective_distance_estimation
 
 
 def main():
+
     image_path = "./upload_imgs/tmp_{}.jpg".format(5960)
-    model, cfg = init_model()
+
+    config = './configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi_car_insurance.py'
+    cfg = mmcv.Config.fromfile(config)
+    model = torch.load('./checkpoint/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi_car_insurance.pth')
+
     result = inference_detector(cfg, model, image_path)
     data = format_return_data(result)
 

@@ -229,7 +229,7 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
     def __init__(self,
                  camera_matrix=None,
                  ZRENDER=0.2,
-                 SCALE=1/20,
+                 SCALE=1 / 20,
                  car_model_name='aodi-Q7-SUV',
                  car_model_json_dir='/data/Kaggle/pku-autonomous-driving/car_models_json'):
         """
@@ -245,11 +245,7 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
         self.image_shape = (640, 480)  # this is generally the case
 
         # From camera --> this is wudi's Xiaomi 10
-        if camera_matrix:
-            self.camera_matrix = camera_matrix
-        else:
-            # We use Wudi's default camera matrix
-            self.camera_matrix = camera_matrix_xiaomi10pro
+        self.camera_matrix = camera_matrix
 
         print("Loading Car model files...")
         self.car_model_name = car_model_name
@@ -278,7 +274,7 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
         # Computing the diagonal length will take roughly 0.1 second per car
         # import time
         # start = time.time()
-        car_diagonal_rendered, bb_center_syn_x, bb_center_syn_y = self.get_car_diagonal(image_path, output_origin)
+        car_diagonal_rendered, bb_center_syn_x, bb_center_syn_y, img_cor_points, triangles, Rt, vertices = self.get_car_diagonal(output_origin)
         # end = time.time()
         # print(end - start)
 
@@ -293,15 +289,42 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
         t_pred_x = t_pred_z / self.camera_matrix[0, 0] * (bb_cent_test_x - bb_center_syn_x)
         t_pred_y = t_pred_z / self.camera_matrix[1, 1] * (bb_cent_test_y - bb_center_syn_y)
 
+        if draw:
+            translation_vector = np.array([t_pred_x, t_pred_y, t_pred_z])
+            self.draw_rendered_image(image_path, Rt, translation_vector, vertices, triangles)
         return t_pred_x, t_pred_y, t_pred_z
 
-    def get_car_diagonal(self, image_path, output_origin, draw=False):
+    def draw_rendered_image(self, image_path, Rt, translation_vector, vertices, triangles):
+        img_origin = mmcv.imread(image_path)
+        # Draw the render mesh
+        color_ndarray = np.random.randint(0, 256, (1, 3), dtype=np.uint8)
+        color = tuple([int(i) for i in color_ndarray[0]])
 
-        if draw:
-            img_origin = mmcv.imread(image_path)
+        Rt[:3, 3] = translation_vector
+        Rt = Rt[:3, :]
+
+        P = np.ones((vertices.shape[0], vertices.shape[1] + 1))
+        P[:, :-1] = vertices
+        P = P.T
+
+        img_cor_points = np.dot(self.camera_matrix, np.dot(Rt, P))
+        img_cor_points = img_cor_points.T
+        img_cor_points[:, 0] /= img_cor_points[:, 2]
+        img_cor_points[:, 1] /= img_cor_points[:, 2]
+
+        for tri in triangles:
+            coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]], dtype=np.int32)
+            cv2.polylines(img_origin, np.int32([coord]), 1, color, thickness=1)
+
+        mmcv.imwrite(img_origin, image_path[:-4] + '_mesh.jpg')
+
+    def get_car_diagonal(self, output_origin, positive_y=True):
         # Get all the vertices from the car mode
         vertices = np.array(self.car_model_dict[self.car_model_name]['vertices'])
         vertices[:, 1] = -vertices[:, 1]
+        if positive_y:
+            # Move the car to the positive plane
+            vertices[:, 1] -= vertices[:, 1].min()
         vertices *= self.SCALE
         triangles = np.array(self.car_model_dict[self.car_model_name]['faces']) - 1
         ea = output_origin['rotation']
@@ -321,24 +344,13 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
         img_cor_points[:, 0] /= img_cor_points[:, 2]
         img_cor_points[:, 1] /= img_cor_points[:, 2]
 
-        # Draw the render mesh
-        color_ndarray = np.random.randint(0, 256, (1, 3), dtype=np.uint8)
-        color = tuple([int(i) for i in color_ndarray[0]])
-        for tri in triangles:
-            coord = np.array([img_cor_points[tri[0]][:2], img_cor_points[tri[1]][:2], img_cor_points[tri[2]][:2]],
-                             dtype=np.int32)
-            cv2.polylines(img_origin, np.int32([coord]), 1, color, thickness=1)
-
-        if draw:
-            mmcv.imwrite(img_origin, image_path[:-4] + '_mesh.jpg')
-
         car_diagonal_rendered = np.sqrt((img_cor_points[:, 0].max() - img_cor_points[:, 0].min()) ** 2 +
                                         (img_cor_points[:, 1].max() - img_cor_points[:, 1].min()) ** 2)
 
         bb_center_syn_x = (img_cor_points[:, 0].max() + img_cor_points[:, 0].min()) / 2
         bb_center_syn_y = (img_cor_points[:, 1].max() + img_cor_points[:, 1].min()) / 2
 
-        return car_diagonal_rendered, bb_center_syn_x, bb_center_syn_y
+        return car_diagonal_rendered, bb_center_syn_x, bb_center_syn_y, img_cor_points, triangles, Rt, vertices
 
 
 if __name__ == '__main__':
