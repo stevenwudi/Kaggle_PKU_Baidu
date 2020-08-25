@@ -1,21 +1,24 @@
-# 2nd Place for Kaggle_PKU_Baidu Solution
+# Car Insurance Car Rotation
 
-Below you can find a outline of how to reproduce our solution for the
-[Peking University/Baidu - Autonomous Driving](https://www.kaggle.com/c/pku-autonomous-driving/) competition.
+### How to run 
 
-The solution is detailed in [Solution](README_solution.md).
+on 177 server, the conda environment is:
 
-### ARCHIVE CONTENTS
+`/home/wudi/anaconda2/envs/wudi/bin/python`
 
-One trained model can be found at [Google Drive](https://drive.google.com/open?id=1IldUtfgoRly6Ili3C9h6Xncgfet4DXKC).
-It achieves 0.112/0.118 on (private/public Leaderboard).
+The bash shell for the Flask server is (e.g., using CUDA device=4, and listening to port=5003):
 
+`CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_carInsurance_AAE.py flask run -p 5003`
 
-## Installation
-### Requirements
+(without using AAE)
 
+`CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_carInsurance.py flask run -p 5003`
+ 
+ 
+If you need to install your own environment, the following is the gist for
+installation requirements:
 
-We have tested the following versions of OS and softwares:
+#### Installation Requirements
 - OS: Ubuntu 16.04 LTS 
 - nvidia drivers v.384.130
 - 4 x NVIDIA GeForce GTX 1080
@@ -30,72 +33,28 @@ We have tested the following versions of OS and softwares:
 Hence, we would recommend install the mmdet from the uploaded files using:
 `python setup.py install`)
 
+
+## Main script to run 
+For local debug, the main file to run locally is:
+
+`interface_AAE_local.py` (this one use AAE as a second step to refine the rotation)
+or `interface_local.py` (this is the original implementation using Kaggle winning solution).
+
+### Data pipeline
+
+- Get `image_base64, fx, fy, cx, cy, ZRENDER, SCALE` from Flask service in terms of POST method.
+
+- Get the camera intrinsics from the post method and transform the base64 image to RGB image.
+
+- Save a temporary image in the `./upload_imgs`  folder.
+
+- Get the result from Kaggle competition model and remove the temporary image.
+
+- Refine using AAE for the car 3D information.
+
+- return the result in terms of json.
+
 ### Configurations
- All the data and network configurations are in the .config file:
- ` ./configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation.py ` 
-
-
-#### Dataset setup
-
-Download the dataset from Kaggle and modify the config file to where you download the data
-`data_root = '/data/Kaggle/pku-autonomous-driving/'`
-
-The newly added dataloader from `mmdet/datasets/kaggle_pku.py`
-will generate a corresponding annotation json file.
-
-### Running the code
-
-#### training
-In the tools folder, we provide the scripts for training:
-
-- single gpu training: `python train_kaggle_pku.py `: currently single gpu training does not support validation evaluation. It
-is recommended to  use the below
-
-- multi-gpu training:  `CUDA_VISIBLE_DEVICES=0,1,2,3,4,5 python -m torch.distributed.launch --nproc_per_node=6 train_kaggle_pku.py --launcher pytorch`
-
-- validation is only written for distributed training. If you only have a single gpu, you can do something like:  `CUDA_VISIBLE_DEVICES=0 python -m torch.distributed.launch --nproc_per_node=1 train_kaggle_pku.py --launcher pytorch`
-
-It is also recommended to load some pretrained model from mmdet.
-
-Note: `kaggle_apollo_combined_6691_origin.json` is the annotation file from the combination of ApolloScape and Kaggle (We also cleaned up the noisy images with mesh overlay visualisation).
-Alternatively, you can use `train.json` from the Kaggle file. 
-We have uploaded a json file `kaggle_apollo_combined_6691_origin.json` to google drive as:
-（We have encoded an absolute path, so to use the clean up data, you need to change the filepath
-according to your data location--> both for Kaggle and Apolloscape)
-
-https://drive.google.com/open?id=1gEK7aGvTSAi8o2Jq3PgFky_YYX-HpJDt
-
-#### Inference 
-
-- single model inference:  the inference time is around 3 fps. `python test_kaggle_pku.py` and it will generate a single model .csv file.
-post processing
-
-#### Model merging
-
-`python tools/model_merge.py`  in this script, you need to set the corresponding generated predicted pickle file.
-
-## Cite
-
-If you find this repo helpful, we would appreciate if you cite the following paper.
-
-```
-@article{NMR6D2020,
-  title   = {Neural Mesh Refiner for 6-DoF Pose Estimation},
-  author  = {Di Wu and Yihao Chen and Xianbiao Qi and Yongjian Yu and Weixuan Chen and Rong Xiao},
-  journal= {arXiv preprint 	arXiv:2003.07561},
-  year={2020}
-}
-
-@InProceedings{Wu_2019_CVPR_Workshops,
-author = {Wu, Di and Zhuang, Zhaoyong and Xiang, Canqun and Zou, Wenbin and Li, Xia},
-title = {6D-VNet: End-to-End 6-DoF Vehicle Pose Estimation From Monocular RGB Images},
-booktitle = {The IEEE Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
-month = {June},
-year = {2019}
-}
-```
-
-## Contact
-
-This repo is currently maintained by Di Wu ([@stevenwudi](http://github.com/stevenwudi)) and Yihao Chen ([@cyh1112](o0o@o0oo0o.cc)).
+ All the data and network configurations for the first stage are in the .config file:
+ `config='/home/wudi/code/Kaggle_PKU_Baidu/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi_car_insurance.py'` 
 

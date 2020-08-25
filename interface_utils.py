@@ -20,7 +20,7 @@ from mmdet.utils.plot_mesh_postprocessing import Plot_Mesh_Postprocessing_Car_In
 
 
 def init_model():
-    config = './configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi_car_insurance.py'
+    config = '/home/wudi/code/Kaggle_PKU_Baidu/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi_car_insurance.py'
     checkpoint_path = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48/epoch_100.pth'
 
     cfg = mmcv.Config.fromfile(config)
@@ -50,7 +50,6 @@ class LoadImage(object):
 
 def format_return_data(output):
     CAR_IDX = 2  # this is the coco car class
-    file_name = os.path.basename(output[2]["file_name"])
 
     # Wudi change the conf to car prediction
     if len(output[0][CAR_IDX]):

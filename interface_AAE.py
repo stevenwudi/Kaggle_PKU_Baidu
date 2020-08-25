@@ -1,17 +1,27 @@
-#CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_carInsurance.py flask run -p 5003
+#CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_AAE.py flask run -p 5003
 import os
 import random
+import base64
+import io
+
+from PIL import Image
 import numpy as np
 import cv2
-
 from flask import Flask
 from flask import request, jsonify
-from interface_utils import init_model, base64ToRGB, inference_detector, format_return_data, projective_distance_estimation
+
+
+from interface_utils import init_model, inference_detector, format_return_data, projective_distance_estimation_AAE
 
 app = Flask(__name__)
 
 model, cfg = init_model()
-print("Finish initialising model.")
+
+
+def base64ToRGB(base64_string):
+    imgdata = base64.b64decode(str(base64_string))
+    image = Image.open(io.BytesIO(imgdata))
+    return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
 
 
 @app.route('/', methods=['POST'])
@@ -53,9 +63,10 @@ def hello():
             rotation=list(data[5:8]),
             translation=list(data[8:]),
         )
+
         # We obtain the car 3D information here
 
-        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path, camera_matrix, ZRENDER, SCALE)
+        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation_AAE(json, image_path, camera_matrix, ZRENDER, SCALE)
         json['translation'] = [t_pred_x, t_pred_y, t_pred_z]
 
     else:
