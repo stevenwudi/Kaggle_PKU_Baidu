@@ -236,7 +236,7 @@ class Plot_Mesh_Postprocessing_Car_Insurance:
                  ZRENDER=0.2,
                  SCALE=1 / 20,
                  car_model_name='aodi-Q7-SUV',
-                 car_model_json_dir='/data/Kaggle/pku-autonomous-driving/car_models_json'):
+                 car_model_json_dir='/home/wudi/code/Kaggle_PKU_Baidu_docker/car_model_json'):
         """
         We follow the paper to acquire the  Projective Distance Estimation
         Eq.5 and Eq. 6 from
@@ -364,7 +364,7 @@ class Plot_Mesh_Postprocessing_Car_Insurance_AAE:
                  ZRENDER=0.2,
                  SCALE=1 / 20,
                  car_model_name='aodi-Q7-SUV',
-                 car_model_json_dir='/data/Kaggle/pku-autonomous-driving/car_models_json'):
+                 car_model_json_dir='/home/wudi/code/Kaggle_PKU_Baidu_docker/car_model_json'):
         """
         We follow the paper to acquire the  Projective Distance Estimation
         Eq.5 and Eq. 6 from
@@ -450,9 +450,9 @@ class Plot_Mesh_Postprocessing_Car_Insurance_AAE:
 
         # knn classifier predict
         pred_azimuth = knn_classifier.predict(cpu_pred.detach().numpy())
-
         corrected_yaw = pred_azimuth * np.pi / 180
-        output_origin['rotation'][1] = corrected_yaw
+
+        output_origin['rotation'][1] = float(corrected_yaw[0])
         # Computing the diagonal length will take roughly 0.1 second per car
         # import time
         # start = time.time()

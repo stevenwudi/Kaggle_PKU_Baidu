@@ -21,7 +21,7 @@ from mmdet.utils.plot_mesh_postprocessing import Plot_Mesh_Postprocessing_Car_In
 
 def init_model():
     config = '/home/wudi/code/Kaggle_PKU_Baidu/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi_car_insurance.py'
-    checkpoint_path = '/data/Kaggle/checkpoints/all_cwxe99_3070100flip05resumme93Dec29-16-28-48/epoch_100.pth'
+    checkpoint_path = '/home/wudi/code/Kaggle_PKU_Baidu_docker/checkpoint/epoch_100.pth'
 
     cfg = mmcv.Config.fromfile(config)
     model = build_detector(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
@@ -89,7 +89,7 @@ def inference_detector(cfg, model, img):
 
 
 def base64ToRGB(base64_string):
-    imgdata = Image.b64decode(str(base64_string))
+    imgdata = base64.b64decode(str(base64_string))
     image = Image.open(io.BytesIO(imgdata))
     return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
 

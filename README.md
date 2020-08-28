@@ -1,6 +1,33 @@
 # Car Insurance Car Rotation
 
-### How to run 
+## Docker
+
+### on 177 server
+To Jiaquan: in 177 server, I have created a docker image that you can run directly.
+
+`docker run -v /home/wudi:/home/wudi -it --gpus all -p 5003:5003 8b88157a4cdd`
+
+- `-v /home/wudi:/home/wudi` to load the code and the network weights.
+- `--gpus all` to enable all gpus (alternatively, you can specify only one gpu).
+- `-p 5003:5003` we expose the port `5003`, this is hard coded in android post request.
+- `8b88157a4cdd` docker image ID.
+
+
+To run the Flask server on 177 serve, you run the following command:
+
+`CUDA_VISIBLE_DEVICES=4 LC_ALL=C.UTF-8 LANG=C.UTF-8 FLASK_ENV=development FLASK_APP=../home/wudi/code/Kaggle_PKU_Baidu_docker/interface_carInsurance_AAE.py flask run -p 5003 --host=0.0.0.0`
+
+- `CUDA_VISIBLE_DEVICES=4` to specify which gpu to run. 
+- `LC_ALL=C.UTF-8 LANG=C.UTF-8` are the export env for flask.
+- `-p 5003` expose the docker port `5003` (this is hard coded for android as well...)
+- `--host=0.0.0.0` for "Externally Visible Server"
+
+
+### Or Install the docker from scratch
+
+Note: alternatively, you can use the Dockerfile under the `./docker` directory and run.
+
+### How to run and debug locally
 
 on 177 server, the conda environment is:
 
@@ -48,12 +75,11 @@ or `interface_local.py` (this is the original implementation using Kaggle winnin
 
 - Save a temporary image in the `./upload_imgs`  folder.
 
-- Get the result from Kaggle competition model and remove the temporary image.
+- Get the result from Kaggle competition model.
 
 - Refine using AAE for the car 3D information.
 
-- return the result in terms of json.
-
+- Return the result in terms of json and remove the temporary image.
 ### Configurations
  All the data and network configurations for the first stage are in the .config file:
  `config='/home/wudi/code/Kaggle_PKU_Baidu/configs/htc/htc_hrnetv2p_w48_20e_kaggle_pku_no_semantic_translation_wudi_car_insurance.py'` 

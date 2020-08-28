@@ -38,8 +38,6 @@ def hello():
     cv2.imwrite(image_path, image)
     result = inference_detector(cfg, model, image_path)
     data = format_return_data(result)
-    os.remove(image_path)
-
     if data.shape[0] > 0:
         data = data[0]
         json = dict(
@@ -56,11 +54,13 @@ def hello():
         # We obtain the car 3D information here
 
         t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation(json, image_path, camera_matrix, ZRENDER, SCALE)
-        json['translation'] = [t_pred_x, t_pred_y, t_pred_z]
+        json['translation'] = list([t_pred_x, t_pred_y, t_pred_z])
 
     else:
         json = dict(
             status=1,
             msg='NO CAR'
         )
+
+    os.remove(image_path)
     return jsonify(json)

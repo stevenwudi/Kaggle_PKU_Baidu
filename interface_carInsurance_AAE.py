@@ -1,8 +1,9 @@
-#CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_carInsurance_AAE.py flask run -p 5003
+# CUDA_VISIBLE_DEVICES=4 FLASK_ENV=development FLASK_APP=interface_carInsurance_AAE.py flask run -p 5003
 import os
 import random
 import base64
 import io
+import pprint
 
 from PIL import Image
 import numpy as np
@@ -10,18 +11,11 @@ import cv2
 from flask import Flask
 from flask import request, jsonify
 
-
-from interface_utils import init_model, inference_detector, format_return_data, projective_distance_estimation_AAE
+from interface_utils import init_model, inference_detector, format_return_data, projective_distance_estimation_AAE, base64ToRGB
 
 app = Flask(__name__)
 
 model, cfg = init_model()
-
-
-def base64ToRGB(base64_string):
-    imgdata = base64.b64decode(str(base64_string))
-    image = Image.open(io.BytesIO(imgdata))
-    return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
 
 
 @app.route('/', methods=['POST'])
@@ -46,13 +40,12 @@ def hello():
 
     # Save a temporary image in the ./upload_imgs  folder
     img_i = random.randint(1, 100000)
-    image_path = "./upload_imgs/tmp_{}.jpg".format(img_i)
+    image_path = "/tmp/tmp_{}.jpg".format(img_i)
     cv2.imwrite(image_path, image)
 
     # Get the result from Kaggle competition model
     result = inference_detector(cfg, model, image_path)
     data = format_return_data(result)
-    os.remove(image_path)
 
     if data.shape[0] > 0:
         data = data[0]
@@ -69,13 +62,16 @@ def hello():
         )
 
         # Refine using AAE for the car 3D information here
-
-        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation_AAE(json, image_path, camera_matrix, ZRENDER, SCALE)
-        json['translation'] = [t_pred_x, t_pred_y, t_pred_z]
+        t_pred_x, t_pred_y, t_pred_z = projective_distance_estimation_AAE(json, image_path, camera_matrix, ZRENDER,
+                                                                          SCALE)
+        json['translation'] = list([t_pred_x, t_pred_y, t_pred_z])
+        pprint.pprint(json)
 
     else:
         json = dict(
             status=1,
             msg='NO CAR'
         )
+    # Finally we remove the image
+    os.remove(image_path)
     return jsonify(json)

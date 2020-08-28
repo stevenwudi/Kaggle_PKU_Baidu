@@ -9,7 +9,6 @@ model, cfg = init_model()
 
 def main():
     image_path = "./upload_imgs/tmp_{}.jpg".format(5960)
-    model, cfg = init_model()
     result = inference_detector(cfg, model, image_path)
     data = format_return_data(result)
 
